@@ -1,0 +1,4 @@
+anthropic>=0.39.0
+mcp>=1.1.0
+
+# imported from anthropics/skills/skills/mcp-builder/scripts/requirements.txt 2026-08-07

@@ -1,0 +1,93 @@
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "attribution": {
+    "commit": "Co-Authored-By: Alfred <noreply@alfred.local>",
+    "pr": "🤖 Generated with [Alfred](https://github.com/dpatel-93/alfred)"
+  },
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch",
+      "Bash(python:*)",
+      "Bash(node .claude/*)",
+      "Read(//c/Users/dishi/.claude/**)",
+      "Read(//c/Users/dishi/AppData/Local/Temp/**)",
+      "Bash(git clone:*)",
+      "Read(//tmp/**)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)"
+    ],
+    "additionalDirectories": [
+      "C:/Users/dishi/.claude"
+    ]
+  },
+  "model": "sonnet",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd /c node C:/Users/dishi/.claude/helpers/auto-memory-hook.mjs import",
+            "timeout": 8000
+          },
+          {
+            "type": "command",
+            "command": "cmd /c node C:/Users/dishi/.claude/helpers/config-doctor.mjs",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd /c node C:/Users/dishi/.claude/helpers/vault-memory-sync.cjs sync",
+            "timeout": 15000
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd /c node C:/Users/dishi/.claude/helpers/auto-memory-hook.mjs sync",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd /c node C:/Users/dishi/.claude/helpers/alfred-fable-gate.mjs",
+            "timeout": 30000
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "cmd /c node C:/Users/dishi/.claude/helpers/statusline.cjs"
+  },
+  "cleanupPeriodDays": 3650,
+  "autoCompactWindow": 600000,
+  "autoUpdatesChannel": "latest",
+  "tui": "fullscreen",
+  "switchModelsOnFlag": true,
+  "remoteControlAtStartup": true,
+  "agentPushNotifEnabled": true,
+  "skipWorkflowUsageWarning": true
+}

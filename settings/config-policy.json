@@ -1,0 +1,18 @@
+{
+  "_comment": "Policy the config-doctor enforces at startup. Uses MODEL ALIASES (opus/sonnet/fable) which Claude Code resolves to the latest available model automatically — so new model releases are picked up with zero edits. Edit this file to change intent; the doctor makes the config match it.",
+  "model": "claude-fable-5[1m]",
+  "fallbackModel": "sonnet",
+  "autoUpdatesChannel": "latest",
+  "auditEveryDays": 7,
+  "brokenPermissionMarkers": [
+    "Bash(done)",
+    "Bash(wait)",
+    "Bash(do ",
+    "Bash(for pid in ",
+    "Bash(for repo:",
+    "Bash(for wf:",
+    "Bash(while read:",
+    "Bash(echo \"===",
+    "Bash(cat \"./"
+  ]
+}

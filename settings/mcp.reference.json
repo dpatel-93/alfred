@@ -1,0 +1,29 @@
+{
+  "mcpServers": {
+    "stitch": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@_davideast/stitch-mcp",
+        "proxy"
+      ],
+      "env": {
+        "npm_config_update_notifier": "false"
+      }
+    },
+    "21st-magic": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@21st-dev/magic@latest"
+      ],
+      "env": {
+        "npm_config_update_notifier": "false"
+      }
+    }
+  }
+}

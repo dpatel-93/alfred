@@ -1,0 +1,18 @@
+{
+  "name": "alfred-brain",
+  "version": "1.0.0",
+  "description": "Alfred — brain server, HUD and execution bridge",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test/run.mjs",
+    "start": "node server.mjs",
+    "index": "node index-vault.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
+}
