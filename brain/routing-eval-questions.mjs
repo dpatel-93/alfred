@@ -30,6 +30,31 @@
 //
 // `trap` records what a plausible-but-wrong router would answer, and why. A case with no trap is
 // not earning its place in the set.
+//
+// BASELINE — first run, 2026-08-11, Opus router, one spawn per case (batching would let the router
+// infer the distribution and inflate the negative-case score).
+//
+//   routing accuracy (strict)   16/22   72.7%
+//   routing accuracy (by dept)  20/22   90.9%   — the 4 extra are the CHILD of the expected agent
+//   over-engagement guard        7/7   100.0%   — every NONE and CLARIFY held
+//   traps sprung                 0/12     0%    — no case fell for its plausible-wrong answer
+//   cost                    1,819,713 tokens, ~82.7k per decision
+//
+// TWO DEFECTS THIS RUN FOUND IN THE EVAL ITSELF, not in the router:
+//
+// 1. `depth` is undefined for CLARIFY cases. The spec expects 'none' (nothing spawns yet); the
+//    router reported the depth it would use AFTER clarifying. Both readings are defensible, so
+//    5 of the 9 depth "failures" are scoring an ambiguity rather than an error. Until the taxonomy
+//    is fixed, read DEPTH ACCURACY as a lower bound.
+//
+// 2. Four ground-truth answers contradict this framework's own anti-relay rule. r05 expects
+//    dr-manager, but dr-manager has exactly ONE employee — routing through it to reach that
+//    employee is the definition of a layer that adds nothing (ORG.md §5b). The router collapsed it
+//    and was right; the ground truth was wrong. Same shape for r07, r08, r09.
+//
+//    These are deliberately LEFT UNCHANGED. Rewriting ground truth to match the router's output is
+//    how an eval stops measuring anything — the disagreement is the finding, and the fix belongs in
+//    whichever artifact is actually wrong, decided deliberately and not to make a number go up.
 
 const ROUTING_CASES = [
   // ---------------------------------------------------------------- clean single-owner routing
