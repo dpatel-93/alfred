@@ -47,19 +47,66 @@ const SCENARIOS = [
   {
     id: 's01-azure-storage-scrape',
     tier: 'trivial',
-    task: 'I need a script to scrape all my storage accounts from azure',
-    truth: { kind: 'answer', check: [
-      'produces a runnable script, not a plan or a description of one',
-      'enumerates storage accounts across subscriptions, not just the default one',
+    task: 'I need a script to inventory all of my Azure Storage Accounts',
+    startingState: 'A shell with Azure CLI available. No existing inventory script. Credentials '
+                 + 'may or may not be present — the system must not assume they are.',
+    artifacts: ['a runnable inventory script'],
+
+    // NEUTRAL capability requirements. No ALFRED agent names, no org vocabulary — a competing
+    // orchestrator must be scorable on this without adopting our roster.
+    capabilities: ['cloud-infrastructure-scripting', 'cloud-authentication'],
+
+    successCriteria: [
+      'produces a runnable script rather than a plan or a description of one',
+      'enumerates across ALL subscriptions, not only the default one',
       'authenticates without a hardcoded secret',
-      'is PowerShell or Azure CLI — NOT Bicep or ARM (framework hard rule)',
-    ] },
-    topology: { maxAgents: 1, mustInclude: [], forbid: ['cso', 'coo', 'cfo', 'cto', 'architect'] },
-    budget: { tokens: 150_000, seconds: 120 },
-    note: 'The CEO named this one himself as the bar for nimble. Any VP in the chain is a FAIL '
-        + 'even if the script is perfect — the cost of the answer is part of the answer.',
-    baseline: 'A single agent writes a working script. Alfred must not be WORSE, and must not '
-            + 'cost meaningfully more. This scenario is where an org chart is most likely to lose.',
+      'handles the no-access / not-authenticated path rather than assuming success',
+    ],
+    qualityThreshold: 'A script that runs and returns a complete inventory. Partial subscription '
+                    + 'coverage is a FAILURE, not a partial pass — an inventory that silently omits '
+                    + 'subscriptions is worse than no inventory, because it will be trusted.',
+
+    invalidAssumptions: [
+      'that the default subscription is the only subscription',
+      'that the caller is already authenticated',
+      'that every subscription grants the same read permissions',
+    ],
+
+    independence: 'none required',
+    independentVerificationRequired: false,
+    deterministicEvidenceSufficient: true,
+    evidence: ['a dry-run or sample output showing the result shape', 'the subscription-enumeration '
+             + 'call is present in the script text'],
+
+    parallelizable: [],
+    dependent: [],
+    gates: [],
+    stopConditions: ['the request turns out to require destructive or multi-tenant action — stop '
+                   + 'and escalate rather than proceeding'],
+
+    humanClarification: 'not required — the request is unambiguous',
+    humanIntervention: 'none',
+
+    budget: { tokens: 150_000, seconds: 120, maxAgents: 1 },
+
+    failureModes: [
+      'over-orchestration: management hops added to a bounded one-discipline task',
+      'default-subscription-only enumeration presented as complete',
+      'credentials embedded in the script',
+      'Bicep or ARM proposed, violating the standing Terraform-only IaC rule',
+    ],
+    undetectedFailureCost: 'moderate. A silently incomplete inventory becomes the basis for cost '
+                         + 'and security decisions, and the omission is invisible at the point of use.',
+
+    baseline: 'A single agent writes a working script. ALFRED must not be WORSE and must not cost '
+            + 'meaningfully more. This is the scenario where an org chart is most likely to lose, '
+            + 'and it is included for exactly that reason.',
+    note: 'The CEO named this himself as the bar for nimble. A perfect script reached through three '
+        + 'unnecessary management hops is an orchestration FAILURE; so is a cheap script that omits '
+        + 'subscriptions. Both halves are scored.',
+
+    // ALFRED-SPECIFIC. Layer 1 (routing eval) may use this; the cross-system scorer must ignore it.
+    alfredOnly: { topology: 'T1', forbid: ['cso', 'coo', 'cfo', 'cto', 'architect'] },
   },
   {
     id: 's02-secret-in-history',

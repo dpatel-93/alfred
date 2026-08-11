@@ -32,11 +32,33 @@ const C = process.stdout.isTTY
 function check() {
   const errs = [];
   const seen = new Set();
+  // MIGRATION IN PROGRESS. v1 scenarios carry `truth.check` plus ALFRED agent names in `topology`.
+  // v2 carries the mandate's full field set with NEUTRAL `capabilities`, and quarantines every
+  // ALFRED-specific constraint under `alfredOnly` so a competing orchestrator can be scored without
+  // adopting our roster. Both are accepted while the conversion runs, and the count is printed so a
+  // stalled migration cannot hide behind a green check.
+  const v2 = SCENARIOS.filter((x) => Array.isArray(x.capabilities));
   for (const s of SCENARIOS) {
     if (seen.has(s.id)) errs.push(`duplicate id ${s.id}`);
     seen.add(s.id);
     if (!TIERS.includes(s.tier)) errs.push(`${s.id}: unknown tier "${s.tier}"`);
-    if (!s.truth?.check?.length) errs.push(`${s.id}: no ground-truth checks`);
+    const isV2 = Array.isArray(s.capabilities);
+    if (isV2) {
+      if (!s.successCriteria?.length) errs.push(`${s.id}: v2 with no successCriteria`);
+      if (!s.qualityThreshold) errs.push(`${s.id}: v2 with no qualityThreshold`);
+      if (s.independentVerificationRequired === undefined) {
+        errs.push(`${s.id}: v2 must state whether independent verification is REQUIRED — that is `
+                + `the artifact-testing vs premise-validation distinction`);
+      }
+      for (const c of s.capabilities) {
+        if (/^(cso|coo|cfo|cto|architect)$|-manager$|-eng$|-dev$/.test(c)) {
+          errs.push(`${s.id}: capability "${c}" is an ALFRED agent name — capabilities must be `
+                  + `NEUTRAL or the cross-system benchmark cannot score another orchestrator`);
+        }
+      }
+    } else if (!s.truth?.check?.length) {
+      errs.push(`${s.id}: no ground-truth checks`);
+    }
     if (!s.baseline) errs.push(`${s.id}: no baseline — nothing to A/B against, so it cannot show `
                              + `the org earned its overhead`);
     if (!s.budget?.tokens || !s.budget?.seconds) errs.push(`${s.id}: no budget`);
@@ -56,7 +78,12 @@ function check() {
   console.log(C.d(`  full sweep budget: ~${(budget / 1e6).toFixed(1)}M tokens per arm, `
                 + `~${((budget * 2) / 1e6).toFixed(1)}M for both arms`));
   const loops = SCENARIOS.filter((s) => s.topology?.mustLoop?.length).length;
-  console.log(C.d(`  ${loops} scenario(s) assert a verification LOOP, not just participation\n`));
+  console.log(C.d(`  ${loops} scenario(s) assert a verification LOOP, not just participation`));
+  const mpct = ((v2.length / SCENARIOS.length) * 100).toFixed(0);
+  const mline = `  neutral-schema migration: ${v2.length}/${SCENARIOS.length} (${mpct}%) `
+              + `— only v2 scenarios are usable in the cross-system benchmark`;
+  console.log(v2.length === SCENARIOS.length ? C.d(mline) : C.y(mline));
+  console.log();
 
   if (errs.length) { errs.forEach((e) => console.log(`  ${C.r('FAIL')} ${e}`)); console.log(); process.exit(1); }
   console.log(`  ${C.g('PASS')} — every scenario has ground truth, a baseline, and a budget.\n`);
