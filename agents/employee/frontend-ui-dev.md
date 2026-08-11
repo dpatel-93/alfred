@@ -19,7 +19,7 @@ tier: employee
 parent: frontend-manager
 domain: frontend
 tools: Read, Grep, Glob, Edit, Write
-skills: vault-recall, verification-before-completion, taste
+skills: org-index, vault-recall, verification-before-completion, taste
 ---
 
 ## Mission

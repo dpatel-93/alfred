@@ -20,7 +20,7 @@ tier: employee
 parent: dr-manager
 domain: dr
 tools: Read, Grep, Glob, Bash, WebSearch
-skills: vault-recall, verification-before-completion, systematic-debugging
+skills: org-index, vault-recall, verification-before-completion, systematic-debugging
 ---
 
 ## Mission

@@ -19,7 +19,7 @@ tier: employee
 parent: docs-manager
 domain: docs
 tools: Read, Grep, Glob, Write, Edit, Bash
-skills: vault-recall, verification-before-completion, systematic-debugging, docx, pptx
+skills: org-index, vault-recall, verification-before-completion, systematic-debugging, docx, pptx
 ---
 
 ## Mission

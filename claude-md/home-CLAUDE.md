@@ -84,6 +84,25 @@ Engaging a VP for a one-line change is not thoroughness, it is waste — and it 
    into my context on every turn, so reaching a manager or employee directly costs nothing extra
    and skips an Opus spawn. I may **not** skip levels for work that writes or asserts: that is
    what the VP's adjudication and the manager's verification exist for.
+
+   **I am the departmental router; VPs adjudicate.** Routing is on the critical path and everything
+   waits for it — but I already hold every agent description, so standing up a VP to be told where
+   to send a secrets sweep adds a serial round trip to answer a question I had answered. Engage a VP
+   when there is something to *adjudicate*: several managers to reconcile, a cross-domain call, or
+   high-stakes work needing independent review. See ORG.md §5d.
+
+   **Before routing below VP, load the `org-index` skill.** Chartered agents preload it via their
+   `skills:` frontmatter; I am the main session and have no frontmatter, so I must invoke it. This
+   is not optional politeness — it was measured. Routing from injected descriptions alone got
+   **1/3** correct (a secrets sweep went to `cso` instead of `sec-secrets-hunter`; a backup question
+   went to `coo` when `dr-manager` reports to `cso`). With the index loaded: **3/3**, one of them
+   better than the full-file-read baseline. The descriptions tell me what each agent *does*; only
+   the index tells me the *parent chain*, and depth decisions are wrong without it.
+
+   **Lazy escalation.** Route to the shallowest agent that could plausibly own it. If that agent
+   finds the scope is wider than its surface, it returns an escalation request and I spawn the wider
+   chain. Over-deep costs `2 × depth` round trips on *every* request; too-shallow costs one extra
+   hop on the *minority* that need it.
 4. **Confirm before fan-out.** Before spawning more than one VP, or any work that writes, spends,
    or ships, state my interpretation to the CEO in one sentence and wait. I am the only node in
    this org with a human present — one clarifying sentence here is cheaper and more reliable than

@@ -19,7 +19,7 @@ tier: employee
 parent: qa-manager
 domain: qa
 tools: Read, Write, Edit, Grep, Glob, Bash
-skills: python-testing-patterns, vault-recall, verification-before-completion
+skills: org-index, python-testing-patterns, vault-recall, verification-before-completion
 ---
 
 ## Mission

@@ -233,7 +233,13 @@ ORIGINAL ASK — the CEO's words as they reached me, then my reading of them. Di
 FINDINGS   — list. Each: what, where (file:line or resource id), evidence (quoted), confidence.
 DID NOT COVER — what was in scope but not reached, and why. Never silently truncate.
 BLOCKERS   — anything that stopped the work.
+ESCALATION REQUEST — if the real scope is wider than my surface: what is needed, and why I cannot
+             cover it. I do NOT spawn upward (§2); I name the gap and the layer above spawns.
 ```
+
+`ESCALATION REQUEST` is what makes lazy escalation (§5d) safe. Routing shallow is only cheaper than
+routing deep if a too-shallow route is *detectable and recoverable* — this field is the detector.
+Without it, shallow routing silently under-answers, which is worse than the round trip it saved.
 
 ### Manager → VP
 
@@ -402,6 +408,83 @@ earlier, at the Chief of Staff, which is the only place the saving is real.
 
 ---
 
+## 5d. Latency — what the chain actually costs in wall-clock
+
+Measured on the first routing-eval run, 22 Opus spawns:
+
+| Spawn shape | Wall clock | Tokens |
+|---|---|---|
+| 0 tool calls (answered from injected context) | **~7s** | **~41k** |
+| 2 tool calls | ~13–20s | ~87k |
+| 3 tool calls | ~28s | ~89k |
+
+Two things follow, and they are the whole latency story.
+
+**A file read costs ~5–7s and ~20k tokens, on the critical path, at every level.** That is why the
+roster now preloads as the `org-index` skill (~2.8k tokens, zero tool calls for chartered agents) —
+opening a 431-line ORG.md to look up which agent owns backups was the most wasteful thing this org
+did. Read ORG.md for *contracts and rules*; never to look up a name.
+
+Measured on the same three routing cases, three ways:
+
+| Setup | Latency | Tokens | Correct |
+|---|---|---|---|
+| Read CLAUDE.md + ORG.md (pre-R2 behaviour) | 12.6–18.6s | ~88k | 3/3 by dept |
+| No reads, no roster | **2.2–6.9s** | **~41k** | **1/3** |
+| `org-index` loaded, no file reads | 5.4–9.6s | ~96k | **3/3**, one better than baseline |
+
+**The roster is load-bearing, and cutting it to go fast is the wrong trade.** Stripping reads was
+the fastest and cheapest configuration and it routed a secrets sweep to `cso` instead of
+`sec-secrets-hunter`, and a backup question to `coo` when `dr-manager` reports to `cso`. Agent
+descriptions say what each agent *does*; only the roster gives the *parent chain*, without which
+every depth decision is a guess.
+
+The win is real but it is **latency, not tokens**: one skill load beats two file reads by roughly
+half the wall clock. For chartered agents the preload is free of tool calls entirely, which is
+where the token win also lands.
+
+**Levels are serial and paid twice.** Every tier is a full spawn on the way down and a synthesis on
+the way back, so orchestration overhead is roughly `2 × depth × per-spawn latency` before the
+employee's actual work is counted. A 4-level chain spends ~30–60s orchestrating before any real
+work starts. This is the cost the CEO feels as "the Alfred layer added slowness," and it is real.
+
+### The VP is on the wrong side of the critical path
+
+A VP does two jobs with opposite latency profiles, and the pre-R2 design paid Opus latency for both
+before any work began:
+
+| VP job | When it happens | On the critical path? |
+|---|---|---|
+| **Route** — decide which managers, with what boundaries | before any work | **yes — everything waits** |
+| **Adjudicate** — strike, dedupe, rank, synthesize | after work returns | **no — work is already done** |
+
+Routing is classification. Adjudication is judgment. Only the second needs a VP.
+
+**So the Chief of Staff routes, and VPs adjudicate.** The CoS already holds every agent description
+in context on every turn — it is the departmental router whether or not anyone calls it that, and
+the routing eval measured it reaching the correct department on 20/22 cases with no VP involved.
+Standing a VP up *to decide who should work* adds a serial round trip to answer a question the CoS
+had already answered.
+
+Engage a VP when there is genuinely something to adjudicate: several managers whose findings must
+be reconciled, a cross-domain call, or high-stakes work needing the §5c.3 review. Not to be told
+where to send a secrets sweep.
+
+### Lazy escalation — build the chain upward on demand, not downward on spec
+
+The old default was: instantiate the chain, then let anti-relay collapse what turned out to be
+unnecessary. That pays for every layer and refunds some. Invert it.
+
+Route to the shallowest agent that could plausibly own the work. If that agent discovers the scope
+is genuinely wider than its surface, it returns an **escalation request** naming what it needs and
+why — and the Chief of Staff spawns the wider chain. Spawning stays strictly top-down (§2); nobody
+spawns upward. One extra round trip in the rare case beats four guaranteed round trips in every case.
+
+The cost asymmetry is the entire argument. Over-deep costs `2 × depth` round trips on **every**
+request. Too-shallow costs one escalation on **the minority** that need it.
+
+---
+
 ## 6. Verified skill registry
 
 Only these names exist. Naming anything else fails validation. This is the actual selling point of
@@ -409,9 +492,14 @@ the skills library over an unstructured skills folder: every skill below is plac
 not just alphabetized — the same way a real company's shared-services catalog tells you which team
 owns a tool before you go looking for it.
 
-**Universal (3)** — every chartered agent may use these regardless of domain:
+**Universal (4)** — every chartered agent may use these regardless of domain:
+`org-index` (the roster, preloaded — use INSTEAD of opening this file to look up a name),
 `vault-recall` (check prior knowledge before re-deriving), `verification-before-completion`
 (evidence before any success claim), `systematic-debugging` (any bug or unexpected behaviour).
+
+`org-index` is generated from `agents/**/*.md`, never hand-edited, and preloads via the native
+`skills:` field — so it costs no tool call. It exists because a file read is ~5-7s and ~20k tokens
+on the critical path at every level (§5d).
 
 **Domain-owned (21)** — declared in a specific agent's `skills:` frontmatter; this is the ground
 truth for ownership, not this table (rebuild it from `agents/**/*.md` if the two drift):

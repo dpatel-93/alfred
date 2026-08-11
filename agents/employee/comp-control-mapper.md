@@ -19,7 +19,7 @@ tier: employee
 parent: compliance-manager
 domain: compliance
 tools: Read, Grep, Glob, Bash, WebSearch
-skills: vault-recall, verification-before-completion
+skills: org-index, vault-recall, verification-before-completion
 ---
 
 ## Mission

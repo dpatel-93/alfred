@@ -19,7 +19,7 @@ tier: employee
 parent: appsec-manager
 domain: appsec
 tools: Read, Grep, Glob, Bash
-skills: vault-recall, verification-before-completion, before-you-build
+skills: org-index, vault-recall, verification-before-completion, before-you-build
 ---
 
 ## Mission

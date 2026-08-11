@@ -20,7 +20,7 @@ tier: employee
 parent: infra-manager
 domain: infra
 tools: Read, Grep, Glob, Bash
-skills: vault-recall, verification-before-completion, systematic-debugging, graph-api-rest
+skills: org-index, vault-recall, verification-before-completion, systematic-debugging, graph-api-rest
 ---
 
 ## Mission

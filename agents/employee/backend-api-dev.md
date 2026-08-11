@@ -19,7 +19,7 @@ tier: employee
 parent: backend-manager
 domain: backend
 tools: Read, Grep, Glob, Bash, Write, Edit
-skills: vault-recall, verification-before-completion, systematic-debugging, postgresql, ps-http-server
+skills: org-index, vault-recall, verification-before-completion, systematic-debugging, postgresql, ps-http-server
 ---
 
 ## Mission
