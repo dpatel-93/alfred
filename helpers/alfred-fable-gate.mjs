@@ -191,6 +191,13 @@ if (!model) {
   // and a wrong-tier answer costs more than the tokens it saves.
   const injected = { ...(evt?.tool_input || {}), model: DEFAULT_TIER };
   try {
+    // mkdir first. appendFileSync does NOT create missing parent directories, so on any install
+    // where ~/.claude/metrics/ does not already exist this threw ENOENT into the swallow below and
+    // the audit trail was never written — silently, forever, because a failure to log must not
+    // break a spawn. It only appeared to work on the author's box because the directory happened
+    // to exist from an unrelated feature. A cost control whose evidence depends on that is not a
+    // control; it is a coincidence.
+    fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
     fs.appendFileSync(
       LOG_FILE,
       JSON.stringify({ at: new Date().toISOString(), event: 'model-injected', subagent_type: who, model: DEFAULT_TIER }) + '\n'

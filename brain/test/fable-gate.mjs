@@ -242,5 +242,38 @@ R.push(await (async () => {
       { ...home(`stale${stale || 'empty'}`, null), ALFRED_GATE_TIMEOUT_MS: stale }, 'ask', 3000);
   }
 }
+// --- Model-policy audit trail -----------------------------------------------------------------
+// The injection path itself is covered above. What was NOT covered is whether the injection leaves
+// an AUDIT RECORD — and the hook's own header says why that matters: "An injection nobody can see
+// is its own silent default." Model-tier policy that silently rewrites a spawn and writes nothing
+// is a cost control with no evidence, which is the same failure class as a test suite that prints
+// SKIP and exits 0. The control was verified working by hand; this test is what keeps it working.
+{
+  const env = home('modelpolicy', null);
+  const ledger = path.join(env.HOME, '.claude', 'metrics', 'model-policy.jsonl');
+  try { fs.rmSync(ledger, { force: true }); } catch {}
+
+  const out = await runHook(agent({ subagent_type: 'general-purpose', prompt: 'x' }), env);
+  let decision = null;
+  try { decision = JSON.parse(out.raw).hookSpecificOutput; } catch { /* reported below */ }
+
+  add('implicit model is injected, not inherited',
+    decision?.updatedInput?.model === 'sonnet',
+    `got ${JSON.stringify(decision?.updatedInput?.model)}`);
+
+  const wrote = fs.existsSync(ledger);
+  add('model injection writes an audit record', wrote,
+    'injection fired with no ledger entry — the cost control leaves no evidence it acted');
+
+  if (wrote) {
+    let rec = null;
+    try { rec = JSON.parse(fs.readFileSync(ledger, 'utf8').trim().split('\n').pop()); } catch {}
+    add('audit record names the event, the agent and the injected tier',
+      rec?.event === 'model-injected' && rec?.subagent_type === 'general-purpose'
+        && rec?.model === 'sonnet',
+      `record was ${JSON.stringify(rec)}`);
+  }
+}
+
 try { fs.rmSync(TMP, { recursive: true, force: true }); } catch {}
 console.log('__ALFRED_RESULTS__' + JSON.stringify(R));
