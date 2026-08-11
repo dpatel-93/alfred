@@ -44,6 +44,7 @@ const SUITES = [
   { name: 'spend', file: 'spend.mjs', browser: false },
   { name: 'retrieval', file: 'retrieval.mjs', browser: false },
   { name: 'routing', file: 'routing.mjs', browser: false },
+  { name: 'orchestration', file: 'orchestration.mjs', browser: false },
   { name: 'ask-stream', file: 'ask-stream.mjs', browser: false },
   { name: 'search-nav', file: 'search-nav.mjs', browser: true },
   { name: 'org', file: 'org.mjs', browser: true },
