@@ -266,6 +266,19 @@ function main() {
       + 'run node ~/.claude/helpers/gen-org-index.mjs');
   }
 
+  // --- R3: the evidence ledger ------------------------------------------------------------------
+  // "Never present a finding as verified when the chain says it was inferred" lived only as prose in
+  // the CoS charter, which made provenance unauditable: the CEO could not tell a checked claim from
+  // a confident one. Every return contract now separates VERIFIED (with a pointer) from INFERRED,
+  // and this check keeps it there. Precedent is Magentic-One's Task Ledger facts/guesses split —
+  // they structured this before we did.
+  for (const a of chartered) {
+    if (!/EVIDENCE\s+—/.test(a.body)) {
+      err(a.rel, 'return contract has no EVIDENCE line — VERIFIED claims must carry a pointer and '
+        + 'INFERRED ones must be labelled, or provenance cannot be audited (ORG.md §5)');
+    }
+  }
+
   for (const t of uncharteredTargets) {
     if (!/^##\s*What I return/m.test(t.body)) {
       warn(t.rel, 'delegated to by a chartered agent but has no `## What I return` — its caller '

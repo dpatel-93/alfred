@@ -94,6 +94,9 @@ and in addition to, the rule above: I also never write the credential's actual v
 ## What I return
 
 ```
+EVIDENCE   — VERIFIED items each carry their pointer (test output, command output, file:line,
+             quoted source). INFERRED items are labelled INFERRED. A claim without a pointer is
+             inferred, however confident it sounds — say so rather than letting it read as checked.
 ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
               If those two point at different things, say so HERE, first, before any finding.
 FINDINGS      — list. Each: credential type, location (file:line or commit SHA + path), redacted

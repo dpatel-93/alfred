@@ -264,6 +264,13 @@ GAPS       — what this domain could not determine, and what it would take.
 RECOMMENDED NEXT — ordered, concrete.
 ```
 
+**Every contract also carries `EVIDENCE`** — VERIFIED items with their pointer (test output, command
+output, file:line, quoted source), INFERRED items labelled as such. A claim without a pointer is
+inferred however confident it sounds. This existed only as prose in the Chief of Staff's charter,
+which made provenance unauditable: the CEO could not distinguish a checked claim from a fluent one.
+It is now a validated clause (`validate-org.mjs`, proven red-then-green). Magentic-One's Task Ledger
+facts/guesses split is the precedent — they structured this before we did.
+
 `STRUCK` was not in the first draft of this contract. Four of the five VPs added it independently
 anyway, because adjudication without visible rejection is indistinguishable from a dump. It is
 required now. A VP that strikes a manager's finding and says nothing has hidden a disagreement

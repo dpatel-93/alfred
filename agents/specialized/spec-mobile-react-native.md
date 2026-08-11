@@ -97,6 +97,9 @@ I am delegated to by a chartered agent, so I return the employee-tier contract r
 my caller synthesizes, and it cannot synthesize what it has to re-parse (ORG.md §5).
 
 ```
+EVIDENCE   — VERIFIED items each carry their pointer (test output, command output, file:line,
+             quoted source). INFERRED items are labelled INFERRED. A claim without a pointer is
+             inferred, however confident it sounds — say so rather than letting it read as checked.
 ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
               If those two point at different things, say so HERE, first, before any finding.
 FINDINGS   — list. Each: what, where (file:line or resource id), evidence (quoted), confidence.

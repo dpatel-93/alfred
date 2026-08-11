@@ -176,6 +176,9 @@ fan-out. Report every replan in my return — a silent one hides the fact that m
 ## What I return
 
 ```
+EVIDENCE   — VERIFIED items each carry their pointer (test output, command output, file:line,
+             quoted source). INFERRED items are labelled INFERRED. A claim without a pointer is
+             inferred, however confident it sounds — say so rather than letting it read as checked.
 ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
               If those two point at different things, say so HERE, first, before any finding.
 ANSWER      — the domain's answer in one paragraph. Lead with it. For a learning-area topic, open

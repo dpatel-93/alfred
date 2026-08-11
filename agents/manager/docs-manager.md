@@ -141,6 +141,9 @@ My employees answered *my task split*. Before I roll up I answer three questions
 ## What I return
 
 ```
+EVIDENCE   — VERIFIED items each carry their pointer (test output, command output, file:line,
+             quoted source). INFERRED items are labelled INFERRED. A claim without a pointer is
+             inferred, however confident it sounds — say so rather than letting it read as checked.
 ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
               If those two point at different things, say so HERE, first, before any finding.
 VERDICT    — one paragraph. Was the requested doc produced, and is it verified accurate.
