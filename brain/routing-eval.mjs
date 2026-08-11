@@ -121,10 +121,13 @@ and agents/ORG.md.
 
 Load the org-index skill first. Do not open ORG.md to look up a name.
 
-Answer with JSON only, no prose:
+Answer with JSON only, no prose. EVERY field is required:
 {"owner":"<exact agent name, or NONE to stay in-session, or CLARIFY to confirm with the CEO first>",
  "depth":"none|direct|full|full+review",
  "topology":"T0|T1|T2|T3|T4",
+ "stakes":"S0|S1|S2|S3",
+ "blocking_premises":"<the assumptions that make this worthless if false, or 'none'>",
+ "gate":"proceed|CLARIFY|confirm-before-fanout — because ...",
  "why":"<one sentence>"}
 
 Three ORTHOGONAL axes decide this (ORG.md 5e). Do not collapse them:
@@ -164,6 +167,7 @@ function score(file) {
   }
 
   let owner = 0, depth = 0, both = 0, missing = 0, topoOk = 0, topoTotal = 0;
+  const behaviourMisses = [];
   const fails = [];
 
   for (const c of CASES) {
@@ -172,8 +176,28 @@ function score(file) {
     const want = [c.expect].flat();
     const okOwner = want.includes(r.owner)
       || (want.length > 1 && want.every((w) => (r.owner || '').includes(w)));
-    const okDepth = r.depth === c.depth;
+    let okDepth = r.depth === c.depth;
     if (c.topology) { topoTotal++; if (r.topology === c.topology) topoOk++; }
+
+    // `requireEither` — amended cases where the right answer is not a single label but a BEHAVIOUR.
+    // r21 may act on a rollback, but only with an independent recovery check or a stated causal
+    // premise; r24 may commit to the program, but only after citing confirm-before-fanout. Scored
+    // against the router's stated reasoning, because a claim it never made is one it cannot be
+    // credited for. CLARIFY satisfies these by construction — nothing has been committed yet.
+    if (c.requireEither && r.owner !== 'CLARIFY') {
+      const why = `${r.why || ''} ${r.gate || ''}`.toLowerCase();
+      const has = {
+        verifier: /verif|independent|confirm(ed|s)? (that )?login|recover/.test(why),
+        statedPremise: /premise|assum|if .*(does not|doesn't|not) recover|fallback|cause/.test(why),
+        confirmBeforeFanout: /confirm[- ]before|present the plan|ceo (approval|sign|confirm)|before (the )?fan/.test(why),
+      };
+      const need = Object.keys(c.requireEither);
+      const met = need.some((k) => has[k]);   // "either" — any one satisfies
+      if (!met) {
+        okDepth = false;   // fold into the pass/fail so it cannot silently pass on owner alone
+        behaviourMisses.push(`${c.id}: none of [${need.join(', ')}] present in the router's reasoning`);
+      }
+    }
     if (okOwner) owner++;
     if (okDepth) depth++;
     if (okOwner && okDepth) both++;
@@ -189,6 +213,7 @@ function score(file) {
   console.log(`  ROUTING ACCURACY  ${C.b(pct(owner))}  (${owner}/${n})   did it pick the right owner`);
   console.log(`  DEPTH ACCURACY    ${C.b(pct(depth))}  (${depth}/${n})   did it pay for the right chain`);
   console.log(`  BOTH              ${C.b(pct(both))}  (${both}/${n})`);
+  if (behaviourMisses.length) { console.log(); for (const b of behaviourMisses) console.log(`  ${C.y("behaviour")} ${b}`); }
   if (topoTotal) {
     const tp = `${((topoOk / topoTotal) * 100).toFixed(1)}%`;
     console.log(`  TOPOLOGY ACCURACY ${C.b(tp)}  (${topoOk}/${topoTotal})   did it pick the right shape`);
