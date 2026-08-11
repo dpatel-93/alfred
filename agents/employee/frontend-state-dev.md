@@ -1,19 +1,10 @@
 ---
 name: frontend-state-dev
 description: |
-  Client-side state, data-fetching, and routing builder — wires a UI up to its data and manages what
-  the app knows and does when, explaining the pattern when frontend is a stated learning area. Use
-  when state needs managing, a fetch or polling call needs writing, or routing needs wiring up.
-  <example>
-  user: "the token-usage panel is in the hud, hook it up to refresh every 10 seconds"
-  assistant: "I'll wire it to the data source and set up polling."
-  <commentary>Markup already exists — this is purely data and refresh.</commentary>
-  </example>
-  <example>
-  user: "the appreg portal needs nav between the app list and detail pages"
-  assistant: "I'll build the routing between the two views."
-  <commentary>"Between" is what shows when, not how it looks.</commentary>
-  </example>
+  Client-side state, data-fetching, and routing builder — wires a UI up to its data and manages
+  what the app knows and does when, explaining the pattern when frontend is a stated learning
+  area. Use when state needs managing, a fetch or polling call needs writing, or routing needs
+  wiring up.
 model: haiku
 tier: employee
 parent: frontend-manager

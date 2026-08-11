@@ -4,16 +4,6 @@ description: |
   Azure cost analysis and optimization specialist — traces spend to the resource causing it and
   designs zero-cost/free-tier architectures. Use when a bill needs tracing to a driver, a project
   should stay free-tier, or the deliverable is a cost table.
-  <example>
-  user: "azure bill jumped 40% this month, no idea which resource is eating it"
-  assistant: "I'll trace spend by resource group and flag the driver."
-  <commentary>Billing, not model behaviour.</commentary>
-  </example>
-  <example>
-  user: "new side project, want it free-tier as long as possible"
-  assistant: "I'll lay out a zero-cost architecture and when you'd need to upgrade."
-  <commentary>Cost as the driving question, unlike infra-manager's design lens.</commentary>
-  </example>
 model: haiku
 tier: employee
 parent: analytics-manager

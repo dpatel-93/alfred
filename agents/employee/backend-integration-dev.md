@@ -1,20 +1,10 @@
 ---
 name: backend-integration-dev
 description: |
-  Third-party API and Graph integration implementer — webhook receivers, OAuth/auth flows, and calls
-  into external systems, especially Microsoft Graph via app-only client-credentials REST, NEVER the
-  SDK. Use when something must call Graph, Entra, or any external API, a webhook receiver is needed,
-  or an auth flow needs implementing.
-  <example>
-  user: "TenantSync needs guest sign-in activity from Graph, app-only creds"
-  assistant: "I'll build the Graph REST call with client-credentials auth."
-  <commentary>Outbound Graph access, not the app's own endpoints.</commentary>
-  </example>
-  <example>
-  user: "Northwind needs a webhook endpoint for the ticketing approval callback"
-  assistant: "I'll build the receiver and validate its payload."
-  <commentary>Inbound is still this surface — the boundary is "someone else's system", not direction.</commentary>
-  </example>
+  Third-party API and Graph integration implementer — webhook receivers, OAuth/auth flows, and
+  calls into external systems, especially Microsoft Graph via app-only client-credentials REST,
+  NEVER the SDK. Use when something must call Graph, Entra, or any external API, a webhook
+  receiver is needed, or an auth flow needs implementing.
 model: haiku
 tier: employee
 parent: backend-manager

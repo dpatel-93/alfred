@@ -5,16 +5,6 @@ description: |
   dependency files and cross-checks REAL references before reporting anything unused or duplicate.
   Naming overlap is never proof. Use when a tool's usage needs checking, a category needs an
   inventory sweep, or a "looks like duplicates" claim needs verifying.
-  <example>
-  user: "are these firecrawl skills actually duplicates or is that just the naming"
-  assistant: "I'll read each body and check whether any agent references them."
-  <commentary>The check that once found a false positive on this framework's own roster.</commentary>
-  </example>
-  <example>
-  user: "is anything still using the old xlsx skill, or can it go"
-  assistant: "I'll search every charter, command, and hook for references first."
-  <commentary>A removal recommendation needs a real search result, not an impression.</commentary>
-  </example>
 model: haiku
 tier: employee
 parent: vendor-manager

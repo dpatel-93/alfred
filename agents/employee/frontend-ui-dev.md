@@ -4,16 +4,6 @@ description: |
   Component, layout, and styling builder — turns a scoped UI brief into working markup, CSS, and
   component structure, explaining the pattern when frontend is a stated learning area. Use when a
   component needs building, a layout needs fixing, or an existing UI needs a visual/design pass.
-  <example>
-  user: "add a token-usage panel to the hud, next to the existing status panel"
-  assistant: "I'll build the markup and styling to match the status panel."
-  <commentary>Pure markup and layout; state-dev is only needed if live data must be wired.</commentary>
-  </example>
-  <example>
-  user: "the tickr cards look like default bootstrap, make them not look ai-generated"
-  assistant: "I'll apply the taste skill to redesign the card styling."
-  <commentary>Visual quality is styling, not state.</commentary>
-  </example>
 model: haiku
 tier: employee
 parent: frontend-manager

@@ -4,16 +4,6 @@ description: |
   Attacker-path analyst for this application's own trust boundaries — reasons about how a real
   attacker approaches this codebase, not a generic STRIDE checklist, and states what crossing a
   boundary actually GAINS them. Use when a feature, endpoint, or auth flow needs a threat model.
-  <example>
-  user: "before I ship this API key exchange flow, what could go wrong"
-  assistant: "I'll trace the trust boundaries and what an attacker gains at each."
-  <commentary>Design review with no dependency or CVE involved.</commentary>
-  </example>
-  <example>
-  user: "walk me through how someone could abuse this webhook endpoint"
-  assistant: "I'll trace who can call it and what they get if the check is weak."
-  <commentary>Single-endpoint path — same lane, narrower scope.</commentary>
-  </example>
 model: haiku
 tier: employee
 parent: appsec-manager

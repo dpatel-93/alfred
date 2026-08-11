@@ -4,16 +4,6 @@ description: |
   Health, alerting, and availability status reporter — checks health-check endpoints, alert-rule
   coverage, log queries, and uptime metrics, and reports what they show. Use when asking whether
   something is up, whether alerting exists or fired, or what an error rate shows over a window.
-  <example>
-  user: "does tickr have any alerts if the api goes down"
-  assistant: "I'll check current alert-rule coverage on the API resource."
-  <commentary>A coverage question with nothing reported broken, so no incident responder.</commentary>
-  </example>
-  <example>
-  user: "is the static web app actually up right now"
-  assistant: "I'll hit the health check and report status."
-  <commentary>"Is it up" is a status read; "why isn't it up" is triage — the verb decides.</commentary>
-  </example>
 model: haiku
 tier: employee
 parent: sre-manager

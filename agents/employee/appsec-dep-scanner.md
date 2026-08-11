@@ -5,16 +5,6 @@ description: |
   whether each CVE is actually REACHABLE in this codebase's own code paths — a CVE in the tree is
   not a vulnerability until reachability is shown. Use when a lockfile changes, an advisory fires,
   or a dependency CVE's exploitability is questioned.
-  <example>
-  user: "is this lodash CVE actually exploitable in Meridian or just noise"
-  assistant: "I'll trace whether Meridian actually calls the vulnerable function."
-  <commentary>Dependency reachability, not attacker paths through the app's design.</commentary>
-  </example>
-  <example>
-  user: "run an npm audit across alfred, tell me what's actually a problem"
-  assistant: "I'll report only what's new or reachable, filtering accepted risks."
-  <commentary>Re-reporting known highs trains the CEO to ignore the scan.</commentary>
-  </example>
 model: haiku
 tier: employee
 parent: appsec-manager

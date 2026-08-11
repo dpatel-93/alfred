@@ -3,18 +3,8 @@ name: infra-identity-eng
 description: |
   Entra ID identity plumbing specialist — app registrations, enterprise apps, Graph permission
   grants, certificate-based auth, and Key Vault as the cert/secret store behind an automation. Use
-  when a registration needs scoping, a Graph permission needs granting, or auth needs moving from a
-  client secret to a certificate.
-  <example>
-  user: "TenantSync needs an app registration with Directory.Read.All, admin-consented"
-  assistant: "I'll scope the registration and document the Graph grant."
-  <commentary>Provisioning new grants; sec-config-auditor audits ones that already exist.</commentary>
-  </example>
-  <example>
-  user: "Northwind's automation needs to switch from a client secret to a cert"
-  assistant: "I'll configure cert-based auth and the Key Vault storage for it."
-  <commentary>Identity and secrets plumbing, not network or Terraform mechanics.</commentary>
-  </example>
+  when a registration needs scoping, a Graph permission needs granting, or auth needs moving from
+  a client secret to a certificate.
 model: haiku
 tier: employee
 parent: infra-manager

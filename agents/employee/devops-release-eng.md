@@ -4,16 +4,6 @@ description: |
   Release engineer — checks version-bump correctness, artifact presence, and deploy readiness, and
   drafts release notes from the ACTUAL commit range. Use when a release needs cutting, tagging, or
   documenting, or a version bump needs verifying against the project's existing scheme.
-  <example>
-  user: "cut a new release for Northwind, bump the version and write up what changed"
-  assistant: "I'll verify the bump against the existing scheme and draft notes from real commits."
-  <commentary>Release mechanics, distinct from diagnosing pipeline config and logs.</commentary>
-  </example>
-  <example>
-  user: "before I tag v2.3, are the artifacts there and does the version match everywhere"
-  assistant: "I'll check artifact presence and version-string consistency across manifests."
-  <commentary>The run isn't in question, the release state is.</commentary>
-  </example>
 model: haiku
 tier: employee
 parent: devops-manager

@@ -1,19 +1,10 @@
 ---
 name: qa-browser-tester
 description: |
-  Playwright UI and end-to-end browser tester — writes and runs browser-level tests for a page, flow,
-  or component, and audits existing suites for INVISIBLE SKIPS and environment-dependent flake. Use
-  when a UI flow needs end-to-end coverage, or a Playwright suite is green but not trusted.
-  <example>
-  user: "make sure the add-user flow works end to end, not just that the API returns 200"
-  assistant: "I'll drive it in a real browser and confirm the UI reflects it."
-  <commentary>An API assertion misses a broken button binding or a JS error that only appears rendered.</commentary>
-  </example>
-  <example>
-  user: "playwright shows green in CI but half didn't actually run on windows"
-  assistant: "I'll check for silently skipped specs — path resolution is a known quiet failure."
-  <commentary>This estate lost three suites to exactly that, with the runner still exiting 0.</commentary>
-  </example>
+  Playwright UI and end-to-end browser tester — writes and runs browser-level tests for a page,
+  flow, or component, and audits existing suites for INVISIBLE SKIPS and environment-dependent
+  flake. Use when a UI flow needs end-to-end coverage, or a Playwright suite is green but not
+  trusted.
 model: haiku
 tier: employee
 parent: qa-manager

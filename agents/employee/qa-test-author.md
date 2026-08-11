@@ -1,19 +1,10 @@
 ---
 name: qa-test-author
 description: |
-  Unit and integration test author — pytest, Pester, Jest, xUnit. Writes new coverage for a function,
-  module, script, or API, and audits existing suites for tautological assertions and invisible skips.
-  Use when a function or module needs tests written, or a green suite nobody trusts needs auditing.
-  <example>
-  user: "write unit tests for the probability calc engine in Meridian"
-  assistant: "I'll write pytest coverage, proving each test red before it's trusted green."
-  <commentary>Function-level logic with nothing rendering, so not qa-browser-tester.</commentary>
-  </example>
-  <example>
-  user: "add Pester tests for the Northwind cert-rotation runbook"
-  assistant: "I'll write them including a negative case for Key Vault access failing."
-  <commentary>The language names the framework; a runbook has no page to render.</commentary>
-  </example>
+  Unit and integration test author — pytest, Pester, Jest, xUnit. Writes new coverage for a
+  function, module, script, or API, and audits existing suites for tautological assertions and
+  invisible skips. Use when a function or module needs tests written, or a green suite nobody
+  trusts needs auditing.
 model: haiku
 tier: employee
 parent: qa-manager

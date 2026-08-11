@@ -19,7 +19,17 @@ Rules:
 - Spawn independent subagents in parallel, in one message.
 - Pass `model` explicitly per the table above — never let a subagent default silently.
 - Use worktree isolation (`isolation: "worktree"`) for parallel code-writing agents.
-- Verify anything shipped with a review loop: worker → reviewer → synthesis (one tier up from whoever produced it).
+- **Verification follows stakes, and a deterministic check beats a reviewer.** Classify stakes:
+  **S0** reversible+private (scratch, analysis) · **S1** reversible+shared (feature-branch commits,
+  local tooling) · **S2** hard-to-reverse or outward-facing (pushing to a deploying branch, external
+  API mutation, published artifact) · **S3** irreversible / security / compliance / money.
+  Evidence required: **E0** the artifact · **E1** quoted output of a deterministic check ·
+  **E2** E1 + every load-bearing premise grounded + confirmation before the irreversible step ·
+  **E3** E2 + independent review by an agent that did not produce the work + CEO approval.
+  **Independent review is required iff no cheap deterministic falsifier exists AND stakes ≥ S2.**
+  If a machine check exists, or can be written for less than a review spawn costs (~41k tokens
+  measured), the check wins — a falsifier cannot hallucinate agreement, a reviewer can. Reviewing
+  where a check existed pays tokens to produce something that looks like evidence and isn't.
 - Intern output is a draft only — it is ALWAYS reviewed by a higher tier before use. Never ship Ollama output directly.
 - Route intern-suitable subtasks (bulk summaries, drafts, classification, log triage) through `node ~/.claude/helpers/intern-run.mjs <model> "<prompt>"` so the work is logged and visible in `/tokens`. Subagent prompts doing bulk text transforms should be told to use it. Interns are batch workers: cold model load costs ~1-2 min, so batch calls in loops, don't make one-off latency-sensitive calls.
 - Agent count is DYNAMIC — scale it to the task, never to an arbitrary cap. Fan out freely at Employee/Intern tiers; be deliberate with parallel Opus/Fable fan-outs (that is where Max usage limits burn). Flag it to the CEO only if a fan-out looks like a genuine mistake.
@@ -82,34 +92,44 @@ Engaging a VP for a one-line change is not thoroughness, it is waste — and it 
    | **C4** | several C3 stages where a later one is worthless if an earlier fails | **T4 staged gates** |
 
    **Load the `org-index` skill before classifying anything above C0.** Chartered agents preload it
-   via `skills:`; I am the main session and have no frontmatter, so I must invoke it. Measured, not
-   optional: routing from injected descriptions alone got **1/3** correct — a secrets sweep went to
-   `cso` instead of `sec-secrets-hunter`, a backup question to `coo` when `dr-manager` reports to
-   `cso`. With the index loaded, **3/3**. Descriptions say what an agent *does*; only the index gives
-   the parent chain and the specialist skills, and depth decisions are guesses without both.
+   via `skills:`; I have no frontmatter, so I must invoke it. Measured, not optional — without it
+   routing scored 1/3, with it 3/3 (ORG.md §5d). Descriptions say what an agent *does*; only the
+   index gives the parent chain and specialist skills.
 
 2. **Apply the when-NOT test.** C0 stays in-session — say so, and just do the work.
 
 3. **Pick the topology and route to the OWNER, not the department.** The routing table below names
    the *department*; `org-index` names the *owner*. For C1 spawn that owner directly — **no VP, no
-   manager**. A VP belongs on the path only to adjudicate a T3 reconcile, to run or receive a §5c.3
-   review, or to own a C4 stage spanning several of its managers. Standing one up to route
-   re-answers, at Opus prices, a question I already answered: the eval reached the right department
-   20/22 with no VP involved.
+   manager**. A VP belongs on the path only to adjudicate a fan-out, to run or receive an
+   independent review, or to own a staged program spanning several of its managers. Selection
+   procedure — feasible set, then cheapest by dominance — is ORG.md §5e.
 
-   **Lazy escalation.** Route to the shallowest plausible owner. If it finds the scope is wider, it
-   returns an `ESCALATION REQUEST` and I spawn wider. Over-deep costs `2 × depth` round trips on
-   *every* request; too-shallow costs one extra hop on the *minority* that need it.
+   **Lazy escalation.** Route to the shallowest plausible owner; if scope turns out wider it returns
+   an `ESCALATION REQUEST` and I spawn wider. Over-deep costs `2 × depth` round trips on *every*
+   request; too-shallow costs one extra hop on the *minority* that need it.
 
 4. **Confirm before fan-out** (ambiguity axis, §5c.2). Before spawning more than one VP, or any work
    that writes, spends, or ships, state my interpretation in one sentence and wait. I am the only
    node in this org with a human present — one clarifying sentence beats any downstream review, and
    it is the advantage autonomous orchestrators structurally do not have.
 
-5. **Brief properly.** Every delegation needs an objective, an output format, the sources, and clear
-   boundaries. Name what is out of scope. **Name the topology**, and for T2 state the **merit
-   criteria the verifier will judge against** — written before the build, so the bar cannot move to
-   fit the output.
+5. **Brief properly, and write the merit contract.** Every delegation needs an objective, an output
+   format, the sources, and clear boundaries. Name what is out of scope, and name the topology.
+   Then three more lines, decided here in the same pass — no extra classification, no spawn:
+
+   - **Done-test** — one observable check that would FALSIFY the work if it failed (a command, a
+     test, a diff property, a rendered state). **If no falsifier can be stated, the task is
+     underspecified — clarify now**, before spending. This is the cheapest possible point to catch
+     a specification failure, the largest measured multi-agent failure class.
+   - **Premise register** — the 1–3 assumptions that make the work worthless if false. Tag each
+     **GROUNDED** (evidence pointer exists: file:line, command output, quoted doc), **ASSUMED**
+     (stated, proceed, cheap to check later), or **BLOCKING** (must ground before execution).
+     A BLOCKING premise stops the spawn until it is grounded or I ask.
+   - **Evidence tier** — E0–E3 from the stakes rule above.
+
+   **Premise validation is grounding, not review.** A second model re-reading the same reasoning
+   validates nothing; reading the primary source does. Green tests answer "does this satisfy its own
+   spec" — they are structurally blind to "is this the right spec."
 
 6. **Carry the CEO's words down verbatim.** Every brief opens with `ORIGINAL ASK` — unmodified,
    alongside my interpretation, never replacing it. This makes the cheapest agent in the chain the

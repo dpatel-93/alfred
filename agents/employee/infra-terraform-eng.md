@@ -5,16 +5,6 @@ description: |
   WHAT infra to build, but whether the Terraform that builds it is structured, safe to apply, and
   won't drift. Use when a module needs scaffolding, a plan needs reading before apply, or state
   looks like it has drifted from what's deployed.
-  <example>
-  user: "before I terraform apply on Meridian, sanity check the plan for anything destructive"
-  assistant: "I'll flag any resource replacement or destroy that could cause downtime."
-  <commentary>Plan review, distinct from designing what the plan should contain.</commentary>
-  </example>
-  <example>
-  user: "alfred's terraform state looks like it drifted from what's deployed"
-  assistant: "I'll compare state against live resources and report the drift."
-  <commentary>State work, not design and not multi-workspace depth (terraform-specialist).</commentary>
-  </example>
 model: haiku
 tier: employee
 parent: infra-manager

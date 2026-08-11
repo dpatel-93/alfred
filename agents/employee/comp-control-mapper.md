@@ -3,17 +3,8 @@ name: comp-control-mapper
 description: |
   Maps findings and Azure/Terraform state to the exact named control ID it satisfies or violates —
   NIST 800-53, NYDFS 500, Azure Security Benchmark. A mapping without a control ID is an opinion,
-  not a finding. Use when findings need tying to named controls, or config needs its control identified.
-  <example>
-  user: "map our Key Vault and NSG config to NIST for the audit"
-  assistant: "I'll cite the exact control IDs each one satisfies or falls short of."
-  <commentary>Config and framework exist, but no IDs are attached yet.</commentary>
-  </example>
-  <example>
-  user: "we mapped TenantSync's Key Vault policy to AC-6 last quarter — has it drifted?"
-  assistant: "I'll re-read the current policy against that mapping and report whether it holds."
-  <commentary>Drift re-verification: confirm-or-flag, not a fresh citation.</commentary>
-  </example>
+  not a finding. Use when findings need tying to named controls, or config needs its control
+  identified.
 model: haiku
 tier: employee
 parent: compliance-manager

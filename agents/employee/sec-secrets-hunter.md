@@ -1,19 +1,9 @@
 ---
 name: sec-secrets-hunter
 description: |
-  Committed-credential hunter — finds API keys, tokens, and connection strings in the working tree,
-  in .env/config files, and in git HISTORY, not just current files. Use when a secret might be
-  committed, a .env file needs checking, or git history needs a credential sweep.
-  <example>
-  user: "did we ever commit an API key to this repo?"
-  assistant: "I'll sweep the working tree and the full git history."
-  <commentary>"Ever" is the tell — a working-tree grep misses a key committed then removed.</commentary>
-  </example>
-  <example>
-  user: "before I push, make sure I didn't leave a connection string in there"
-  assistant: "I'll check the staged diff and working tree for credential patterns."
-  <commentary>Credential exposure, not source logic or cloud resource settings.</commentary>
-  </example>
+  Committed-credential hunter — finds API keys, tokens, and connection strings in the working
+  tree, in .env/config files, and in git HISTORY, not just current files. Use when a secret might
+  be committed, a .env file needs checking, or git history needs a credential sweep.
 model: haiku
 tier: employee
 parent: security-manager

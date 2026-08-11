@@ -144,7 +144,7 @@ before the CEO had typed anything.
 |---|---|---|
 | VP | Full weight. 2–4 examples with `Context:` lines. | This is what the Chief of Staff reads to pick a VP. It is the *only* org routing surface loaded by default, so it is the one that must be rich. |
 | Manager | Role line, `Use when`, 2 compact examples. | Its parent VP's `## My team` table already says which manager and why not its sibling — and that loads only when the VP is spawned. |
-| Employee | Role line, `Use when`, 2 compact examples. | Its manager's `## My team` table already separates it from its siblings by surface, and its own `## Mission`/`## Rules` carry every behavioural constraint. |
+| Employee | Role line + `Use when` ONLY. **No examples** (R3). | 33 employees cost 7.2k tok on EVERY turn, for agents the Chief of Staff cannot spawn directly anyway. Their discrimination lives in the manager's `## My team` table and in org-index's parent chain — both load only when needed. Cut to ~2.6k; gated on the routing eval showing no regression. |
 
 **Detail belongs to the level that acts on it.** Broad strokes at the top to reach the right VP;
 granular and particular as you descend. A behavioural rule the agent must follow (never write a
@@ -538,8 +538,38 @@ and the eval must assert — a sixth costs more in routing error than it buys in
 | **T3** Fan-out → reconcile | N independent workers in parallel → one adjudicator strikes, dedupes, ranks | **only genuinely independent** read/analyze workstreams: audits, sweeps, ship-readiness. Never coupled builds — parallel writers need §5b file ownership and worktrees |
 | **T4** Staged gates | serial stages, each internally T0–T3; a CEO-visible gate wherever a stage can invalidate everything downstream; CoS holds a task ledger and **replans** rather than re-spawning after 2 stalls | C4 |
 
-**The choice rule is one word: coupling.** Independent work → T3. Dependent *judgment* → T2.
-Dependent *stages* → T4.
+### Selection — feasible set first, then cheapest by dominance
+
+An earlier draft picked topology by coupling alone. That answered "what shape fits the work" and
+never asked "what is the cheapest shape that can still produce the required evidence" — so it could
+select a correct-but-expensive topology and never notice. Coupling survives, but only inside the
+parallelism trigger below.
+
+Run in one classification pass — no spawn, no file read:
+
+1. **Restate the ORIGINAL ASK.** Classify **C** (complexity, above) and **S** (stakes, home
+   `CLAUDE.md`). Write the merit contract: done-test, premise register, evidence tier. Any
+   **BLOCKING** premise → ground it or ask the CEO *now*, before anything is spawned.
+2. **Feasible set** — the topologies that can produce the required evidence tier. E0–E2 are
+   topology-independent (a deterministic check works at any size). **E3 requires two independent
+   agents**, so T0 is infeasible at S3; the minimum there is work + a separate reviewer.
+3. **Cheapest by dominance.** Cost ≈ recurring + spawns×41k + 2×depth×per-spawn (serial) +
+   reads×20k + rework. So: **fewer spawns ≺ shallower depth ≺ cheaper models.** Smaller wins by
+   default. Escalate only on a named trigger:
+   - **review** — S ≥ 2 and no deterministic falsifier → add one independent reviewer.
+   - **parallel** — ≥3 genuinely *independent* chunks, each worth more than a spawn floor of work.
+     This is where coupling still decides, and where multi-agent's ~15× cost actually pays back.
+   - **isolation** — output volume would poison the main context. Context protection is a real
+     cost, so spawn even at C1.
+   - Otherwise **stay small.**
+
+**Bias small, deliberately.** Under-provisioning is recoverable mid-flight — the agent returns an
+`ESCALATION REQUEST` and the layer above spawns wider. Over-provisioning is sunk the moment the
+spawn lands. The risk is asymmetric, so the default leans to the recoverable side.
+
+**Expected failure cost is handled ordinally, through S.** That is the honest version of "expected
+cost of an undetected failure" when nobody has real probabilities — inventing numbers to multiply
+would be worse than ranking.
 
 ### T2 is the primitive that was missing
 

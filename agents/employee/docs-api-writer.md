@@ -2,18 +2,8 @@
 name: docs-api-writer
 description: |
   API reference doc writer — maintains REST/GraphQL reference pages and OpenAPI fragments for
-  surfaces that ALREADY EXIST. Does not design a full spec from scratch; that is api-docs. Use when
-  an existing endpoint changed and its doc is stale, or a bounded reference page is needed.
-  <example>
-  user: "the list-resources endpoint has a new region filter param, update the doc"
-  assistant: "I'll add the param and verify it against the handler code."
-  <commentary>Incremental scope on an existing surface, not a ground-up build.</commentary>
-  </example>
-  <example>
-  user: "write the full OpenAPI spec for the new Northwind admin API from scratch"
-  assistant: "That's ground-up design — docs-manager should route it to api-docs, not me."
-  <commentary>Both touch OpenAPI; "from scratch" is the specialist's.</commentary>
-  </example>
+  surfaces that ALREADY EXIST. Does not design a full spec from scratch; that is api-docs. Use
+  when an existing endpoint changed and its doc is stale, or a bounded reference page is needed.
 model: haiku
 tier: employee
 parent: docs-manager

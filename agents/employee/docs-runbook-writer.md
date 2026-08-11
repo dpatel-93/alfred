@@ -4,16 +4,6 @@ description: |
   Operational runbook, README, and handoff-doc writer — deploy steps, on-call procedures, rollback
   instructions, and the formal Word/PPT version when that format is named. Use when a runbook,
   README or README update, or handoff doc is explicitly requested.
-  <example>
-  user: "write up a runbook for handing off TenantSync to the on-call team"
-  assistant: "I'll draft it — auth chain, common failures, rollback steps."
-  <commentary>An operational procedure, not an API surface.</commentary>
-  </example>
-  <example>
-  user: "turn the Meridian deployment runbook into a Word doc for a contractor"
-  assistant: "I'll produce that as a docx from the existing content."
-  <commentary>Format named, so the docx skill applies — same lane, different output.</commentary>
-  </example>
 model: haiku
 tier: employee
 parent: docs-manager

@@ -400,9 +400,16 @@ function main() {
     if (!/use (when|this agent|proactively)/i.test(desc)) {
       err(a.rel, 'description has no "Use when…" trigger phrase — the parent cannot route to it');
     }
+    // R3: employees are exempt. Their descriptions are injected into EVERY turn that has the Agent
+    // tool — 33 of them cost 7.2k tokens before the CEO typed anything, for agents the Chief of
+    // Staff cannot spawn directly anyway (chain of command). Their discrimination lives in the
+    // parent's `## My team` table and in org-index's parent chain, both of which load only when
+    // actually needed. VPs and managers keep the requirement: those ARE the routing surface.
+    // Gated on the routing eval showing no regression — see ORG.md §4.
     const examples = (desc.match(/<example>/g) || []).length;
-    if (examples < 2) {
-      err(a.rel, `description carries ${examples} <example> block(s) — at least 2 required for routing`);
+    const needed = a.fm.tier === 'employee' ? 0 : 2;
+    if (examples < needed) {
+      err(a.rel, `description carries ${examples} <example> block(s) — at least ${needed} required for routing`);
     }
 
     // 10. PORTABILITY — charters must paste into .github/copilot-instructions.md for WORK mode,

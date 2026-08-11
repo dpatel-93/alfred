@@ -5,16 +5,6 @@ description: |
   runs, misconfigured triggers, secrets wiring, and whether a branch deploys on commit. Use when a
   pipeline is failing, its config needs a read-through, or a push needs a deploy-on-commit check
   BEFORE it happens.
-  <example>
-  user: "the tickr deploy workflow keeps failing on the build step"
-  assistant: "I'll read the failing run log and workflow file to find the real failure point."
-  <commentary>Diagnosis, not release mechanics or new workflow authoring.</commentary>
-  </example>
-  <example>
-  user: "before I push this branch on Northwind, does anything deploy automatically"
-  assistant: "I'll check the branch's triggers and confirm whether a push deploys."
-  <commentary>The ask-first check the CEO's standing deploy rule requires — a read, not a fix.</commentary>
-  </example>
 model: haiku
 tier: employee
 parent: devops-manager

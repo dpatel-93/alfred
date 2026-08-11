@@ -2,18 +2,8 @@
 name: infra-network-eng
 description: |
   Azure network topology specialist — VNets, NSGs, UDRs, App Gateway, WAF, Load Balancers, Traffic
-  Manager, Front Door, and Private Link design. Use when a network path needs designing, a WAF needs
-  configuring in front of a service, or something should move behind a Private Endpoint.
-  <example>
-  user: "Northwind's portal needs an App Gateway with WAF in front, what's the topology"
-  assistant: "I'll design the App Gateway/WAF topology and the NSG rules around it."
-  <commentary>Network edge, distinct from the module that encodes it or the identity behind it.</commentary>
-  </example>
-  <example>
-  user: "adding a subnet for CloudOps's Function App, what NSG rules and UDRs do I need"
-  assistant: "I'll design the subnet rules and any required UDRs."
-  <commentary>Routing design, not the compute hosting, which is platform-manager's.</commentary>
-  </example>
+  Manager, Front Door, and Private Link design. Use when a network path needs designing, a WAF
+  needs configuring in front of a service, or something should move behind a Private Endpoint.
 model: haiku
 tier: employee
 parent: infra-manager
