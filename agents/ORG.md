@@ -392,15 +392,17 @@ its dissent is reported to the CEO even when the VP disagrees with it.
 Blanket quorum is deliberately rejected: it triples cost against a failure that is rare at low
 stakes and nearly free to prevent at high stakes via mechanism 2.
 
-### The unifying rule — depth follows stakes, not domain
+### The unifying rule — three axes, three levers
 
-Chain depth was previously fixed at four levels regardless of what was asked. It is now a function
-of **stakes × ambiguity**:
+Chain depth was previously fixed at four levels regardless of what was asked. It is now decomposed:
 
-| | Unambiguous | Ambiguous |
-|---|---|---|
-| **Low stakes** (read, analyze, report) | Chief of Staff → employee. One hop. | Confirm with CEO, then one hop. |
-| **High stakes** (writes, spends, ships, asserts) | Full chain + independent review vs. original ask | Confirm, then full chain + independent review |
+- **Shape follows complexity** → topology, §5e
+- **Care follows stakes** → independent review, §5c.3 above
+- **Clarification follows ambiguity** → confirm before fan-out, §5c.2 above
+
+An earlier draft of this section folded shape into stakes with a single 2×2 table. That conflated
+two genuinely different questions and could not express a low-stakes, unambiguous, deeply coupled
+build — which is most real engineering work. See §5e for the classes and topologies.
 
 Anti-relay (§5b) already collapses layers that add nothing — but it can only fire *after* the VP
 has been spawned and paid for, so it saves the manager and never the VP. This rule fires one level
@@ -482,6 +484,75 @@ spawns upward. One extra round trip in the rare case beats four guaranteed round
 
 The cost asymmetry is the entire argument. Over-deep costs `2 × depth` round trips on **every**
 request. Too-shallow costs one escalation on **the minority** that need it.
+
+---
+
+## 5e. Complexity and topology — what shape the work takes
+
+§5c scaled depth by **stakes × ambiguity**. That was right about *when to be careful* and silent
+about *what shape the work takes*. A cross-discipline build can be low-stakes and perfectly
+unambiguous and still need four specialties and a verification loop — and the pre-R2 org had
+exactly one shape for it: fan VPs out in parallel and reconcile at the top.
+
+That shape cannot express *"the quant verifies the developer's indicator, the developer revises,
+QA regresses it."* Parallel fan-out has no loop in it. So the org could staff complex work and
+could not *close* it.
+
+**Three orthogonal axes, three different levers.** They do not compete; each answers its own question:
+
+| Axis | Question | Lever |
+|---|---|---|
+| **Complexity** | what shape? | topology (this section) |
+| **Stakes** | how careful? | independent review (§5c.3) |
+| **Ambiguity** | do I understand? | confirm before fan-out (§5c.2) |
+
+### Complexity classes
+
+Classified by the Chief of Staff from the request text plus `org-index` — no spawn, no file read.
+
+| Class | Definition | Signals | Topology | Cost of over-classing | Cost of under-classing |
+|---|---|---|---|---|---|
+| **C0** Trivial | Answerable or doable in-session | single fact; typo; tight refinement loop; answer already in context | T0 | ~15× a chat turn for nothing | none — agents can still be stood up mid-task |
+| **C1** Specialist task | One bounded artifact, one discipline | one concrete deliverable + one technology; org-index yields a unique owner | T1 | a VP+manager round trip (~2×2×41k tokens, ~30s) wasted on a script | caught by `ESCALATION REQUEST`; costs one extra hop |
+| **C2** Discipline job | Several bounded tasks, or one build needing verification, inside one discipline | plural deliverables under one routing-table row; or a single-discipline build that writes | T1 + verifier, or T3 within the discipline | Opus VP paid to relay to one Sonnet manager | unverified code ships — MAST's 21.3% class |
+| **C3** Cross-discipline build | Deliverable whose **merit is judged by a different specialty than the one building it** | verbs/nouns spanning ≥2 routing-table rows joined by one deliverable; "is it actually good/valid/safe" answerable only outside the building discipline | T2 | decorative parallel agents, ~15× spend, no loop closing | **the failure the CEO named**: one agent guessing with its own reasoning. MAST's 41.8% class |
+| **C4** Program | Several C3 workstreams where a later stage is worthless if an earlier one fails | deliverables from different rows, sequentially dependent ("an indicator **and** a website **to sell it**") | T4 | over-ceremony, stalled gates | building stage 2 on a stage 1 that should have been killed |
+
+### Topologies
+
+Five, and deliberately no more. Every topology is something a router must learn to pick correctly
+and the eval must assert — a sixth costs more in routing error than it buys in expressiveness.
+
+| Name | Shape | Pick when |
+|---|---|---|
+| **T0** In-session | no spawn | C0 — the handoff costs more than the work |
+| **T1** Direct | CoS → one specialist; `ESCALATION REQUEST` is the escape hatch | C1 — org-index yields a unique owner |
+| **T2** Build → verify → revise | builder → **verifier (different spawn, told to refute)** → REJECTED findings with evidence → builder revises → verifier re-checks *only the rejected items*; **≤2 cycles then escalate** | any deliverable whose merit is judged by a different specialty; any C2+ that writes |
+| **T3** Fan-out → reconcile | N independent workers in parallel → one adjudicator strikes, dedupes, ranks | **only genuinely independent** read/analyze workstreams: audits, sweeps, ship-readiness. Never coupled builds — parallel writers need §5b file ownership and worktrees |
+| **T4** Staged gates | serial stages, each internally T0–T3; a CEO-visible gate wherever a stage can invalidate everything downstream; CoS holds a task ledger and **replans** rather than re-spawning after 2 stalls | C4 |
+
+**The choice rule is one word: coupling.** Independent work → T3. Dependent *judgment* → T2.
+Dependent *stages* → T4.
+
+### T2 is the primitive that was missing
+
+§5b has said since the rebuild that verification must be a separate spawn told to refute. **Zero
+loop shapes implemented it** — it described a property with no structure to hang it on. T2 is that
+structure:
+
+1. The builder's brief states the **merit criteria** the verifier will judge against. Written down
+   before the build, so the bar cannot move to fit the output.
+2. The verifier is a **different spawn**, ideally a different discipline, receiving the original
+   ask and the artifact — **not the builder's reasoning**. A verifier that reads the build log
+   inherits its premise and is worth nothing.
+3. It returns **REJECTED findings with evidence**, not a grade.
+4. The builder revises. The verifier re-checks **only the rejected items** — a full re-verify per
+   cycle is how a 2-cycle cap turns into a 6-cycle bill.
+5. **2 cycles, then escalate to the CEO.** Borrowed from Magentic-One's stall threshold and
+   consistent with the 5-iteration hard rule.
+
+A T2 loop whose verifier never rejects anything on the first pass is a smell: either the merit
+criteria were written to be passed, or the verifier is confirming rather than refuting.
 
 ---
 

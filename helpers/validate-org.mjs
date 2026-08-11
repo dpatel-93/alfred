@@ -235,6 +235,37 @@ function main() {
       if (t && !chartered.includes(t)) uncharteredTargets.add(t);
     }
   }
+  // --- R2: org-index drift ---------------------------------------------------------------------
+  // org-index is generated from these same files and preloaded into every chartered agent, so a
+  // stale index is a roster that lies with authority. Cheaper to catch here than to debug a
+  // misroute later.
+  const idxPath = path.join(os.homedir(), '.claude', 'skills', 'org-index', 'SKILL.md');
+  if (fs.existsSync(idxPath)) {
+    const idx = fs.readFileSync(idxPath, 'utf8');
+    for (const a of chartered) {
+      if (!new RegExp(`\\|\\s*\`${a.fm.name}\`\\s*\\|`).test(idx)) {
+        err('skills/org-index/SKILL.md', `missing \`${a.fm.name}\` — regenerate: `
+          + `node ~/.claude/helpers/gen-org-index.mjs`);
+        continue;
+      }
+      // The Skills column is the routing signal for "who knows which skill to use". If a charter
+      // declares a skill the index does not show, the router cannot see it.
+      const declared = (a.fm.skills || '').split(',').map((s) => s.trim())
+        .filter((s) => s && !['org-index', 'vault-recall', 'verification-before-completion',
+                              'systematic-debugging'].includes(s));
+      const row = idx.split('\n').find((l) => l.includes(`\`${a.fm.name}\``)) || '';
+      for (const sk of declared) {
+        if (!row.includes(`\`${sk}\``)) {
+          warn('skills/org-index/SKILL.md', `\`${a.fm.name}\` declares skill \`${sk}\` but the `
+            + `index row does not show it — regenerate`);
+        }
+      }
+    }
+  } else {
+    warn('skills/org-index/SKILL.md', 'not generated — every chartered agent preloads it; '
+      + 'run node ~/.claude/helpers/gen-org-index.mjs');
+  }
+
   for (const t of uncharteredTargets) {
     if (!/^##\s*What I return/m.test(t.body)) {
       warn(t.rel, 'delegated to by a chartered agent but has no `## What I return` — its caller '

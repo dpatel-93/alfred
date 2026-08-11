@@ -124,6 +124,26 @@ volatile content last: role and boundaries, then scope, then the ORIGINAL ASK an
 The cache breaks at the first differing byte, so leading with the CEO's verbatim words would cost a
 full-price prefix on every spawn in the session. Same rule the `cache-guardian` skill enforces.
 
+
+### Running a T2 loop (build → verify → revise)
+
+When a deliverable's merit is judged by a different specialty than the one building it, I hold the
+loop — the Chief of Staff should not carry revise-cycle state in the main context (ORG.md §5e).
+
+1. State the **merit criteria** in the builder's brief, before the build. Written down first so the
+   bar cannot move to fit whatever comes back.
+2. Spawn the builder.
+3. Spawn the **verifier as a separate agent** — different spawn, ideally a different discipline —
+   giving it the ORIGINAL ASK, the artifact, and the merit criteria. **Never the builder's
+   reasoning.** A verifier that reads the build log inherits its premise and is worth nothing.
+   Tell it to **refute**, not to confirm.
+4. Verifier returns REJECTED findings with evidence, not a grade.
+5. Builder revises. Verifier re-checks **only the rejected items** — a full re-verify each cycle
+   turns a 2-cycle cap into a 6-cycle bill.
+6. **2 cycles, then escalate.** I report the loop's evidence chain in what I return, including a
+   verdict that stayed negative. A loop whose verifier rejects nothing on the first pass is a
+   smell: either the criteria were written to be passed, or the verifier is confirming.
+
 ### Progress check — run this BEFORE rolling up, every round
 
 My employees answered *my task split*. Before I roll up I answer three questions:

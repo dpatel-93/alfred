@@ -25,8 +25,16 @@
 //   'CLARIFY' — genuinely ambiguous; correct behaviour is confirm-before-fan-out (ORG.md §5c.2),
 //               not a confident guess.
 //
-// `depth` asserts ORG.md §5c's stakes-scaled routing: how many hops SHOULD be paid for.
+// `depth` asserts how many hops SHOULD be paid for.
 //   'none' | 'direct' (CoS→employee/manager) | 'full' (CoS→VP→mgr→emp) | 'full+review'
+//
+// DEPTH IS ALWAYS 'none' FOR A CLARIFY CASE. Resolved after the first run scored an ambiguity as
+// an error: the spec meant "nothing spawns yet"; the router reported the depth it would use AFTER
+// clarifying. Both readings were defensible, which is the definition of a broken spec. The rule is
+// now explicit — CLARIFY means nothing has been spawned, so no depth has been paid.
+//
+// `topology` asserts ORG.md §5e's shape: 'T0' | 'T1' | 'T2' | 'T3' | 'T4'. Complexity decides shape,
+// stakes decides review, ambiguity decides clarification — three axes, scored separately.
 //
 // `trap` records what a plausible-but-wrong router would answer, and why. A case with no trap is
 // not earning its place in the set.
@@ -213,6 +221,33 @@ const ROUTING_CASES = [
     trap: 'security-manager. A named framework makes it PROVING posture (compliance), not FINDING '
         + 'problems (security). Also asserts a compliance position, so §5c.3 review applies: the '
         + 'reviewer sees only this sentence and the deliverable, never the chain\'s reasoning.',
+  },
+
+  // ------------------------------------------------- complexity/topology (R2 §5e, added 2026-08-11)
+  // The CEO's own two worked examples, phrased as he phrased them. These are the cases that
+  // separate "routed to the right person" from "picked the right SHAPE" — the axis the first
+  // 22 cases never tested, because before §5e the org had only one shape for complex work.
+  {
+    id: 'r23-one-call-specialist',
+    q: 'I need a script to scrape all my storage accounts from azure',
+    expect: 'azure-infra-engineer', depth: 'direct', topology: 'T1',
+    trap: 'architect, or infra-manager, or a T3 fan-out across infra employees. One artifact, one '
+        + 'technology, read-only — C1. The CEO named this himself as the bar for nimble: any VP on '
+        + 'the path is a failure even if the script is perfect, because the cost of the answer is '
+        + 'part of the answer. Also tests the Skills column: the router should reach a specialist '
+        + 'with Azure/PowerShell authorship, not sec-config-auditor (that audits storage config, '
+        + 'not inventories it) and not analytics-cost-eng (that traces spend).',
+  },
+  {
+    id: 'r24-program-staged-gates',
+    q: 'design a new digital trading indicator and a website around it to sell it',
+    expect: 'CLARIFY', depth: 'none', topology: 'T4',
+    trap: 'Spawning a T3 fan-out across cfo + cto and stapling the returns together. Two '
+        + 'deliverables from different departments, sequentially dependent — C4, staged gates. The '
+        + 'load-bearing property is GATE 1: if the quant loop finds no edge, the website is never '
+        + 'built. A parallel fan-out builds the site regardless, which is precisely the spend this '
+        + 'redesign exists to prevent. It is CLARIFY first because it ships and sells — high '
+        + 'stakes, and §5c.2 requires confirming interpretation before committing to a program.',
   },
 ];
 

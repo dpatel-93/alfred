@@ -34,7 +34,10 @@ const agents = [];
         .replace(/\n\s*/g, ' ').replace(/`/g, '').trim();
       surface = surface.split(/(?<=[a-z0-9)])\.\s/)[0].replace(/\.$/, '');
       if (surface.length > 118) surface = surface.slice(0, 115).replace(/\s\S*$/, '') + '…';
-      agents.push({ name, tier: g('tier') || 'specialist', parent: g('parent') || '—', surface });
+      const skills = (g('skills') || '').split(',').map((x) => x.trim())
+        .filter((x) => x && !['org-index', 'vault-recall', 'verification-before-completion',
+                              'systematic-debugging'].includes(x));
+      agents.push({ name, tier: g('tier') || 'specialist', parent: g('parent') || '—', surface, skills });
     }
   }
 })(ROOT);
@@ -43,7 +46,8 @@ const ORDER = { vp: 0, manager: 1, employee: 2, specialist: 3 };
 agents.sort((a, b) => (ORDER[a.tier] - ORDER[b.tier]) || a.name.localeCompare(b.name));
 
 const rows = (tier) => agents.filter((a) => a.tier === tier)
-  .map((a) => `| \`${a.name}\` | ${a.parent === '—' ? '—' : `\`${a.parent}\``} | ${a.surface} |`)
+  .map((a) => `| \`${a.name}\` | ${a.parent === '—' ? '—' : `\`${a.parent}\``} | ${a.surface} | `
+            + `${a.skills.length ? a.skills.map((s) => `\`${s}\``).join(' ') : '—'} |`)
   .join('\n');
 
 const body = `---
@@ -72,26 +76,26 @@ Spawning is top-down. To reach a tier ABOVE you, return an escalation request �
 
 ## VPs — one per domain
 
-| Agent | Reports to | Owns |
-|---|---|---|
+| Agent | Reports to | Owns | Specialist skills |
+|---|---|---|---|
 ${rows('vp')}
 
 ## Managers — one per discipline
 
-| Agent | Reports to | Owns |
-|---|---|---|
+| Agent | Reports to | Owns | Specialist skills |
+|---|---|---|---|
 ${rows('manager')}
 
 ## Employees — one bounded surface each
 
-| Agent | Reports to | Owns |
-|---|---|---|
+| Agent | Reports to | Owns | Specialist skills |
+|---|---|---|---|
 ${rows('employee')}
 
 ## Specialists — delegated to by name, exempt from the charter (ORG.md §7)
 
-| Agent | Reports to | Owns |
-|---|---|---|
+| Agent | Reports to | Owns | Specialist skills |
+|---|---|---|---|
 ${rows('specialist')}
 
 ---

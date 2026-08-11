@@ -26,6 +26,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const AGENTS = path.join(os.homedir(), '.claude', 'agents');
 const SENTINELS = new Set(['NONE', 'CLARIFY']);
 const DEPTHS = new Set(['none', 'direct', 'full', 'full+review']);
+const TOPOLOGIES = new Set(['T0', 'T1', 'T2', 'T3', 'T4']);
 
 const C = process.stdout.isTTY
   ? { r: (s) => `\x1b[31m${s}\x1b[0m`, g: (s) => `\x1b[32m${s}\x1b[0m`,
@@ -65,6 +66,11 @@ function check() {
       }
     }
     if (!DEPTHS.has(c.depth)) errs.push(`${c.id}: unknown depth "${c.depth}"`);
+    if ([c.expect].flat()[0] === 'CLARIFY' && c.depth !== 'none') {
+      errs.push(`${c.id}: CLARIFY must carry depth 'none' — nothing has been spawned yet, so no `
+              + `depth has been paid. This ambiguity cost 5 false failures on the first run.`);
+    }
+    if (c.topology && !TOPOLOGIES.has(c.topology)) errs.push(`${c.id}: unknown topology "${c.topology}"`);
     if (!c.trap || c.trap.length < 30) {
       errs.push(`${c.id}: missing or trivial trap — a case with no plausible wrong answer is not `
               + `discriminating anything`);
@@ -113,16 +119,27 @@ function findFile(name) {
 const RUBRIC = `You are the Alfred Chief of Staff. Route the request below per ~/.claude/CLAUDE.md
 and agents/ORG.md.
 
+Load the org-index skill first. Do not open ORG.md to look up a name.
+
 Answer with JSON only, no prose:
 {"owner":"<exact agent name, or NONE to stay in-session, or CLARIFY to confirm with the CEO first>",
  "depth":"none|direct|full|full+review",
+ "topology":"T0|T1|T2|T3|T4",
  "why":"<one sentence>"}
 
-Rules that decide this:
-- NONE  = engaging the org is the wrong call (answerable from context, trivial edit, tight iteration).
-- CLARIFY = genuinely ambiguous, OR high-stakes and irreversible. Confirm before spawning (ORG.md 5c.2).
-- depth follows stakes x ambiguity, not domain (ORG.md 5c). Four levels is a ceiling, not a default.
-- If the ask already arrives scoped to one employee's surface, name that employee, not its VP.`;
+Three ORTHOGONAL axes decide this (ORG.md 5e). Do not collapse them:
+- COMPLEXITY decides topology.  C0 in-session -> T0.  C1 one artifact, one discipline -> T1.
+  C2 several tasks or one build needing verification, one discipline -> T1+verifier or T3.
+  C3 merit judged by a DIFFERENT specialty than the builder -> T2 build/verify/revise.
+  C4 staged workstreams where a later stage is worthless if an earlier fails -> T4 staged gates.
+- STAKES decides review (writes/spends/ships/asserts -> independent refute-review, 5c.3).
+- AMBIGUITY decides clarification (5c.2). CLARIFY always carries depth "none" — nothing spawned yet.
+
+- NONE = engaging the org is the wrong call (answerable from context, trivial edit, tight iteration).
+- Route to the OWNER, not the department. If the ask arrives scoped to one employee's surface, name
+  that employee — not its manager and not its VP. A VP belongs on the path only to adjudicate a T3
+  reconcile, to run/receive a 5c.3 review, or to own a C4 stage spanning several of its managers.
+- The coupling rule: independent work -> T3. Dependent judgment -> T2. Dependent stages -> T4.`;
 
 function emit(out) {
   const lines = CASES.map((c) => JSON.stringify({
@@ -146,7 +163,7 @@ function score(file) {
     got.set(r.id, r);
   }
 
-  let owner = 0, depth = 0, both = 0, missing = 0;
+  let owner = 0, depth = 0, both = 0, missing = 0, topoOk = 0, topoTotal = 0;
   const fails = [];
 
   for (const c of CASES) {
@@ -156,6 +173,7 @@ function score(file) {
     const okOwner = want.includes(r.owner)
       || (want.length > 1 && want.every((w) => (r.owner || '').includes(w)));
     const okDepth = r.depth === c.depth;
+    if (c.topology) { topoTotal++; if (r.topology === c.topology) topoOk++; }
     if (okOwner) owner++;
     if (okDepth) depth++;
     if (okOwner && okDepth) both++;
@@ -171,6 +189,10 @@ function score(file) {
   console.log(`  ROUTING ACCURACY  ${C.b(pct(owner))}  (${owner}/${n})   did it pick the right owner`);
   console.log(`  DEPTH ACCURACY    ${C.b(pct(depth))}  (${depth}/${n})   did it pay for the right chain`);
   console.log(`  BOTH              ${C.b(pct(both))}  (${both}/${n})`);
+  if (topoTotal) {
+    const tp = `${((topoOk / topoTotal) * 100).toFixed(1)}%`;
+    console.log(`  TOPOLOGY ACCURACY ${C.b(tp)}  (${topoOk}/${topoTotal})   did it pick the right shape`);
+  }
   if (missing) console.log(`  ${C.y(`${missing} case(s) had no result — counted as failures`)}`);
 
   // Over-engagement is scored separately: it is the failure that costs money rather than accuracy.
