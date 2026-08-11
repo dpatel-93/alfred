@@ -563,9 +563,20 @@ Run in one classification pass — no spawn, no file read:
      cost, so spawn even at C1.
    - Otherwise **stay small.**
 
-**Bias small, deliberately.** Under-provisioning is recoverable mid-flight — the agent returns an
-`ESCALATION REQUEST` and the layer above spawns wider. Over-provisioning is sunk the moment the
-spawn lands. The risk is asymmetric, so the default leans to the recoverable side.
+**Bias small, deliberately — but only while the work is reversible.** Under-provisioning is
+recoverable mid-flight: the agent returns an `ESCALATION REQUEST` and the layer above spawns wider.
+Over-provisioning is sunk the moment the spawn lands. The risk is asymmetric, so the default leans
+to the recoverable side.
+
+**At S ≥ 2 that asymmetry disappears, so the BLOCKING-premise check runs FIRST and its answer
+outranks any topology conclusion.** An irreversible or outward-facing action resting on an
+ungrounded load-bearing premise is **CLARIFY**, no matter how confidently C and T resolve.
+
+This sentence exists because its absence was measured. Stated unconditionally, "bias small — we can
+correct later" is a rationalization the router will accept, and it is false exactly where it costs
+most: a rollback cannot be un-rolled-back, and a program that ships and sells cannot be un-shipped.
+Two cases regressed from CLARIFY to confident routing on that reasoning — including a rollback whose
+load-bearing premise ("the fault is in the release being rolled back") was never grounded.
 
 **Expected failure cost is handled ordinally, through S.** That is the honest version of "expected
 cost of an undetected failure" when nobody has real probabilities — inventing numbers to multiply

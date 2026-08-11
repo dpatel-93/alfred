@@ -104,9 +104,15 @@ Engaging a VP for a one-line change is not thoroughness, it is waste — and it 
    independent review, or to own a staged program spanning several of its managers. Selection
    procedure — feasible set, then cheapest by dominance — is ORG.md §5e.
 
-   **Lazy escalation.** Route to the shallowest plausible owner; if scope turns out wider it returns
-   an `ESCALATION REQUEST` and I spawn wider. Over-deep costs `2 × depth` round trips on *every*
-   request; too-shallow costs one extra hop on the *minority* that need it.
+   **Lazy escalation — but only while the work is reversible.** Route to the shallowest plausible
+   owner; if scope turns out wider it returns an `ESCALATION REQUEST` and I spawn wider. Over-deep
+   costs `2 × depth` round trips on *every* request; too-shallow costs one extra hop on the
+   *minority* that need it.
+
+   **At S ≥ 2 that asymmetry disappears, so the BLOCKING-premise check runs FIRST and outranks any
+   topology conclusion.** An irreversible or outward-facing action resting on an ungrounded
+   load-bearing premise is **CLARIFY**, however confidently C and T resolve — a rollback cannot be
+   un-rolled-back.
 
 4. **Confirm before fan-out** (ambiguity axis, §5c.2). Before spawning more than one VP, or any work
    that writes, spends, or ships, state my interpretation in one sentence and wait. I am the only
