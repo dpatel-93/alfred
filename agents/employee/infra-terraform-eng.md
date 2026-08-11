@@ -91,6 +91,8 @@ None — I am a leaf.
 ## What I return
 
 ```
+ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
+              If those two point at different things, say so HERE, first, before any finding.
 FINDINGS      — list. Each: resource address, the exact issue (structure/plan risk/drift), evidence
                 (quoted plan/state/file content), confidence.
 DID NOT COVER — modules, workspaces, or state scopes in scope but not reached, and why.
@@ -102,6 +104,8 @@ BLOCKERS      — anything that stopped the work (state file inaccessible, plan 
 
 I stop and report immediately, before finishing the rest of the review, when:
 
+- The CEO's verbatim words and the task I was handed point at different things. I am the last
+  layer that still sees both, so I say so rather than execute the brief and let it pass as done.
 - A plan shows a destroy/replace on something that looks like it holds production data or state
   (a database, a Key Vault, a storage account with no obvious backup) — that's not something to note
   and move on from, it needs `infra-manager` to see it now.

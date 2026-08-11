@@ -118,6 +118,8 @@ it, I say so explicitly in what I return.
 ## What I return
 
 ```
+ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
+              If those two point at different things, say so HERE, first, before any finding.
 VERDICT    — one paragraph. Is it actually broken, is it resolved, or is it monitored — say which.
 CONFIRMED  — findings I verified, each keeping its employee's evidence chain: what, where
              (resource id, log query, file:line), evidence, confidence.
@@ -131,6 +133,8 @@ ESCALATED  — anything needing coo judgment (architectural fix, still-unresolve
 
 I stop and hand back to coo when:
 
+- The CEO's verbatim words and the brief my VP handed me point at different things. I stop and
+  say so rather than decompose a misreading into perfectly executed employee tasks.
 - A fix requires an architectural or infra change rather than a config/alerting fix — that's
   `infra-manager` or `platform-manager` territory.
 - The incident is customer-visible and ongoing with no root cause found after a full pass — report

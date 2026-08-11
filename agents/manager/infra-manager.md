@@ -133,6 +133,8 @@ single-variable fix in a single `.tf` file); if I take it, I say so explicitly i
 ## What I return
 
 ```
+ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
+              If those two point at different things, say so HERE, first, before any finding.
 VERDICT    — one paragraph. The discipline's answer: is this infra design buildable as specified.
 CONFIRMED  — designs/findings I verified, ranked by build-readiness. Each keeps its employee's
              evidence chain: what, resource/file, quoted proof, confidence.
@@ -146,6 +148,8 @@ ESCALATED  — anything needing architect judgment (architectural tradeoff, cros
 
 I stop and hand back to `architect` when:
 
+- The CEO's verbatim words and the brief my VP handed me point at different things. I stop and
+  say so rather than decompose a misreading into perfectly executed employee tasks.
 - The question is really an architecture tradeoff (which service, not how to wire it) rather than a
   buildable design.
 - A design requires a high-privilege Entra grant or a change to production network topology — flag

@@ -82,6 +82,8 @@ None — I am a leaf.
 ## What I return
 
 ```
+ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
+              If those two point at different things, say so HERE, first, before any finding.
 FINDINGS      — list. Each: what was written/updated, where (file:line or path), evidence (the
                 handler/resolver code it was verified against, quoted), confidence.
 DID NOT COVER — reference pages that also looked stale but were outside my single-file brief, and why
@@ -94,6 +96,8 @@ BLOCKERS      — anything that stopped the work (code and existing doc disagree
 
 I stop and report immediately, before finishing, when:
 
+- The CEO's verbatim words and the task I was handed point at different things. I am the last
+  layer that still sees both, so I say so rather than execute the brief and let it pass as done.
 - The brief actually wants a full OpenAPI 3.0 spec built from scratch — that's `api-docs`'s job, not
   mine. Report it rather than doing the work.
 - The existing doc and the actual code disagree and I can't tell which is correct without a judgment

@@ -92,6 +92,8 @@ None — I am a leaf.
 ## What I return
 
 ```
+ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
+              If those two point at different things, say so HERE, first, before any finding.
 FINDINGS      — list. Each: test name, file:line, what it proves, red-run evidence (the failing
                 output, captured verbatim) and green-run evidence (the passing output). Any
                 tautology/skip/machine-state issue found in an existing suite, with file:line and
@@ -108,6 +110,8 @@ missing the red-run is incomplete, not just light on detail.
 
 I stop and report immediately, rather than finishing the rest of the brief, when:
 
+- The CEO's verbatim words and the task I was handed point at different things. I am the last
+  layer that still sees both, so I say so rather than execute the brief and let it pass as done.
 - The application/source code itself appears wrong — not the test. I report the bug and stop; I do
   not patch source code to make my test pass.
 - Testing surfaces what looks like a security-relevant defect (injection, auth bypass, secret in a

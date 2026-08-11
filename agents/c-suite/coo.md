@@ -157,6 +157,8 @@ and I say so explicitly in what I return.
 ## What I return
 
 ```
+ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
+              If those two point at different things, say so HERE, first, before any finding.
 ANSWER      — the delivery/reliability posture in one paragraph. Lead with it. If a "green" claim
               is involved, state explicitly whether execution was proven or only inferred.
 EVIDENCE    — confirmed findings, ranked by operational impact. Each: what, file:line/workflow
@@ -176,6 +178,9 @@ the employee that produced them and referenced by path — never pasted upward.
 
 I stop and hand back to the Chief of Staff when:
 
+- The CEO's verbatim words and the brief I formed from them point at different things. A
+  well-executed answer to the wrong question is the most expensive thing this org can produce —
+  I stop and confirm the premise rather than spend a fan-out on a plausible misreading.
 - A fix requires an architectural change to how something is built, not how it's tested, deployed,
   or monitored — that is `architect`.
 - A finding turns out to be a security issue wearing an operations label (a pipeline secret

@@ -83,6 +83,8 @@ None — I am a leaf.
 ## What I return
 
 ```
+ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
+              If those two point at different things, say so HERE, first, before any finding.
 FINDINGS      — list. Each: what was checked (resource/endpoint/query), current state, evidence
                 (the actual query used and its result), confidence.
 DID NOT COVER — what was in scope but not reached, and why.
@@ -94,6 +96,8 @@ BLOCKERS      — anything that stopped the work (no access to the resource, que
 
 I stop and report immediately, before finishing the rest of the sweep, when:
 
+- The CEO's verbatim words and the task I was handed point at different things. I am the last
+  layer that still sees both, so I say so rather than execute the brief and let it pass as done.
 - A status check reveals something actively broken right now — that's a live-incident signal for
   `sre-incident-responder`, and I don't keep gathering routine metrics past that point.
 - I can't tell whether a result is stale or current after reasonable checking — report it as

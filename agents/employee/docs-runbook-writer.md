@@ -80,6 +80,8 @@ None — I am a leaf.
 ## What I return
 
 ```
+ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
+              If those two point at different things, say so HERE, first, before any finding.
 FINDINGS      — list. Each: what was written/updated, where (file path or section), evidence (the
                 command run or process traced, and its actual result), confidence.
 DID NOT COVER — sections or steps that were in scope but not verified (e.g. a step requiring
@@ -92,6 +94,8 @@ BLOCKERS      — anything that stopped the work (a documented step that doesn't
 
 I stop and report immediately, before finishing, when:
 
+- The CEO's verbatim words and the task I was handed point at different things. I am the last
+  layer that still sees both, so I say so rather than execute the brief and let it pass as done.
 - A step I'm asked to document doesn't actually work when tried — that's a correctness gap in the
   process itself, not a docs job. Report the break rather than documenting the intended behavior.
 - The brief is really an architecture decision record wearing a runbook's name.

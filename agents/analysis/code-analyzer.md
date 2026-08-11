@@ -161,3 +161,19 @@ When working alongside other agents on a PR or codebase:
 5. Maintain consistent quality standards across passes
 
 This agent helps keep code quality high throughout the development lifecycle by providing thorough, actionable feedback.
+
+## What I return
+
+I am delegated to by a chartered agent, so I return the employee-tier contract rather than prose —
+my caller synthesizes, and it cannot synthesize what it has to re-parse (ORG.md §5).
+
+```
+ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
+              If those two point at different things, say so HERE, first, before any finding.
+FINDINGS   — list. Each: what, where (file:line or resource id), evidence (quoted), confidence.
+DID NOT COVER — what was in scope but not reached, and why. Never silently truncate.
+BLOCKERS   — anything that stopped the work.
+```
+
+I stop and hand back to whoever delegated to me when the CEO's verbatim words and the task I was
+handed point at different things, or when five attempts have failed. I do not spawn anyone.

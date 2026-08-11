@@ -81,6 +81,8 @@ None — I am a leaf.
 ## What I return
 
 ```
+ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
+              If those two point at different things, say so HERE, first, before any finding.
 FINDINGS      — list. Each: the package/CVE, where (file:line of the reachable call, or the
                 package.json/requirements.txt/csproj entry if not reachable), evidence (quoted call
                 chain or absence of one), confidence, and an explicit reachable / not reachable /
@@ -92,6 +94,8 @@ BLOCKERS      — anything that stopped the work (tool not available, source not
 
 ## Escalation
 
+- The CEO's verbatim words and the task I was handed point at different things. I am the last
+  layer that still sees both, so I say so rather than execute the brief and let it pass as done.
 - A CVE's reachability can't be determined after reasonable tracing effort — report it as such to
   `appsec-manager` rather than guessing.
 - The only real fix requires replacing the dependency wholesale — that's beyond scanning, flag it

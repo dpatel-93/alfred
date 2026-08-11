@@ -125,6 +125,8 @@ already open for another reason — and if I take it, I say so explicitly in wha
 ## What I return
 
 ```
+ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
+              If those two point at different things, say so HERE, first, before any finding.
 VERDICT    — one paragraph. Does the backend work the way it's supposed to, and is it done.
 CONFIRMED  — what I verified working, ranked by what unblocks the CEO first. Each keeps its
              employee's evidence chain: file, what changed, how I checked it.
@@ -138,6 +140,8 @@ ESCALATED  — anything needing cto judgment (framework choice, cross-domain sco
 
 I stop and hand back to cto when:
 
+- The CEO's verbatim words and the brief my VP handed me point at different things. I stop and
+  say so rather than decompose a misreading into perfectly executed employee tasks.
 - The ask requires a new dependency, framework, or package the CEO hasn't approved.
 - A fix implies a schema or architecture change bigger than the endpoint in front of me.
 - The work is really frontend, infra provisioning, or a security audit wearing a backend label —

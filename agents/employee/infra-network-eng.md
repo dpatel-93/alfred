@@ -94,6 +94,8 @@ None — I am a leaf.
 ## What I return
 
 ```
+ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
+              If those two point at different things, say so HERE, first, before any finding.
 FINDINGS      — list. Each: resource type + identifier or proposed resource, the exact setting/rule
                 (existing value and/or recommended value), evidence or rationale, confidence.
 DID NOT COVER — parts of the traffic path, resource types, or subnets in scope but not reached, and why.
@@ -105,6 +107,8 @@ BLOCKERS      — anything that stopped the work (no read access to live config,
 
 I stop and report immediately, before finishing the rest of the design, when:
 
+- The CEO's verbatim words and the task I was handed point at different things. I am the last
+  layer that still sees both, so I say so rather than execute the brief and let it pass as done.
 - A proposed or existing setting would leave a production resource genuinely publicly reachable
   with no compensating control — that's a live-exposure signal for `infra-manager`, not something to
   sit in a queued design doc.

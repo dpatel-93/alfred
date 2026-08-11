@@ -83,6 +83,8 @@ None — I am a leaf.
 ## What I return
 
 ```
+ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
+              If those two point at different things, say so HERE, first, before any finding.
 FINDINGS      — list. Each: what (readiness fact or changelog content), where (file:line, commit SHA,
                 or artifact path), evidence (quoted), confidence. If I wrote release notes, the file
                 path is named here.
@@ -94,6 +96,8 @@ BLOCKERS      — anything that stopped the work, including an unconfirmed deplo
 
 I stop and report immediately, before finishing the rest of the check, when:
 
+- The CEO's verbatim words and the task I was handed point at different things. I am the last
+  layer that still sees both, so I say so rather than execute the brief and let it pass as done.
 - A deploy-on-commit branch is flagged and there's no record of CEO confirmation — stop, report it
   as a BLOCKER, and do not recommend the push proceed.
 - The version scheme is ambiguous or conflicting across files — report as unconfirmed rather than

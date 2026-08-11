@@ -86,6 +86,8 @@ None — I am a leaf.
 ## What I return
 
 ```
+ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
+              If those two point at different things, say so HERE, first, before any finding.
 FINDINGS      — list. Each: what, where (resource id, billing line, or Terraform resource block),
                 evidence (the export line, pricing page, or free-tier limit that proves it), confidence.
 DID NOT COVER — what was in scope but not reached (e.g. a subscription outside my access, a billing
@@ -97,6 +99,8 @@ BLOCKERS      — anything that stopped the work (no billing access, missing cos
 
 I stop and report immediately, before finishing the rest of the trace, when:
 
+- The CEO's verbatim words and the task I was handed point at different things. I am the last
+  layer that still sees both, so I say so rather than execute the brief and let it pass as done.
 - A resource appears to be actively accumulating cost outside any expected usage pattern (e.g. a
   forgotten VM, an unbounded storage write loop) — that's time-sensitive, report now.
 - I can't confirm whether a cost driver is real usage or a billing anomaly after reasonable

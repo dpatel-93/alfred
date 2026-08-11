@@ -85,6 +85,8 @@ None — I am a leaf.
 ## What I return
 
 ```
+ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
+              If those two point at different things, say so HERE, first, before any finding.
 FINDINGS      — list. Each: the recommended service and tier, why (workload shape + limit checked),
                 cost (free or the specific paid tier and rate), and confidence.
 DID NOT COVER — services or tiers in scope that weren't checked, and why (e.g. regional
@@ -97,6 +99,8 @@ BLOCKERS      — anything that stopped the work (no access to check actual usag
 
 I stop and report immediately, before finishing the rest of the comparison, when:
 
+- The CEO's verbatim words and the task I was handed point at different things. I am the last
+  layer that still sees both, so I say so rather than execute the brief and let it pass as done.
 - The workload genuinely cannot fit any PaaS free tier and the CEO hasn't said a budget is
   acceptable — flag the cost before recommending anything, don't assume it's fine.
 - The right fix looks architectural (the app needs a rewrite to run stateless, or needs a container)

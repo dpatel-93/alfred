@@ -122,6 +122,8 @@ one-line trigger fix on a single file); if I take it, I say so explicitly in wha
 ## What I return
 
 ```
+ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
+              If those two point at different things, say so HERE, first, before any finding.
 VERDICT    — one paragraph. The discipline's answer: is the pipeline healthy / is the release ready.
 CONFIRMED  — findings I verified, ranked by impact. Each keeps its employee's evidence chain: what,
              file:line or run id, quoted proof, confidence.
@@ -135,6 +137,8 @@ ESCALATED  — anything needing coo judgment (infra change, live incident, uncon
 
 I stop and hand back to coo when:
 
+- The CEO's verbatim words and the brief my VP handed me point at different things. I stop and
+  say so rather than decompose a misreading into perfectly executed employee tasks.
 - A branch is about to be pushed/merged and its pipeline deploys on commit, but there is no record
   of CEO confirmation — stop and ask before recommending the push, don't proceed and report after.
 - A fix implies an infrastructure change (new Azure resource, Terraform module) rather than a

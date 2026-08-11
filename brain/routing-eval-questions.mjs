@@ -1,0 +1,194 @@
+// Ground-truth routing cases for the Alfred org.
+//
+// WHY THIS EXISTS
+// ---------------
+// Before R2 this framework had exactly one behavioural eval — `eval-questions.mjs`, which measures
+// vault chunk retrieval. Everything else under `brain/test/` is structural: the validator proves
+// delegation targets resolve, the Playwright suites prove the HUD renders. Nothing measured whether
+// the org ROUTES CORRECTLY, and nothing measured whether using the org beats not using it.
+//
+// That gap is the honest core of the "what's the actual breakthrough beyond packaging" critique.
+// A hierarchy whose accuracy is unmeasured is an assertion. The Berkeley MAST study (NeurIPS 2025)
+// found prompt-and-topology refinement bought only +15.6% on ChatDev — Alfred is largely
+// prompt-and-topology refinement, so it should EXPECT modest gains and must prove them.
+//
+// WHAT IS BEING TESTED
+// --------------------
+// `expect` is the agent (or outcome) that should own the request per ORG.md's domain definitions —
+// NOT per whichever charter description happens to share keywords with it. Cases were written
+// against the domain map, then checked for a unique owner. Testing descriptions against their own
+// examples would be circular and is deliberately avoided: no case below is lifted from a charter.
+//
+// Special expected values:
+//   'NONE'    — the Chief of Staff should stay in-session. Engaging the org is the wrong answer
+//               (CLAUDE.md "When NOT to engage the org"). Untested before R2 and a real cost leak.
+//   'CLARIFY' — genuinely ambiguous; correct behaviour is confirm-before-fan-out (ORG.md §5c.2),
+//               not a confident guess.
+//
+// `depth` asserts ORG.md §5c's stakes-scaled routing: how many hops SHOULD be paid for.
+//   'none' | 'direct' (CoS→employee/manager) | 'full' (CoS→VP→mgr→emp) | 'full+review'
+//
+// `trap` records what a plausible-but-wrong router would answer, and why. A case with no trap is
+// not earning its place in the set.
+
+const ROUTING_CASES = [
+  // ---------------------------------------------------------------- clean single-owner routing
+  {
+    id: 'r01-secret-history',
+    q: 'worried a connection string slipped into git a few months back, can you find out',
+    expect: 'sec-secrets-hunter', depth: 'direct',
+    trap: 'Routing to cso and paying an Opus spawn. The ask arrives pre-scoped to one employee — '
+        + 'anti-relay (§5b) says collapse, and §5c says the CoS should collapse it BEFORE the VP.',
+  },
+  {
+    id: 'r02-graph-apponly',
+    q: 'tenantsync has to read last-sign-in dates for every guest out of entra, without pulling '
+     + 'in the sdk',
+    expect: 'backend-integration-dev', depth: 'direct',
+    trap: 'backend-api-dev. The boundary is "someone else\'s system", not request direction.',
+  },
+  {
+    id: 'r03-nsg-review',
+    q: 'before i add another subnet to the cloudops vnet, sanity check the nsg and udr layout',
+    expect: 'infra-network-eng', depth: 'direct',
+    trap: 'cso — it sounds like a security review but it is topology, and shape is architect\'s.',
+  },
+
+  // ---------------------------------------------------------------- VP-boundary discrimination
+  {
+    id: 'r04-cost-not-delivery',
+    q: 'my azure spend roughly doubled and i cannot tell what changed',
+    expect: 'analytics-cost-eng', depth: 'direct',
+    trap: 'coo. Delivery owns whether it RUNS; cfo owns what it COSTS to run.',
+  },
+  {
+    id: 'r05-dr-not-sre',
+    q: 'if the tenantsync storage account got wiped tomorrow, could i genuinely get it back',
+    expect: 'dr-manager', depth: 'full',
+    trap: 'sre-manager. Nothing is broken. "Would they work" is a restore test, not an incident.',
+  },
+  {
+    id: 'r06-sre-not-dr',
+    q: 'tickr api has been throwing 500s for twenty minutes',
+    expect: 'sre-manager', depth: 'full',
+    trap: 'dr-manager. Live incident, no data loss — the mirror of r05.',
+  },
+  {
+    id: 'r07-docs-not-coo',
+    q: 'write up how the appreg portal graph auth flow works so future-me doesn\'t relearn it',
+    expect: 'docs-manager', depth: 'full',
+    trap: 'coo. coo owns deploy/on-call runbooks; explaining shipped app code is docs-manager.',
+  },
+  {
+    id: 'r08-db-choice-not-infra',
+    q: 'should cloudops store its run history in cosmos or just stick with table storage',
+    expect: 'data-manager', depth: 'full',
+    trap: 'architect/infra-manager. Infra owns network+compute; what backs the data layer is cfo.',
+  },
+  {
+    id: 'r09-quant-not-cto',
+    q: 'does my meridian rsi mean-reversion script have lookahead bias',
+    expect: 'quant-manager', depth: 'full',
+    trap: 'cto. It is code, but trading logic — "lookahead bias" pins it to quant.',
+  },
+  {
+    id: 'r10-test-trust-not-pipeline',
+    q: 'are the cloudops tests actually passing or just showing green',
+    expect: 'qa-manager', depth: 'full',
+    trap: 'devops-manager. Pipeline mechanics vs. test truthfulness. This estate lost three suites '
+        + 'to specs that printed SKIP while the runner still exited 0.',
+  },
+  {
+    id: 'r11-pipeline-not-test',
+    q: 'the tickr github action has gone red three runs in a row, dies during npm ci',
+    expect: 'devops-pipeline-eng', depth: 'direct',
+    trap: 'qa-manager. The mirror of r10 — the run is broken, the tests are not in question.',
+  },
+  {
+    id: 'r12-reachability-not-scan',
+    q: 'is this one lodash cve actually exploitable in meridian or just noise',
+    expect: 'appsec-dep-scanner', depth: 'direct',
+    trap: 'security-manager\'s full three-employee fan-out for a single-CVE reachability question.',
+  },
+
+  // ---------------------------------------------------------------- stay-in-session (cost leak)
+  {
+    id: 'r13-trivial-typo',
+    q: 'fix the typo in the readme, it says "recieve"',
+    expect: 'NONE', depth: 'none',
+    trap: 'Engaging docs-manager. Anthropic measured multi-agent at ~15x a chat turn; a one-word '
+        + 'fix costs more in handoff than in work.',
+  },
+  {
+    id: 'r14-answerable-from-context',
+    q: 'what model tier do managers run on again',
+    expect: 'NONE', depth: 'none',
+    trap: 'Spawning anything at all. The answer is in CLAUDE.md, already in context.',
+  },
+  {
+    id: 'r15-tight-iteration',
+    q: 'nah, make that button blue instead',
+    expect: 'NONE', depth: 'none',
+    trap: 'Re-engaging frontend-manager mid-refinement. Iterative loops stay in-session.',
+  },
+
+  // ---------------------------------------------------------------- confirm-before-fan-out
+  {
+    id: 'r16-ambiguous-deploy',
+    q: 'can you deploy this',
+    expect: 'CLARIFY', depth: 'none',
+    trap: 'Guessing a target. CLAUDE.md already says ambiguous "deploy" must ask — and this is '
+        + 'high-stakes and irreversible, so §5c.2 requires confirmation before any spawn.',
+  },
+  {
+    id: 'r17-ambiguous-broken',
+    q: 'something feels off with alfred lately',
+    expect: 'CLARIFY', depth: 'none',
+    trap: 'Fanning out all five VPs on a symptom. Cost is real; the clarifying sentence is not.',
+  },
+  {
+    id: 'r18-ambiguous-secure',
+    q: 'make sure this is secure before i show anyone',
+    expect: 'CLARIFY', depth: 'none',
+    trap: 'Launching a full cso sweep. "Show anyone" could mean a demo, a repo push, or a public '
+        + 'deploy — three different scopes with three different answers.',
+  },
+
+  // ---------------------------------------------------------------- genuinely cross-domain
+  {
+    id: 'r19-ship-ready',
+    q: 'is the northwind admin portal actually ready to ship',
+    expect: ['cso', 'coo', 'cto'], depth: 'full+review',
+    trap: 'Picking one VP and returning a confidently partial answer. CLAUDE.md names this exact '
+        + 'request as the canonical parallel-VP case.',
+  },
+  {
+    id: 'r20-real-money',
+    q: 'thinking about funding meridian properly — what will it cost me to run, and do the setups '
+     + 'genuinely hold up',
+    expect: 'cfo', depth: 'full+review',
+    trap: 'Pulling in a second VP. Cost AND market validity both sit under cfo — this fans out '
+        + 'INTERNALLY. Tests that cross-domain detection is not oversensitive.',
+  },
+
+  // ---------------------------------------------------------------- intent-integrity (R2, §5c)
+  {
+    id: 'r21-premise-divergence',
+    q: 'the login is broken for everyone, roll it back',
+    expect: 'CLARIFY', depth: 'none',
+    trap: 'Executing the rollback as briefed. "Roll it back" is a proposed REMEDY, not the ask — '
+        + 'the ask is "logins are broken". If the cause shipped three deploys ago, a perfectly '
+        + 'executed rollback of the wrong release is exactly the beautifully-organized wrong '
+        + 'answer §5c exists to catch. High stakes + irreversible = confirm first.',
+  },
+  {
+    id: 'r22-anchor-survives-depth',
+    q: 'audit the terraform for anything that would fail a nydfs review',
+    expect: 'compliance-manager', depth: 'full+review',
+    trap: 'security-manager. A named framework makes it PROVING posture (compliance), not FINDING '
+        + 'problems (security). Also asserts a compliance position, so §5c.3 review applies: the '
+        + 'reviewer sees only this sentence and the deliverable, never the chain\'s reasoning.',
+  },
+];
+
+export default ROUTING_CASES;

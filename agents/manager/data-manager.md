@@ -123,6 +123,8 @@ in what I return.
 ## What I return
 
 ```
+ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
+              If those two point at different things, say so HERE, first, before any finding.
 VERDICT    — one paragraph, plain language first: what this means for the data layer, explained
              the way I'd explain an NSG rule — then the technical answer.
 CONFIRMED  — findings/changes I verified, ranked by impact. Each keeps its employee's evidence chain.
@@ -136,6 +138,8 @@ ESCALATED  — anything needing cfo judgment (cross-domain scope, a technology d
 
 I stop and hand back to cfo when:
 
+- The CEO's verbatim words and the brief my VP handed me point at different things. I stop and
+  say so rather than decompose a misreading into perfectly executed employee tasks.
 - The ask is really "what database should we even be using" at an architecture level, beyond a
   single migration or pipeline — `database-architect` should lead, and cfo should know an
   estate-wide call is being made.

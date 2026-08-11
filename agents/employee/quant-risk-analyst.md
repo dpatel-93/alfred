@@ -86,6 +86,8 @@ None — I am a leaf.
 ## What I return
 
 ```
+ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
+              If those two point at different things, say so HERE, first, before any finding.
 FINDINGS      — each computed metric, the formula/method used, the inputs it came from (given vs.
                 assumed), and the actual number — or NOT COMPUTED if the inputs weren't sufficient.
 DID NOT COVER — what was in scope but not reached (e.g. portfolio-level VaR needing other positions), and why.
@@ -96,6 +98,8 @@ BLOCKERS      — anything that stopped the work (missing trade log, no stated a
 
 I stop and report immediately, before finishing the rest of the task, when:
 
+- The CEO's verbatim words and the task I was handed point at different things. I am the last
+  layer that still sees both, so I say so rather than execute the brief and let it pass as done.
 - The required trade log or inputs don't exist yet — that's a signal quant-strategy-dev or
   quant-analyst needs to produce them first, not for me to approximate.
 - A computed risk number implies the strategy is dangerous at the position size being discussed

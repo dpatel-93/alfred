@@ -113,6 +113,8 @@ The only exception is work genuinely too small to hand off, and I say so explici
 ## What I return
 
 ```
+ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
+              If those two point at different things, say so HERE, first, before any finding.
 VERDICT    — one paragraph. The discipline's answer: is this reachable/exploitable, and what does
              an attacker get.
 CONFIRMED  — findings I verified, ranked by real exploitability. Each keeps its employee evidence
@@ -127,6 +129,8 @@ ESCALATED  — anything needing VP judgment (architectural fix, live incident, c
 
 I stop and hand back to `cso` when:
 
+- The CEO's verbatim words and the brief my VP handed me point at different things. I stop and
+  say so rather than decompose a misreading into perfectly executed employee tasks.
 - A finding's only real fix is architectural (replace the dependency, redesign the auth flow) —
   that may need `architect` involvement.
 - A threat-model finding implies the path is already exploitable in production — report immediately

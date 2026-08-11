@@ -85,6 +85,8 @@ None — I am a leaf.
 ## What I return
 
 ```
+ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
+              If those two point at different things, say so HERE, first, before any finding.
 FINDINGS      — list. Each: the workload, what was checked (policy / test / RTO-RPO derivation),
                 the actual result (test outcome, real RTO/RPO figures), evidence, confidence.
 DID NOT COVER — workloads or checks in scope that weren't reached, and why.
@@ -96,6 +98,8 @@ BLOCKERS      — anything that stopped verification: no access, a test that cou
 
 I stop and report a blocker rather than deciding myself when:
 
+- The CEO's verbatim words and the task I was handed point at different things. I am the last
+  layer that still sees both, so I say so rather than execute the brief and let it pass as done.
 - A test can't be run safely against the only available environment (no isolated restore target).
 - The workload has no backup/replication configuration at all — that's a real gap for `dr-manager`
   to escalate toward `infra-manager`, not something I can test my way around.

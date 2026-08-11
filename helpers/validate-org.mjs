@@ -218,6 +218,31 @@ function main() {
   // full charter but still must not be referenced if they do not exist.
   const chartered = agents.filter((a) => a.fm.tier && TIER_ORDER[a.fm.tier] !== undefined);
 
+  // --- R2: the contract hole under the reuse map -----------------------------------------------
+  // Exempting non-chartered agents from the charter is deliberate (ORG.md §7 — do not write thin
+  // replacements for real specialists). Exempting them from VISIBILITY was not: this filter meant
+  // a delegation target with no `## What I return` could never be flagged, so the validator printed
+  // PASS while ~23% of the delegation surface returned freeform prose into a chain whose entire
+  // premise (§5, citing MetaGPT) is that typed artifacts stop the telephone game.
+  //
+  // That is anti-pattern #1 — the green picture — reproduced inside the tool built to prevent it.
+  // These are warnings, not errors: the fix is to give each one a return contract, not to delete a
+  // working specialist because it predates the charter.
+  const uncharteredTargets = new Set();
+  for (const a of chartered) {
+    for (const m of a.body.matchAll(/`([a-z][a-z0-9-]{2,})`/g)) {
+      const t = byName.get(m[1]);
+      if (t && !chartered.includes(t)) uncharteredTargets.add(t);
+    }
+  }
+  for (const t of uncharteredTargets) {
+    if (!/^##\s*What I return/m.test(t.body)) {
+      warn(t.rel, 'delegated to by a chartered agent but has no `## What I return` — its caller '
+                + 'receives freeform prose and must re-derive the structure the return contract '
+                + 'exists to guarantee (ORG.md §5)');
+    }
+  }
+
   for (const a of chartered) {
     // 1. Frontmatter completeness
     for (const field of REQUIRED_FRONTMATTER) {

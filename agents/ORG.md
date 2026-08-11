@@ -223,9 +223,13 @@ A file missing any section fails validation.
 Each tier returns a **fixed shape** so the layer above synthesizes rather than re-derives. This is
 the difference between a real org and a pile of prompts.
 
+**Every contract below opens with `ORIGINAL ASK`** — the CEO's request carried down verbatim,
+unmodified, alongside the agent's own one-line reading of it. See §5c for why.
+
 ### Employee → Manager
 
 ```
+ORIGINAL ASK — the CEO's words as they reached me, then my reading of them. Divergence goes here, first.
 FINDINGS   — list. Each: what, where (file:line or resource id), evidence (quoted), confidence.
 DID NOT COVER — what was in scope but not reached, and why. Never silently truncate.
 BLOCKERS   — anything that stopped the work.
@@ -234,6 +238,7 @@ BLOCKERS   — anything that stopped the work.
 ### Manager → VP
 
 ```
+ORIGINAL ASK — the CEO's words as they reached me, then my reading of them. Divergence goes here, first.
 VERDICT    — one paragraph. The discipline's answer.
 CONFIRMED  — findings the manager verified, ranked by severity. Each keeps its employee evidence chain.
 REJECTED   — findings the manager struck, and why. Report this; a silent drop hides a disagreement.
@@ -244,6 +249,7 @@ ESCALATED  — anything needing VP judgment.
 ### VP → Chief of Staff
 
 ```
+ORIGINAL ASK — the CEO's words as they reached me, then my reading of them. Divergence goes here, first.
 ANSWER     — the domain's single answer to the CEO's question. Lead with it.
 EVIDENCE   — the ranked, deduplicated findings with their full chain intact.
 STRUCK     — findings this VP rejected from its managers, and why. Never drop one silently.
@@ -310,6 +316,89 @@ The agent that did the work does not certify the work. Whoever verifies is a dif
 different prompt, ideally one tier up, and is told to **refute** rather than confirm. Folding
 "did I get this right?" into the prompt that produced the output is why MAST's third category
 exists — premature termination and absent validation.
+
+**This rule shipped as prose and was implemented by zero charters** — an R2 audit found `refute`
+appearing nowhere on the roster except this paragraph. A rule that lives only in a file no agent
+loads is decoration. It is now operationalized in §5c mechanism 3, with an explicit trigger
+(stakes), an explicit input restriction (original ask + deliverable, never the intermediate
+briefs), and an explicit home in the VP charters. Verifying against the chain's own reasoning is
+not verification; it is the chain agreeing with itself.
+
+---
+
+## 5c. Intent integrity — the failure this org is most exposed to
+
+Added for Release 2, in response to external review. The critique, stated fairly:
+
+> A wrong understanding at the top of the chain derails the entire outcome even when every agent
+> below performs its job perfectly. The Chief of Staff slightly misunderstands; the VP receives an
+> already-filtered interpretation; the manager decomposes that interpretation; employees execute it
+> flawlessly; the VP reviews the result **against the same incorrect premise**. The result is a
+> beautifully organized wrong answer.
+
+This was verified against the actual roster before being accepted, and the roster confirmed it:
+
+| Property | Before R2 |
+|---|---|
+| Charters carrying the CEO's verbatim ask | **0 / 71** |
+| Charters implementing refute-style verification | **0 / 71** (the rule existed only in §5b prose) |
+| Escalation triggers for "I may have misunderstood" | **0 / 55** — every trigger was a domain-boundary handoff or a 5-attempt limit |
+| Plan → execute → evaluate → **replan** loop | none; the flow was strictly one-pass |
+
+Every escalation path answered *"is this my job?"* and none answered *"is this the right job?"*
+The org could detect that work belonged to someone else, and could not detect that the work was
+the wrong work. Three mechanisms close that.
+
+### 1. The intent anchor (every tier, always on)
+
+The CEO's request travels **verbatim and unmodified** to every layer, alongside — never replaced
+by — the interpreted brief. Every agent opens its return by restating the original ask and its own
+reading of it, and flags divergence *first*, before any finding.
+
+This inverts who can catch the error. Previously only the Chief of Staff saw the CEO's actual
+words, so a misreading at the top was undetectable everywhere below. Now the **lowest** agent in
+the chain sees both the original words and the filtered brief, which makes a Haiku employee the
+cheapest possible detector of an Opus-level misinterpretation. Cost is roughly 30 tokens per spawn.
+
+### 2. Confirm before fan-out (Chief of Staff only)
+
+Before any fan-out that spawns more than one VP, or any work that writes, spends, or ships, the
+Chief of Staff states its interpretation to the CEO in one sentence and waits.
+
+This is the highest-leverage mechanism in this section and it is available to us specifically
+because **we have a human in the loop that autonomous orchestrators do not**. Magentic-One's
+Orchestrator cannot ask; it re-plans against its own ledger, which is a strictly weaker signal
+than the person who made the request. One clarifying sentence at the top beats any amount of
+downstream quorum, and costs a fraction as much.
+
+### 3. Independent review — gated by stakes, not applied by default
+
+For **irreversible or high-stakes** work only — writes to `master`, spends money, changes
+production, or asserts a security or compliance position — one reviewer is spawned that receives:
+
+- the CEO's **original ask**, and
+- the **final deliverable**
+
+and nothing else. **Never the intermediate briefs.** A reviewer that reads the chain's reasoning
+inherits the chain's premise and is worth nothing. It is told to **refute**, not to confirm, and
+its dissent is reported to the CEO even when the VP disagrees with it.
+
+Blanket quorum is deliberately rejected: it triples cost against a failure that is rare at low
+stakes and nearly free to prevent at high stakes via mechanism 2.
+
+### The unifying rule — depth follows stakes, not domain
+
+Chain depth was previously fixed at four levels regardless of what was asked. It is now a function
+of **stakes × ambiguity**:
+
+| | Unambiguous | Ambiguous |
+|---|---|---|
+| **Low stakes** (read, analyze, report) | Chief of Staff → employee. One hop. | Confirm with CEO, then one hop. |
+| **High stakes** (writes, spends, ships, asserts) | Full chain + independent review vs. original ask | Confirm, then full chain + independent review |
+
+Anti-relay (§5b) already collapses layers that add nothing — but it can only fire *after* the VP
+has been spawned and paid for, so it saves the manager and never the VP. This rule fires one level
+earlier, at the Chief of Staff, which is the only place the saving is real.
 
 ---
 
@@ -380,6 +469,20 @@ department rather than belonging to one:
 
 These agents predate the rebuild, carry real depth, and are delegated to by name. Do not write
 thin replacements.
+
+**R2 correction — the contract hole under this map.** These specialists were exempted from the
+9-section charter (correctly — they carry depth a thin rewrite would lose), but the validator
+filtered them out entirely, so the exemption silently extended to the *return contract* as well.
+An audit found **15 of them actively delegated to by chartered agents while returning freeform
+prose** into a chain whose entire premise (§5, citing MetaGPT) is that typed artifacts stop the
+telephone game. `validate-org.mjs` printed PASS the whole time, because it only inspected agents
+that declared a `tier`.
+
+That is anti-pattern #1 — the green picture — reproduced *inside the tool built to prevent it*.
+All 15 now carry the employee-tier return contract plus the §5c intent anchor, and the validator
+warns on any future delegation target that lacks one. They remain exempt from the other eight
+charter sections. The lesson generalizes: **an exemption granted for one reason quietly becomes an
+exemption from everything unless the check names its own scope.**
 
 | Specialist | Delegated to by | For |
 |---|---|---|

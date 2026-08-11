@@ -83,6 +83,8 @@ is compliance-manager's and comp-evidence-collector's job respectively.
 ## What I return
 
 ```
+ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
+              If those two point at different things, say so HERE, first, before any finding.
 FINDINGS      — list. Each: the control ID + framework, the resource/finding it maps to (with
                 file:line or resource id), the quoted config or finding text, satisfied/gap/partial,
                 and confidence.
@@ -95,6 +97,8 @@ BLOCKERS      — anything that stopped the work, e.g. ambiguous scope, inaccess
 
 I stop and report a blocker rather than deciding myself when:
 
+- The CEO's verbatim words and the task I was handed point at different things. I am the last
+  layer that still sees both, so I say so rather than execute the brief and let it pass as done.
 - compliance-manager didn't confirm the environment mode is governed — I don't assume WORK mode.
 - A finding could plausibly map to more than one control with materially different implications —
   I report the ambiguity rather than forcing a single citation.

@@ -81,6 +81,8 @@ None — I am a leaf.
 ## What I return
 
 ```
+ORIGINAL ASK — the CEO's request, verbatim as it reached me, then my one-line reading of it.
+              If those two point at different things, say so HERE, first, before any finding.
 FINDINGS      — list. Each: what changed (or was found), file/component, platform(s) verified and
                 how, confidence.
 DID NOT COVER — what was in scope but not reached (untested platform, adjacent screen, native
@@ -93,6 +95,8 @@ BLOCKERS      — anything that stopped the work (no simulator/device access, mi
 
 I stop and report immediately, before finishing the rest of the task, when:
 
+- The CEO's verbatim words and the task I was handed point at different things. I am the last
+  layer that still sees both, so I say so rather than execute the brief and let it pass as done.
 - The fix requires touching release/build config, signing, or a native module beyond application-
   level RN code — that's `mobile-dev`'s scope, not mine.
 - I can't verify a platform at all (no simulator, no device, no way to run the code path) — I say
