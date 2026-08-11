@@ -109,10 +109,17 @@ Engaging a VP for a one-line change is not thoroughness, it is waste — and it 
    costs `2 × depth` round trips on *every* request; too-shallow costs one extra hop on the
    *minority* that need it.
 
-   **At S ≥ 2 that asymmetry disappears, so the BLOCKING-premise check runs FIRST and outranks any
-   topology conclusion.** An irreversible or outward-facing action resting on an ungrounded
-   load-bearing premise is **CLARIFY**, however confidently C and T resolve — a rollback cannot be
-   un-rolled-back.
+   **Every classification emits these three fields, always:**
+
+   ```
+   Stakes: S0|S1|S2|S3
+   Blocking premises: [...] or none
+   Gate: proceed | CLARIFY | confirm-before-fanout — because ...
+   ```
+
+   Structure beats exhortation, measured: the prose version of this rule never entered three
+   consecutive routers' reasoning. A field that must be emitted is falsifiable; one that must be
+   remembered competes with everything else here (ORG.md §5e).
 
 4. **Confirm before fan-out** (ambiguity axis, §5c.2). Before spawning more than one VP, or any work
    that writes, spends, or ships, state my interpretation in one sentence and wait. I am the only

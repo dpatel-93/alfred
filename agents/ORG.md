@@ -568,15 +568,20 @@ recoverable mid-flight: the agent returns an `ESCALATION REQUEST` and the layer 
 Over-provisioning is sunk the moment the spawn lands. The risk is asymmetric, so the default leans
 to the recoverable side.
 
-**At S ≥ 2 that asymmetry disappears, so the BLOCKING-premise check runs FIRST and its answer
-outranks any topology conclusion.** An irreversible or outward-facing action resting on an
-ungrounded load-bearing premise is **CLARIFY**, no matter how confidently C and T resolve.
+**Every classification emits three required fields** — `Stakes: S_`, `Blocking premises: [...] or
+none`, `Gate: proceed | CLARIFY | confirm-before-fanout — because ...`. See home `CLAUDE.md`; this
+copy is documentation, the operative one is there because that is what the Chief of Staff reads.
 
-This sentence exists because its absence was measured. Stated unconditionally, "bias small — we can
-correct later" is a rationalization the router will accept, and it is false exactly where it costs
-most: a rollback cannot be un-rolled-back, and a program that ships and sells cannot be un-shipped.
-Two cases regressed from CLARIFY to confident routing on that reasoning — including a rollback whose
-load-bearing premise ("the fault is in the release being rolled back") was never grounded.
+**Structure beats exhortation, and this was measured rather than assumed.** An earlier fix stated
+the rule as prose — "at S ≥ 2 the blocking-premise check outranks any topology conclusion." Three
+consecutive routers across two file placements never mentioned it, and the guard did not move. A
+rule that must be *emitted* is falsifiable in the output; a rule that must be *remembered* competes
+with everything else in the prompt. This is the same lesson as Magentic-One's ledger — they made
+the orchestrator write facts and guesses down rather than trusting it to keep them in mind.
+
+The corollary is uncomfortable and worth keeping: **the falsifiability principle this framework
+applies to the work it commissions also applies to its own instructions.** A policy with no
+observable output is not enforced, however carefully it is worded.
 
 **Expected failure cost is handled ordinally, through S.** That is the honest version of "expected
 cost of an undetected failure" when nobody has real probabilities — inventing numbers to multiply
