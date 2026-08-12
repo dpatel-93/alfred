@@ -572,8 +572,22 @@ execution could meet, and splitting the scenario is a ground-truth change that b
 architect rather than to me after seeing results.
 
 Note also which way `s20` moved once more data arrived: on partial figures Alfred looked **0.59×**
-the baseline's cost — its only cheaper result. On the fuller numbers it is **more** expensive.
-That reversal is the whole argument for excluding it.
+the baseline's cost — its only cheaper result. Completed, it is **1.45× more expensive** (6.07M vs
+4.19M) and produced **13 files to the baseline's 14** — more tokens, less output. That reversal is
+the whole argument for excluding it.
+
+**Robustness check, because I excluded a scenario and the exclusion happened to suit my
+conclusion.** An exclusion that changes a verdict deserves more suspicion than one that does not,
+so here is the verdict computed both ways:
+
+| | Alfred | Baseline | |
+|---|---|---|---|
+| 4 scenarios, `s20` excluded | 4/4 · **0.0379** | 4/4 · **0.0560** | baseline **1.48×** better |
+| 5 scenarios, `s20` included | 5/5 · **0.0115** | 4/5 · **0.0134** | baseline **1.17×** better |
+
+**The conclusion holds either way.** Excluding `s20` was not load-bearing for criterion 13 — it was
+required by the budget defect, and it happens to make Alfred look worse rather than better. Alfred
+loses the efficiency metric whether or not the disputed scenario is counted.
 
 **A correction, in the direction that costs Alfred.** The originally committed headline was
 0.0342 vs 0.0353 — a 1.03× gap with Alfred completing 5/5 against 4/5. That number included `s20`,
