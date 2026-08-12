@@ -46,8 +46,8 @@ Decide, in order:
    above (a manager cannot report to another manager).
 3. **Domain**: a single lowercase word capturing its area (`backend`, `dr`, `quant`, etc.) —
    matches the `domain:` frontmatter field used across the existing roster.
-4. **Name**: lowercase-kebab, and the filename must equal the name exactly (`dr-manager.md` has
-   `name: dr-manager`). Names are case-sensitive at spawn time — a mismatched case is a silent
+4. **Name**: lowercase-kebab, and the filename must equal the name exactly (`sre-manager.md` has
+   `name: sre-manager`). Names are case-sensitive at spawn time — a mismatched case is a silent
    ghost reference, not a typo the system catches for you.
 
 Read 2-3 existing charters at the same tier as your new agent, in a domain as close as possible to

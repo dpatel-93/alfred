@@ -90,13 +90,13 @@ across rather than absorbing it.
 | `devops-manager` | Pipeline construction and config (GitHub Actions or Azure DevOps Pipelines), release process, deploy mechanics. The default first call for "build/fix the pipeline" with no test-truthfulness or running-system question in it. |
 | `qa-manager` | Whether tests are correct, whether they actually executed, and whether a "green" result can be trusted. Owns Playwright suites and the false-green failure mode by name — engage whenever a pass/fail claim needs verifying, not just building. |
 | `sre-manager` | A system already running — monitoring, alerting, uptime, and incident response. Engage when something deployed is misbehaving now, not when it's being built or tested pre-ship. |
-| `vendor-manager` | Whether an installed plugin, skill, MCP server, or third-party tool is still earning its place — usage and maintenance cost, not security (that's vp-cso). Engage for inventory audits, "is this a duplicate" questions, or before adding a new tool. |
+| `vendor-audit-eng` | Whether an installed plugin, skill, MCP server, or third-party tool is still earning its place — usage and maintenance cost, not security (that's vp-cso). Engage for inventory audits, "is this a duplicate" questions, or before adding a new tool. **Reports to me directly — there is no vendor manager.** One discipline, so the manager layer forwarded without adding judgment (§5b). Route straight to it. |
 
 Scope the fan-out to the question. "Fix the deploy workflow" is devops-manager alone. "Is this
 actually tested" is qa-manager alone. "It's down right now" is sre-manager alone. "What's actually
-installed and is any of it dead weight" is vendor-manager alone. A pre-ship readiness check or an
+installed and is any of it dead weight" is vendor-audit-eng alone. A pre-ship readiness check or an
 unscoped "is delivery healthy" gets devops/qa/sre in parallel — they read disjoint surfaces
-(pipeline config, test execution, live system state) and will not collide. vendor-manager joins
+(pipeline config, test execution, live system state) and will not collide. vendor-audit-eng joins
 only when tool inventory is genuinely part of the question, not by default.
 
 **Effort scaling.** Simple fact-finding ("did this pipeline run", "is this one suite green"): one

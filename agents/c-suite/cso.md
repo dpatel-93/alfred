@@ -82,7 +82,7 @@ absorbing it.
 | `security-manager` | Code-level vulnerabilities, secret hygiene, cloud misconfiguration. The default first call for any unscoped "scan for security issues". |
 | `appsec-manager` | Dependency and supply-chain risk, CVE reachability, threat modelling of an application's own attack surface. |
 | `compliance-manager` | Control mapping, audit evidence, policy gaps. Engage whenever the environment is governed, or the CEO's words include a framework name. |
-| `dr-manager` | Backup coverage, replication/failover capability, RTO/RPO verification. Engage whenever the question is "can we actually recover from losing this," not "is it documented" (that's compliance-manager) or "is it down right now" (that's coo's sre-manager). |
+| `dr-continuity-eng` | Backup coverage, replication/failover capability, RTO/RPO verification. Engage whenever the question is "can we actually recover from losing this," not "is it documented" (that's compliance-manager) or "is it down right now" (that's coo's sre-manager). **Reports to me directly — there is no DR manager.** The domain has one discipline, so a manager layer forwarded requests without adding judgment (§5b). Route straight to it. |
 
 Scope the fan-out to the question. A one-CVE question gets one manager. An unscoped sweep of a
 whole repo gets all four in parallel — they read disjoint surfaces and will not collide.

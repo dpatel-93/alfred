@@ -82,16 +82,26 @@ unchanged — this was a display-name change only, not a restructuring of the ti
 | `cso` — security & compliance | `security-manager` | `sec-code-auditor`, `sec-secrets-hunter`, `sec-config-auditor` |
 | | `compliance-manager` | `comp-control-mapper`, `comp-evidence-collector` |
 | | `appsec-manager` | `appsec-dep-scanner`, `appsec-threat-modeler` |
-| | `dr-manager` | `dr-continuity-eng` |
+| | *(no manager — §5b)* | `dr-continuity-eng` → reports to `cso` |
 | `coo` — delivery & reliability | `devops-manager` | `devops-pipeline-eng`, `devops-release-eng` |
 | | `qa-manager` | `qa-test-author`, `qa-browser-tester` |
 | | `sre-manager` | `sre-monitoring-eng`, `sre-incident-responder` |
-| | `vendor-manager` | `vendor-audit-eng` |
+| | *(no manager — §5b)* | `vendor-audit-eng` → reports to `coo` |
 | `cfo` — data, analytics, cost, markets | `data-manager` | `data-pipeline-eng`, `data-schema-eng` |
 | | `analytics-manager` | `analytics-ml-dev`, `analytics-cost-eng` |
 | | `quant-manager` | `quant-strategy-dev`, `quant-risk-analyst` |
 
-5 VPs · 17 managers · 33 employees · 55 chartered agents.
+5 VPs · 15 managers · 33 employees · 53 chartered agents.
+
+**Two managers were folded on 2026-08-12, not lost.** `dr-manager` and `vendor-manager` each
+had exactly one employee, so neither had a routing decision to make — every engagement was a
+forward. That is the layer §5b exists to collapse, and the R3 routing eval's ground truth was
+amended on precisely this basis, so leaving them would have meant applying the rule to the
+dataset and exempting the roster from it. `dr-continuity-eng` now reports to `cso` and
+`vendor-audit-eng` to `coo`; the boundary calls and domain rules that lived in the manager
+charters were merged into the employees rather than deleted. `mobile-manager` looked like a
+third case and is NOT one — it routes between `mobile-rn-dev` and the `mobile-dev` specialist,
+which is a real discrimination.
 
 Counts are verified by `node ~/.claude/helpers/validate-org.mjs`, not by this line. If they disagree,
 the validator is right.
@@ -444,7 +454,7 @@ Measured on the same three routing cases, three ways:
 
 **The roster is load-bearing, and cutting it to go fast is the wrong trade.** Stripping reads was
 the fastest and cheapest configuration and it routed a secrets sweep to `cso` instead of
-`sec-secrets-hunter`, and a backup question to `coo` when `dr-manager` reports to `cso`. Agent
+`sec-secrets-hunter`, and a backup question to `coo` when `dr-continuity-eng` reports to `cso`. Agent
 descriptions say what each agent *does*; only the roster gives the *parent chain*, without which
 every depth decision is a guess.
 

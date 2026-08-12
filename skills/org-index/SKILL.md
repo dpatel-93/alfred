@@ -43,7 +43,6 @@ Spawning is top-down. To reach a tier ABOVE you, return an escalation request �
 | `data-manager` | `cfo` | I own the data layer — schema, migrations, ingestion pipelines, and query performance — across every project that… | `postgresql` |
 | `devops-manager` | `coo` | I own whether the pipes actually work: CI/CD pipeline health across GitHub Actions and Azure DevOps Pipelines, and… | `async-supervisor` |
 | `docs-manager` | `cto` | I own writing documentation — API references, runbooks, READMEs, handoff docs — but only when someone explicitly… | `docx` `pptx` |
-| `dr-manager` | `cso` | I own whether this estate can actually come back from losing something important — not whether a backup policy is… | `zero-cost-azure` |
 | `frontend-manager` | `cto` | I own whether the UI actually works and doesn't look or behave like it was thrown together — every component,… | `taste` `redesign` |
 | `infra-manager` | `architect` | I own turning an infra requirement into a design that's actually buildable in Terraform — the module and state… | `terraform-module-library` |
 | `mobile-manager` | `cto` | I own getting React Native work done correctly across both iOS and Android for every app in the portfolio that… | — |
@@ -52,7 +51,6 @@ Spawning is top-down. To reach a tier ABOVE you, return an escalation request �
 | `quant-manager` | `cfo` | I own whether a trading idea is actually tradeable, not just whether it looks good | `backtesting-frameworks` `risk-metrics-calculation` |
 | `security-manager` | `cso` | I own finding real, exploitable problems in code and cloud config — not documenting theoretical ones | — |
 | `sre-manager` | `coo` | I own whether the operator's estate is up, monitored, and — when it isn't — why | — |
-| `vendor-manager` | `coo` | I own whether the tools this framework has accumulated — plugins, skills, MCP servers, third-party dependencies —… | — |
 
 ## Employees — one bounded surface each
 
@@ -72,7 +70,7 @@ Spawning is top-down. To reach a tier ABOVE you, return an escalation request �
 | `devops-release-eng` | `devops-manager` | I make sure a release is actually ready before it ships, and I document what shipped in the release notes | — |
 | `docs-api-writer` | `docs-manager` | I write and maintain API reference documentation — endpoint descriptions, request/response schemas, examples, REST… | — |
 | `docs-runbook-writer` | `docs-manager` | I write operational runbooks, READMEs, and handoff/close-out docs — the detailed explanation this framework's… | `docx` `pptx` |
-| `dr-continuity-eng` | `dr-manager` | I check whether a workload can actually be recovered — not whether it's backed up on paper | — |
+| `dr-continuity-eng` | `cso` | I check whether a workload can actually be recovered — not whether it's backed up on paper | — |
 | `frontend-state-dev` | `frontend-manager` | I own what the UI knows and when it knows it — client-side state, data fetching, and routing — inside exactly the… | — |
 | `frontend-ui-dev` | `frontend-manager` | I build and fix the parts of a UI you can see and touch — components, layout, styling — inside exactly the file(s)… | `taste` |
 | `infra-identity-eng` | `infra-manager` | I scope and document the Entra ID identity surface a service needs to authenticate — app registrations, Graph… | `graph-api-rest` |
@@ -90,7 +88,7 @@ Spawning is top-down. To reach a tier ABOVE you, return an escalation request �
 | `sec-secrets-hunter` | `security-manager` | I find committed secrets before someone else does | — |
 | `sre-incident-responder` | `sre-manager` | I find why something is actually broken, not the first plausible-sounding reason | — |
 | `sre-monitoring-eng` | `sre-manager` | I answer "what does the current state actually show" for health, alerting, and availability — not "why is it… | — |
-| `vendor-audit-eng` | `vendor-manager` | I determine whether a tool, skill, plugin, or MCP server is genuinely unused or duplicative — by actually reading… | — |
+| `vendor-audit-eng` | `coo` | I determine whether a tool, skill, plugin, or MCP server is genuinely unused or duplicative — by actually reading… | — |
 
 ## Specialists — delegated to by name, exempt from the charter (ORG.md §7)
 
@@ -115,5 +113,5 @@ Spawning is top-down. To reach a tier ABOVE you, return an escalation request �
 
 ---
 
-5 VPs · 17 managers · 33 employees · 16 specialists.
+5 VPs · 15 managers · 33 employees · 16 specialists.
 Counts are generated, not asserted. If they disagree with ORG.md, run `node ~/.claude/helpers/validate-org.mjs`.
