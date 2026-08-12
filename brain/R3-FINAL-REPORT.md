@@ -561,6 +561,20 @@ scenarios that ran to completion the two arms **tied at 4/4** and Alfred spent *
 getting there, so on the metric this project named as its objective it is behind — and by a wider
 margin than the first figure I published.
 
+**`s20` turned out to be unscorable on cost, and the reason is a defect in the scenario.** It is
+tagged `restraint` with an 80k budget, but its task — *"just set up the module structure"* — is a
+real construction job. Both arms built a full multi-file Bicep tree and overran by roughly **50×**:
+the baseline finished at 4.19M tokens over 53 turns, the Alfred arm passed 5.16M over 58. The budget
+was written for the behaviour the scenario is *about* (surface the conflict) and ignores the work
+its task actually *asks for*, so it tests two things and can only score one. The conflict-flag
+result is clean and stays. The cost comparison cannot be scored against a budget no correct
+execution could meet, and splitting the scenario is a ground-truth change that belongs to the
+architect rather than to me after seeing results.
+
+Note also which way `s20` moved once more data arrived: on partial figures Alfred looked **0.59×**
+the baseline's cost — its only cheaper result. On the fuller numbers it is **more** expensive.
+That reversal is the whole argument for excluding it.
+
 **A correction, in the direction that costs Alfred.** The originally committed headline was
 0.0342 vs 0.0353 — a 1.03× gap with Alfred completing 5/5 against 4/5. That number included `s20`,
 which had **not finished running when I scored it**: both arms were still writing Bicep files. Its
