@@ -533,6 +533,8 @@ evidence, after run B and the first stage of run C.
 high-quality, verifiable outcomes using the least expensive organizational topology capable of
 doing so."*
 
+> **Stage 1 in one line: every scenario ties on outcome, and Alfred pays about 1.5× to tie.**
+
 **Verdict: the second half is now demonstrated. The first half is demonstrated. The two together
 are NOT — because on the one head-to-head that exists, the org costs more per unit of outcome than
 the same rules without the org.**
@@ -549,7 +551,7 @@ the same rules without the org.**
 | 8 | Prevent self-certification | **YES** | stakes-gated independent review; EVIDENCE ledger separates VERIFIED from INFERRED |
 | 9 | Enforce model tiers | **YES** | hook-enforced at spawn; the audit-trail bug that made it unprovable is fixed |
 | 10 | Minimise unnecessary context and cost | **MIXED** | −17% recurring context, but +29% total on the only head-to-head |
-| 11 | Produce a coherent, high-quality outcome | **YES** | 5/5 vs 4/5 on stage 1 |
+| 11 | Produce a coherent, high-quality outcome | **YES** | 5/5 on stage 1 — but so did the baseline; a tie, not an edge |
 | 12 | Produce evidence the outcome is valid | **YES** | this document, and every number in it is reproducible from committed artifacts |
 | 13 | **Choose the least expensive topology capable of satisfying the requirements** | **NO** | 0.0379 vs 0.0560 completion-per-100k on complete runs. It chose correct topologies and still cost 1.48× |
 
@@ -583,11 +585,19 @@ so here is the verdict computed both ways:
 | | Alfred | Baseline | |
 |---|---|---|---|
 | 4 scenarios, `s20` excluded | 4/4 · **0.0379** | 4/4 · **0.0560** | baseline **1.48×** better |
-| 5 scenarios, `s20` included | 5/5 · **0.0115** | 4/5 · **0.0134** | baseline **1.17×** better |
+| 5 scenarios, `s20` included | 5/5 · **0.0115** | 5/5 · **0.0167** | baseline **1.46×** better |
 
-**The conclusion holds either way.** Excluding `s20` was not load-bearing for criterion 13 — it was
-required by the budget defect, and it happens to make Alfred look worse rather than better. Alfred
-loses the efficiency metric whether or not the disputed scenario is counted.
+**The conclusion holds either way**, and the two constructions agree closely — ~1.48× and ~1.46×.
+Excluding `s20` was not load-bearing for criterion 13.
+
+**A fourth correction, and it removes Alfred's only advantage in the entire benchmark.** I reported
+that on `s20` the Alfred arm flagged the Terraform-only conflict and the isolated baseline did not.
+That was wrong, and wrong the same way the headline was: I pattern-matched a transcript that had not
+finished. The completed baseline flags it explicitly — *"noting for the record that this conflicts
+with the standing Terraform-only IaC policy, which I proceeded past because the choice was stated as
+already decided"* — which is the scenario's exact 3/3 behaviour. **Both arms pass every scenario in
+stage 1. There is no case here where Alfred outperforms.** The previously published 5/5-vs-4/5
+completion edge is void.
 
 **A correction, in the direction that costs Alfred.** The originally committed headline was
 0.0342 vs 0.0353 — a 1.03× gap with Alfred completing 5/5 against 4/5. That number included `s20`,
