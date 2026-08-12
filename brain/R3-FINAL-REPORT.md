@@ -551,14 +551,23 @@ the same rules without the org.**
 | 10 | Minimise unnecessary context and cost | **MIXED** | −17% recurring context, but +29% total on the only head-to-head |
 | 11 | Produce a coherent, high-quality outcome | **YES** | 5/5 vs 4/5 on stage 1 |
 | 12 | Produce evidence the outcome is valid | **YES** | this document, and every number in it is reproducible from committed artifacts |
-| 13 | **Choose the least expensive topology capable of satisfying the requirements** | **NO** | 0.0342 vs 0.0353 completion-per-100k. It chose correct topologies and still cost more |
+| 13 | **Choose the least expensive topology capable of satisfying the requirements** | **NO** | 0.0379 vs 0.0560 completion-per-100k on complete runs. It chose correct topologies and still cost 1.48× |
 
 ### The honest summary
 
 Alfred **selects** the right topology and **declines to engage** when engaging is waste — both
-measured, both real. What it does not yet do is make that selection *pay*. On five restraint
-scenarios it completed one more than the baseline and spent 1.29× the tokens doing it, so on the
-metric this project named as its objective it is behind.
+measured, both real. What it does not yet do is make that selection *pay*. On the four restraint
+scenarios that ran to completion the two arms **tied at 4/4** and Alfred spent **1.48× the tokens**
+getting there, so on the metric this project named as its objective it is behind — and by a wider
+margin than the first figure I published.
+
+**A correction, in the direction that costs Alfred.** The originally committed headline was
+0.0342 vs 0.0353 — a 1.03× gap with Alfred completing 5/5 against 4/5. That number included `s20`,
+which had **not finished running when I scored it**: both arms were still writing Bicep files. Its
+inclusion gave Alfred a scenario win and its only cheaper-than-baseline result, on partial token
+data. Excluding it leaves four complete scenarios, an outright tie on outcome, and a 1.48× cost
+penalty. The `s20` flag/no-flag behaviour is still determinate from the transcripts and still
+interesting; its cost figures are not usable and the scenario is excluded from the headline.
 
 Where the overhead goes is visible and unglamorous: the charter and `org-index` are context that
 must be loaded before any classification happens, and on a one-line typo that overhead is 2.13× the
