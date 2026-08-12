@@ -677,3 +677,55 @@ The ~200k classification tax is paid on every request, including the ones correc
 doing nothing, and that single number is what makes the small-task case lose. The org itself is
 already earning its keep above the crossover without any tuning at all.
 
+---
+
+## 22. Replication (2026-08-12) — §21's crossover does not survive n=3
+
+§21 reported the complex tier at 0.87× from **one run per scenario** and called it a crossover.
+Replicated to n=3 per arm, that claim is half right and the half that survives is a different
+claim than the one I made.
+
+| Scenario | Alfred (3 runs) | Baseline (3 runs) | Ratio |
+|---|---|---|---|
+| `s12` cross-domain ship-readiness | 1.33 / 1.40 / 1.93 — **mean 1.55M** | 1.42 / 1.55 / 2.36 — **mean 1.78M** | **0.87×** |
+| `s13` 12-site migration | 2.71 / 2.74 / 3.21 — **mean 2.89M** | 2.62 / 2.80 / 3.08 — **mean 2.83M** | **1.02×** |
+| complex overall | **2.22M** | **2.31M** | **0.96×** |
+| restraint / trivial (n=1) | 2.64M | 1.78M | **1.48×** |
+
+**`s13` was noise.** The 0.88× I published came from a single pairing in which the baseline drew
+its most expensive run and Alfred its cheapest. At n=3 it is 1.02× — parity — and the ranges
+overlap almost completely. On the scenario built to be the hierarchy's *best* case (parallel
+writes, independent verification, three import shapes designed so one grep under-counts), the org
+buys nothing. Quality was 12/12 on all six runs.
+
+**`s12` held at exactly 0.87×**, which is the one durable positive result in this benchmark.
+
+### The corrected rule: breadth, not size
+
+`s13` is a single discipline. Splitting it across agents is coordination overhead, and it prices at
+parity. `s12` requires three genuinely disjoint specialties reading different slices of the same
+codebase — and that is where delegation still pays, because each specialist loads context the
+others never need.
+
+> **Delegate when the work spans specialties that would each load different context. Not when the
+> task merely feels large.**
+
+That is a materially different design rule from §21's, and it is the one supported by the data.
+
+### Honest limits on the surviving result
+
+- 0.87× is a **small effect on overlapping ranges** (alfred 1.33–1.93, baseline 1.42–2.36). It is
+  directionally consistent across all three pairings but n=3 cannot separate it from variance with
+  confidence.
+- **Quality was a dead tie across all twelve runs** on every deterministically scorable check.
+- The single **best** piece of work in the entire benchmark came from a **baseline** run: it
+  proved the test suite vacuous by deleting all of `src/` and re-running it, then restored the
+  tree — and found an **unplanted** unauthenticated cross-tenant audit-log export that no Alfred
+  run caught. A falsifier it invented, and the most severe finding in the fixture.
+
+### What this does to the recommendation
+
+The decline test is now **more** justified, not less: the org is a 1.48× tax below the line and at
+best 0.87× above it, so the range where it pays is narrower than §21 implied. It does not change
+the direction of the fix — it raises the bar the gate must clear before engaging.
+
