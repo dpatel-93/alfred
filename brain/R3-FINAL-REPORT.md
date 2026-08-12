@@ -463,7 +463,7 @@ Three circularities must keep being named, because the report's discipline is th
 
 One of the caught errors is mine, and it belongs here rather than in a quieter appendix: I repeated "guard restored 6/6" into a formal ruling without recomputing it. The implementer's falsifier caught what my review did not. That is this report's central thesis demonstrated at the adjudicator's expense — a reviewer, however senior, accepts a plausible number; a deterministic check cannot. Weight my other unrecomputed judgments accordingly.
 
-The reconstruction near-miss belongs beside it: a results file assembled from mixed-run transcripts, entirely plausible, wrong on 5 of 23 cases, and biased against the very intervention being measured — caught only by checking the rebuild against the recorded owners, a verification invented for the occasion. Four things went wrong in this exercise, and three were invisible until a check written for a different purpose happened to catch them. That is the strongest argument in this report for the falsifiability rule, and it was produced by accident, repeatedly.
+The reconstruction near-miss belongs beside it: a results file assembled from mixed-run transcripts, entirely plausible, wrong on 5 of 23 cases, and biased against the very intervention being measured — caught only by checking the rebuild against the recorded owners, a verification invented for the occasion. Four things went wrong in this exercise, and three were invisible until a check written for a different purpose happened to catch them. That is strong evidence for the half of the falsifiability rule that ranks checks above reviewers — one of the reviewers it beat was me — and no evidence at all for the half that gates review by stakes: every one of those checks was written at stakes where the rule mandates nothing, so what the incidents actually argue for is cheap checks everywhere. The gating half is still design, not measurement; it earns or loses its keep in run B and Layer 2. The pattern arrived by accident, repeatedly. The right response is to produce it on purpose.
 
 The sharpest open risk is not a number. Gate honouring — whether an emitted confirm-before-fanout actually halts anything — is the load-bearing safety behaviour of this whole design, and it is currently tested nowhere. And r22's shape — skipping the one mandatory review on a compliance assertion while paying for a VP relay — is the only failure class in this run that maps onto real-world harm rather than wasted tokens, and it survived every fix in R3. Decision 4 in section 17, enforcing the gate with a hook instead of observing it, is in my judgment the highest-value item on that list and the cheapest.
 
@@ -501,8 +501,16 @@ invisible until a check written for a different purpose happened to catch them**
 narrowness surfaced while writing a falsifier for an unrelated known defect; the guard-denominator
 shift surfaced by following that same falsifier; the mixed-run reconstruction surfaced from a
 verification added for its own sake. Only the fable-gate `mkdir` bug was found by looking for it.
-That is the strongest argument in this report for the falsifiability rule, and it was produced by
-accident, repeatedly.
+**What this does and does not support.** It is strong evidence for the half of the falsifiability
+rule that *ranks* checks above reviewers, and **no evidence at all** for the half that *gates* review
+by stakes. Every one of those checks was written at S0/S1, where the rule mandates nothing — so what
+the incidents actually argue for is **cheap checks everywhere**, which is a real claim but a weaker
+and different one than §3's conditional. One nuance that is not an escape: the reconstruction check
+was protecting an **S2** artifact, this report, so the stakes the failures *threatened* were not all
+low even though the checks' provenance was. That makes the incidents relevant to the rule's
+territory, not evidence for its threshold. The threshold is still design, not measurement; it earns
+or loses its keep in run B and Layer 2. The pattern arrived by accident, repeatedly. The right
+response is to produce it on purpose.
 
 **Also retracted:** the claim that Magentic-One cannot ask a human (it has `approval_func`), and the
 claim that `spend-ledger.mjs` was dead code (it is live and tested).
