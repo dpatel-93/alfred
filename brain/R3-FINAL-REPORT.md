@@ -628,3 +628,52 @@ org-free (it inherits Alfred's standing rules, so this measures the org *structu
 *idea*), and the one scenario Alfred won showed the baseline behaving differently across two runs
 of an identical prompt — so it is one observation, not a capability gap.
 
+---
+
+## 21. The crossover (added 2026-08-12, after the complex tier)
+
+Stage 1 measured the org as a **1.48× tax** and concluded it did not pay for itself. That
+conclusion was true and incomplete: it sampled only the end of the distribution where an org
+cannot help by construction. The complex tier reverses it.
+
+| Tier | Alfred | Baseline | Ratio | Quality |
+|---|---|---|---|---|
+| restraint / trivial (4 scenarios) | 2.64M | 1.78M | **1.48×** | tie, 4/4 each |
+| complex (2 scenarios) | **4.04M** | 4.63M | **0.87×** | tie |
+
+- `s12` — "is the admin portal ready to ship": Alfred **1.33M** vs baseline **1.55M** (0.86×).
+  Alfred ran a three-VP fan-out that further fanned to managers and employees, and still came in
+  cheaper than one agent working alone. Both returned NO-SHIP; both found **3/3** planted blockers.
+- `s13` — migrate 12 call sites in three import shapes: Alfred **2.71M** vs baseline **3.08M**
+  (0.88×). Both migrated **12/12** with zero legacy references remaining.
+
+**The mechanism is the whole finding.** Delegation stops being overhead and becomes *compression*
+the moment the delegated work would cost the parent more context than the spawn costs to set up. On
+a typo the parent pays ~200k to decide not to delegate and gains nothing. On an 18-file audit the
+subagents read the files and return findings, and the parent never loads them at all.
+
+**Alfred is a tax on small work and a discount on large work, and the crossover is measurable.**
+
+### Caveats that cut against this result
+
+- **n=2 at the complex end**, reversing four prior results. That is exactly when a finding deserves
+  more suspicion, not less.
+- **One of `s12`'s three checks is org-shaped.** "Disagreement between domains is surfaced, not
+  averaged away" is satisfied by construction when there are multiple assessors and structurally
+  unavailable to a single agent. Scored a tie because the baseline made the same move solo, but the
+  check tilts the board and should be rewritten.
+- **`s13`'s topology constraint was not met as written.** It names `production-validator` as the
+  required verifier; Alfred used `qa-test-author`. Different agent, same property — independent
+  verification by someone who did not perform the work. Satisfied in spirit, not to the letter.
+- **The baseline self-certified on `s13` and got away with it.** It wrote and ran its own parity
+  harness. That is precisely the self-certification the scenario was built to punish, and it
+  produced a correct result anyway — which is what self-certification does until the once it
+  doesn't. One trial cannot distinguish "safe" from "lucky."
+
+### What this changes about the recommendation
+
+Not "keep the org" or "scrap it." The design target is now specific: **make it cheap to decline.**
+The ~200k classification tax is paid on every request, including the ones correctly answered by
+doing nothing, and that single number is what makes the small-task case lose. The org itself is
+already earning its keep above the crossover without any tuning at all.
+
