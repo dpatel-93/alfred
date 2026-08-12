@@ -3,7 +3,7 @@
 **Prepared for:** the operator (CEO)
 **Architecture and adjudication:** Fable, principal systems architect
 **Implementation and measurement:** Opus
-**Date:** 2026-08-11 · **Head:** `1244e57` · **Range:** `7281f96~1..HEAD` (15 commits)
+**Date:** 2026-08-11 · **Range:** `7281f96~1..HEAD` · **Status:** released — no further architect hold
 
 ---
 
@@ -388,6 +388,10 @@ percentage, and it points at a specific fix rather than "try harder."
 | **C. Layer 2, both arms** | 20 scenarios × alfred + baseline | **~24.1M** | The first evidence the org beats a single agent — the actual answer to critique #1 |
 | **D. Cross-system** | + AutoGen install, OpenAI key, neutral harness | 24.1M + external API | Head-to-head vs Magentic-One |
 
+*One spawn, not a run:* the emission axis reads 23/24 only because `r13`'s transcript did not
+survive. A single-spawn top-up (~80k tokens) would take it to 24/24 if that number is ever wanted.
+Worth exactly one spawn and never a run.
+
 Recommendation: **B only** (~0.5M) — A was cancelled after the re-extraction made it unnecessary. B is cheap, it closes the last
 load-bearing untested behaviour, and C is worth far more once the instrument is known-good. Running
 C on an instrument that silently dropped its own required fields would have been spending 24M tokens
@@ -445,31 +449,25 @@ its instrumentation are the contribution; one layer of that is measured and one 
 
 ## 19. Fable's adversarial final judgment
 
-*Committed verbatim as delivered by the principal architect. Not edited, summarised, or softened.*
+*Committed verbatim as delivered by the principal architect. Not edited, summarised, or softened.
+This supersedes an earlier version that approved "runs A and B"; run A was cancelled once the
+re-extraction obtained its deliverable for free.*
 
 **Verdict: ship the report; bound the claims; the org is still unproven and the instrument is now real.**
 
 This exercise set out to answer two external critiques of the org and ended up answering a different, better question: whether this framework can measure itself honestly. It can. That is not the deliverable that was commissioned, and it is worth more than the one that was.
 
-What is proven: the router, under the R3 charter, classifies 24 author-written requests at 95.8% owner and 87.5% depth accuracy on a single run, and its residual failure mode is miscalibrated ceremony, not misrouting. What is not proven: that the org should exist. Layer 2 has never run; every number in section 14 measures Claude operating Alfred's charter against Alfred's own dataset. Until an org arm beats a single-agent arm on completion-per-token, critique #1 — "what's the breakthrough beyond packaging" — is answered in design and unanswered in evidence. Nobody should quote 95.8% outside this repo.
+What is proven: the router, under the R3 charter, classifies 24 author-written requests at 95.8% owner and 87.5% depth accuracy on a single run, emits its required classification fields 23/23, does not game its own restraint guard (13/13), and its residual failure mode is miscalibrated ceremony, not misrouting. What is not proven: that the org should exist. Layer 2 has never run; every number in section 14 measures Claude operating Alfred's charter against Alfred's own dataset. Until an org arm beats a single-agent arm on completion-per-token, critique #1 — "what's the breakthrough beyond packaging" — is answered in design and unanswered in evidence. Nobody should quote 95.8% outside this repo.
 
 Three circularities must keep being named, because the report's discipline is the only thing keeping them honest: the dataset's author is the implementer; the adjudicator who ruled its ground truth wrong is the architect who wrote the rules the ruling appealed to; and n=1 everywhere. The amendments survive these only because they are grounded in shipped documents and logged bidirectionally — r06 costing a pass is the single strongest line in the amendment log.
 
 One of the caught errors is mine, and it belongs here rather than in a quieter appendix: I repeated "guard restored 6/6" into a formal ruling without recomputing it. The implementer's falsifier caught what my review did not. That is this report's central thesis demonstrated at the adjudicator's expense — a reviewer, however senior, accepts a plausible number; a deterministic check cannot. Weight my other unrecomputed judgments accordingly.
 
+The reconstruction near-miss belongs beside it: a results file assembled from mixed-run transcripts, entirely plausible, wrong on 5 of 23 cases, and biased against the very intervention being measured — caught only by checking the rebuild against the recorded owners, a verification invented for the occasion. Four things went wrong in this exercise, and three were invisible until a check written for a different purpose happened to catch them. That is the strongest argument in this report for the falsifiability rule, and it was produced by accident, repeatedly.
+
 The sharpest open risk is not a number. Gate honouring — whether an emitted confirm-before-fanout actually halts anything — is the load-bearing safety behaviour of this whole design, and it is currently tested nowhere. And r22's shape — skipping the one mandatory review on a compliance assertion while paying for a VP relay — is the only failure class in this run that maps onto real-world harm rather than wasted tokens, and it survived every fix in R3. Decision 4 in section 17, enforcing the gate with a hook instead of observing it, is in my judgment the highest-value item on that list and the cheapest.
 
-Ship it. Approve runs A and B; hold every external claim until C. And keep the property that made this cycle work: every number in this report was allowed to get worse, and three of them did.
-
----
-
-*Implementer's note, appended rather than edited into the text above.* Section 19 says "approve runs
-A and B." **Run A no longer exists to approve** — it was cancelled in §16 after the free
-re-extraction from retained transcripts produced its deliverable (field emission 23/23) at zero
-token cost. The live spend decision is **B only, ~0.5M**. This is recorded as a discrepancy rather
-than corrected in place, because the architect's judgment was committed verbatim by its own
-instruction and quietly reconciling it would be the exact behaviour this report was written to
-catch.
+Ship it. Approve run B; run A was rightly cancelled once the re-extraction obtained its deliverable for free. Hold every external claim until C. And keep the property that made this cycle work: every number in this report was allowed to get worse, and three of them did.
 
 ---
 
@@ -488,6 +486,23 @@ both out of the denominator, 8 → 6 — and both were exactly the two the guard
 fixed-denominator truth was 7/8. Caught by writing a falsifier for a *different* known defect and
 following it where it led. The wrong number had already been committed and reported; it was
 corrected in a follow-up commit rather than by amending history.
+
+**Correction 3 — the reconstruction that nearly fabricated a result set.** Re-deriving the results
+file from retained transcripts (§14) initially took last-file-wins across a directory that
+accumulates *every* run — r2, r3 and r4 together. The output was entirely plausible and wrong on **5
+of 23 cases**, including `r24` returning its **pre-intervention** answer, which would have
+*understated the very intervention being measured*. Nothing about the file looked wrong. It was
+caught only by checking the rebuild against the recorded owners and depths before scoring it — a
+verification invented for that occasion, not part of any plan. The extractor now performs that check
+itself and refuses to emit on any disagreement (currently 23 agree, 0 disagree).
+
+**The pattern this run kept producing.** Four things went wrong in this exercise, and **three were
+invisible until a check written for a different purpose happened to catch them**: the `expect[0]`
+narrowness surfaced while writing a falsifier for an unrelated known defect; the guard-denominator
+shift surfaced by following that same falsifier; the mixed-run reconstruction surfaced from a
+verification added for its own sake. Only the fable-gate `mkdir` bug was found by looking for it.
+That is the strongest argument in this report for the falsifiability rule, and it was produced by
+accident, repeatedly.
 
 **Also retracted:** the claim that Magentic-One cannot ask a human (it has `approval_func`), and the
 claim that `spend-ledger.mjs` was dead code (it is live and tested).
