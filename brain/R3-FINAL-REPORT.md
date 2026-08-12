@@ -305,8 +305,9 @@ line when Alfred costs more and completes no more.
 | Both | — | — | 66.7% | **87.5%** (21/24) |
 | Review bit | — | — | — | 3/5 |
 | Topology | — | — | 2/2 | 1/1 — **under-sampled, not a rate** |
-| Field compliance | — | — | — | **0/24** |
-| Over-engagement | 7/7 | — | 6/8 | **7/7** adjudicated · **7/8** frozen denominator |
+| Field emission | — | — | — | **23/23** recovered — see below |
+| Over-gating | — | — | — | **13/13** C1 cases correctly gated `proceed` |
+| Over-engagement | 7/7 | — | 6/8 | **7/7** steady-state · **7/8** frozen denominator |
 | Recurring context | 22,855 tok/turn | — | — | **~18,861** (−17%) |
 
 **Reading these honestly:**
@@ -316,12 +317,32 @@ line when Alfred costs more and completes no more.
   caught up. Eleven amendments are logged with impact **in both directions** — `r06` is in the log
   because it *costs* a pass, since an amendment list containing only cases the router lost is
   indistinguishable from fitting data to results.
-- **The guard was never "restored."** On the frozen pre-amendment denominator it went 6/8 → 7/8:
-  **+1 real case** (`r24`), caused by the required-fields change. It reads 7/7 on adjudicated ground
-  truth only because `r21` left the population **by adjudication, not by router improvement**.
-- **Field compliance 0/24 is ours, not the router's.** R3 mandated three required fields and then
-  measured none of them — emitted upstream, dropped by the capture step, never scored. By the exact
-  principle this project shipped, the mandate was live in the prompt and absent from the system.
+- **The guard was never "restored."** Both numbers belong in the record because they answer different
+  questions. *Steady state:* **7/7**, on the criterion that a conditional case sits in the
+  denominator **iff CLARIFY is its preferred arm** — `r24` in, `r21` out, because `r21`'s recorded
+  amendment makes proceeding the preferred answer, and a guard that scores the preferred answer as a
+  leak is a metric that cannot reach 100% while the router behaves ideally. That is a tax on correct
+  behaviour, not a guard. *Frozen denominator:* **6/8 → 7/8, +1 real case** (`r24`), caused by the
+  required-fields change — the historical comparison that detected the silent shift. `r21` leaves the
+  population **by adjudication, not by router improvement**; its non-clarifying behaviour is not
+  hidden by that, it lives in the gate-honouring gap in §15.
+- **The 0/24 field number was a capture-pipeline defect, and it has been repaired for free.** The raw
+  subagent transcripts survived, so the results file was re-derived from the *original* responses
+  with a capture step that keeps everything — no re-run, no tokens, no new evidence. On the 23 cases
+  whose transcripts were retained, **field emission is 23/23**. The router had been emitting all
+  seven fields all along; my capture step dropped four of them. `r13`'s transcript did not survive,
+  which is why the axis reads 23/24 rather than 24/24, and why routing/depth on the reconstruction
+  read 91.7%/83.3% — the missing case counts as a failure. The canonical figures stay on the
+  complete 24-case file.
+- **The intervention is not gaming its own guard.** The over-gating counterweight — added precisely
+  because the cheapest route to a perfect guard is to gate everything — reads **13/13**: on every
+  bounded single-owner case, the router gated `proceed` rather than manufacturing caution. That
+  number could only be computed once the fields were recovered.
+- **Two axes were being conflated, including by me.** The ≥75% gate was always *depth accuracy* and
+  was never conditioned on field capture. What went unmeasured was field **emission rate**, a new
+  axis whose baseline is the 23/23 above. Saying "the gate passed on a run whose mandate was never
+  measured" undersold the intervention: its behavioural effect was in evidence throughout — `r24`
+  flipping to CLARIFY, `r21` emitting its premise — in the transcripts, just not in the artifact.
 - **Topology at n=1–2 is not a rate** and is never reported as a percentage.
 
 **The residual failure mode is miscalibrated ceremony, not misrouting.** All three remaining
@@ -340,14 +361,16 @@ percentage, and it points at a specific fix rather than "try harder."
    juxtaposed as if they were comparable.**
 2. **No baseline arm.** Layer 2 has never run. Without it, Layer 1 measures *Claude*, not *Alfred* —
    there is no evidence here that the org beats a single competent agent given the same request.
-3. **Gate honouring is untested.** Gate *emission* is now measured; whether a gate is *honoured* is
+3. **Field emission has a baseline of one run.** 23/23 is a strong first number but it is n=1, and
+   `r13` is absent because its transcript did not survive rather than because the router failed.
+4. **Gate honouring is untested.** Gate *emission* is now measured; whether a gate is *honoured* is
    measured nowhere and cannot be, from a single-turn artifact. Fable ruled my "wrote the risk down
    and proceeded anyway" reading over-reads it: the schema requires an owner on every answer, so
    `gate=confirm-before-fanout` plus an owner is the only way it can express "here is the plan, now
    waiting." R3.2 is the two-turn probe.
-4. **n=1.** One run of 24 cases, no variance estimate, no repeated trials.
-5. **Neutral-schema migration is 1/20**, so 19 scenarios are unusable in any cross-system run.
-6. **Latency was never instrumented**, despite "the Alfred layer feels slower" being the original
+5. **n=1.** One run of 24 cases, no variance estimate, no repeated trials.
+6. **Neutral-schema migration is 1/20**, so 19 scenarios are unusable in any cross-system run.
+7. **Latency was never instrumented**, despite "the Alfred layer feels slower" being the original
    complaint that started this.
 
 ---
@@ -356,15 +379,15 @@ percentage, and it points at a specific fix rather than "try harder."
 
 | Run | Scope | Estimated tokens | Buys |
 |---|---|---|---|
-| **A. Clean R4 routing run** | 24 cases, capture all 7 fields | ~1.8M | A field-compliance number that isn't 0/24; makes the over-gating counterweight scorable |
+| ~~A. Clean R4 routing run~~ | ~~24 cases, capture all 7 fields~~ | **0 — CANCELLED** | Obtained free by re-extraction from retained transcripts. Spending ~1.8M to backfill an axis whose failure was already attributed to the pipeline, not the router, would have failed the framework's own cost test |
 | **B. R3.2 gate-honouring probe** | one follow-up per gated answer (~6–8 cases) | ~0.5M | The only untested load-bearing behaviour |
 | **C. Layer 2, both arms** | 20 scenarios × alfred + baseline | **~24.1M** | The first evidence the org beats a single agent — the actual answer to critique #1 |
 | **D. Cross-system** | + AutoGen install, OpenAI key, neutral harness | 24.1M + external API | Head-to-head vs Magentic-One |
 
-Recommendation: **A + B first** (~2.3M). They are cheap, they close the two gaps that are *our*
-defects rather than unknowns, and C is worth far more once the instrument is known-good. Running C
-on an instrument that silently dropped its own required fields would be spending 24M tokens to
-measure a harness bug.
+Recommendation: **B only** (~0.5M) — A was cancelled after the re-extraction made it unnecessary. B is cheap, it closes the last
+load-bearing untested behaviour, and C is worth far more once the instrument is known-good. Running
+C on an instrument that silently dropped its own required fields would have been spending 24M tokens
+to measure a harness bug — which is exactly what the free re-extraction just avoided.
 
 ---
 
@@ -372,8 +395,8 @@ measure a harness bug.
 
 | # | Decision | Recommendation |
 |---|---|---|
-| 1 | Spend ~2.3M on runs A+B | **Yes** — closes our own defects before spending 10× on C |
-| 2 | Spend ~24.1M on run C | Only after A+B are green |
+| 1 | Spend ~0.5M on run B (gate-honouring probe) | **Yes** — the last untested load-bearing behaviour. Run A was cancelled, not deferred |
+| 2 | Spend ~24.1M on run C | Only after B is green |
 | 3 | **`dr-manager` is a relay by construction** — one employee, so it loses every anti-relay adjudication | Give it real breadth or fold it. Same question for `vendor-manager` |
 | 4 | **Enforce the gate rather than observe it** — a hook refusing spawns in any turn whose classification emitted a non-proceed gate | Structure beats exhortation; this is the same lesson that produced the three fields |
 | 5 | Delete ~2,600 lines unreachable from `settings.json` (`router.js`, `intelligence.cjs`, `learning-service.mjs`, `metrics-db.mjs`, `hook-handler.cjs`) | Verify once more, then delete |
