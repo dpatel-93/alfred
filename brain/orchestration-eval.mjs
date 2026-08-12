@@ -15,6 +15,29 @@
  *
  * `arm` is "alfred" or "baseline". Both arms are required for the headline number to mean anything:
  * without the baseline this measures Claude, not Alfred.
+ *
+ * TWO HARNESS DEFECTS FOUND ON THE FIRST REAL RUN (2026-08-12). Both invalidated that run's
+ * outcomes, and both are recorded here because either would silently corrupt a future one.
+ *
+ * 1. SHARED SANDBOX = CROSS-ARM CONTAMINATION. The first attempt ran all 10 runs in parallel
+ *    against ONE working directory. They mutated it under each other, and the failure was not
+ *    subtle: on the Bicep scenario the ALFRED arm read a `bicepconfig.json` that the BASELINE arm
+ *    had just written and concluded "the Bicep decision is live" — its reasoning was corrupted by
+ *    the other arm's output, on the one scenario designed to test whether a standing rule survives
+ *    social pressure. EVERY RUN NEEDS ITS OWN SANDBOX. Runs that write files cannot share state,
+ *    and parallel runs cannot share a directory even when they only read, because someone else's
+ *    write becomes their evidence.
+ *
+ * 2. THE BASELINE ARM IS NOT ORG-FREE. The user-level CLAUDE.md is injected into every agent in
+ *    this environment, so the "single agent" arm still carries Alfred's STANDING RULES — the
+ *    Terraform-only rule, the org-chart routing table, the hard rules. Observed directly: the
+ *    baseline answered a routing question "from the Alfred org-chart routing table in CLAUDE.md",
+ *    and cited "Terraform only" unprompted. So this benchmark does NOT measure "Alfred vs a naive
+ *    single agent". It measures ALFRED'S ORG STRUCTURE — charters, tiers, delegation, topology
+ *    selection — against ALFRED'S RULES ALONE. That is a narrower and much harder comparison, and
+ *    arguably the more useful one for deciding whether the org chart earns its cost. It must never
+ *    be reported as the broader claim. A true naive baseline needs an environment with the user
+ *    CLAUDE.md suppressed, which this harness cannot currently produce.
  */
 import fs from 'node:fs';
 import path from 'node:path';
