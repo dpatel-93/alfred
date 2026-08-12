@@ -25,8 +25,49 @@ import CASES from './routing-eval-questions.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const AGENTS = path.join(os.homedir(), '.claude', 'agents');
 const SENTINELS = new Set(['NONE', 'CLARIFY']);
-const DEPTHS = new Set(['none', 'direct', 'full', 'full+review']);
+// R3.1: 'full+review' is GONE. It fused two axes ORG.md §5e itself calls orthogonal — shape (how
+// deep a chain was paid for) and stakes (whether an independent reviewer was engaged). The fusion
+// made "manager entry + independent review" inexpressible, so a router that correctly wanted review
+// had to claim VP depth in order to say so. Depth and review are now separate, scored separately.
+const DEPTHS = new Set(['none', 'direct', 'full']);
 const TOPOLOGIES = new Set(['T0', 'T1', 'T2', 'T3', 'T4']);
+/** Legacy transcripts wrote the fused value. The mapping is deterministic, so old runs re-score. */
+function splitDepth(d) {
+  return d === 'full+review' ? { depth: 'full', review: true } : { depth: d, review: undefined };
+}
+
+/** name -> parent, read from the same frontmatter validate-org.mjs treats as authoritative. */
+function parentage() {
+  const par = new Map();
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith('.md') && e.name !== 'ORG.md') {
+        const src = fs.readFileSync(p, 'utf8');
+        const n = src.match(/^name:\s*(\S+)/m);
+        const pa = src.match(/^parent:\s*(\S+)/m);
+        if (n) par.set(n[1], pa ? pa[1] : null);
+      }
+    }
+  };
+  walk(AGENTS);
+  return par;
+}
+
+/**
+ * Is `name` inside the subtree rooted at `root` (inclusive)? Derived, never hand-listed — a
+ * hand-list is exactly what omitted devops-manager from r21 and turned a router pass into a
+ * scorer failure.
+ */
+function inSubtree(name, root, par = parentage()) {
+  let cur = name, hops = 0;
+  while (cur && hops++ < 12) {
+    if (cur === root) return true;
+    cur = par.get(cur);
+  }
+  return false;
+}
 
 const C = process.stdout.isTTY
   ? { r: (s) => `\x1b[31m${s}\x1b[0m`, g: (s) => `\x1b[32m${s}\x1b[0m`,
@@ -65,24 +106,47 @@ function check() {
         errs.push(`${c.id}: expects "${want}" which is not an agent on disk`);
       }
     }
-    if (!DEPTHS.has(c.depth)) errs.push(`${c.id}: unknown depth "${c.depth}"`);
     // CLARIFY carries depth 'none' — nothing has been spawned yet, so no depth has been paid.
     // This ambiguity cost 5 false failures on the first run.
     //
-    // Checking only expect[0] left a hole I then fell into: a case listing CLARIFY as an
-    // ACCEPTABLE answer beside a real owner is unscorable on depth, because the correct depth
-    // depends on which acceptable answer the router gave — 'none' if it clarified, something
-    // else if it routed. The scorer compares against a single c.depth and cannot express that,
-    // so such a case fails on depth no matter what the router does. Catch the construction here
-    // rather than discovering it in a result set, where the temptation is to relabel the case.
+    // A case listing CLARIFY as an ACCEPTABLE answer beside a real owner is unscorable against a
+    // single depth: clarifying pays 'none' and routing pays the stated depth, so one accepted
+    // answer is always marked wrong. R3.1 makes that construction IMPOSSIBLE TO WRITE rather than
+    // merely detectable — such a case must declare the conditional `onProceed` branch, and the
+    // primary must be the CLARIFY/depth-'none' arm. Checking expect[0] alone is what let r24 ship
+    // broken; it is not enough to catch the mistake, the shape has to refuse it.
     const wants = [c.expect].flat();
-    if (wants.includes('CLARIFY') && c.depth !== 'none') {
-      errs.push(wants[0] === 'CLARIFY'
-        ? `${c.id}: CLARIFY must carry depth 'none' — nothing has been spawned yet.`
-        : `${c.id}: unscorable — CLARIFY is listed as acceptable alongside "${wants[0]}", but `
-        + `depth is "${c.depth}". Clarifying pays depth 'none' and routing pays "${c.depth}", `
-        + `so one accepted answer is always scored wrong. Split it into two cases, or make the `
-        + `behaviour (not the owner) the thing asserted via requireEither.`);
+    if (wants.includes('CLARIFY')) {
+      if (wants.length > 1 || c.onProceed) {
+        if (wants[0] !== 'CLARIFY' || c.depth !== 'none') {
+          errs.push(`${c.id}: a case where CLARIFY is one acceptable answer must put CLARIFY `
+                  + `first with depth 'none' (the arm where nothing has been spawned), and put the `
+                  + `routing arm in onProceed. Got expect[0]="${wants[0]}" depth="${c.depth}".`);
+        }
+        if (!c.onProceed) {
+          errs.push(`${c.id}: lists CLARIFY beside a real owner but declares no onProceed branch, `
+                  + `so the routing arm has no ground truth to score against.`);
+        } else {
+          if (!c.onProceed.expect) errs.push(`${c.id}: onProceed needs an expect`);
+          for (const d of [c.onProceed.depth].flat().filter(Boolean)) {
+            if (!DEPTHS.has(d)) errs.push(`${c.id}: onProceed has unknown depth "${d}"`);
+          }
+          if (c.onProceed.subtree && !names.has(c.onProceed.subtree)) {
+            errs.push(`${c.id}: onProceed subtree root "${c.onProceed.subtree}" is not on disk`);
+          }
+        }
+      } else if (c.depth !== 'none') {
+        errs.push(`${c.id}: CLARIFY must carry depth 'none' — nothing has been spawned yet.`);
+      }
+    }
+    if (c.review !== undefined && typeof c.review !== 'boolean') {
+      errs.push(`${c.id}: review must be a boolean — it is a separate axis from depth, not a suffix`);
+    }
+    for (const d of [c.depth].flat()) {
+      if (!DEPTHS.has(d)) errs.push(`${c.id}: unknown depth "${d}"`);
+    }
+    if (c.subtree && !names.has(c.subtree)) {
+      errs.push(`${c.id}: subtree root "${c.subtree}" is not an agent on disk`);
     }
     if (c.topology && !TOPOLOGIES.has(c.topology)) errs.push(`${c.id}: unknown topology "${c.topology}"`);
     if (!c.trap || c.trap.length < 30) {
@@ -137,7 +201,8 @@ Load the org-index skill first. Do not open ORG.md to look up a name.
 
 Answer with JSON only, no prose. EVERY field is required:
 {"owner":"<exact agent name, or NONE to stay in-session, or CLARIFY to confirm with the CEO first>",
- "depth":"none|direct|full|full+review",
+ "depth":"none|direct|full",
+ "review":true|false,
  "topology":"T0|T1|T2|T3|T4",
  "stakes":"S0|S1|S2|S3",
  "blocking_premises":"<the assumptions that make this worthless if false, or 'none'>",
@@ -151,6 +216,15 @@ Three ORTHOGONAL axes decide this (ORG.md 5e). Do not collapse them:
   C4 staged workstreams where a later stage is worthless if an earlier fails -> T4 staged gates.
 - STAKES decides review (writes/spends/ships/asserts -> independent refute-review, 5c.3).
 - AMBIGUITY decides clarification (5c.2). CLARIFY always carries depth "none" — nothing spawned yet.
+
+DEPTH is the ENTRY POINT this routing decision commands, nothing more:
+  "direct" = your first spawn IS the owner (employee OR manager), no VP anywhere on the path.
+  "full"   = a VP is legitimately on the path — T3 adjudication, a cross-manager reconcile, a C4
+             stage spanning several of its managers, or as the 5c.3 review recipient.
+A manager's own internal fan-out does NOT make this "full". That is the manager's staffing decision,
+governed by its own charter; this eval measures YOUR routing decision. "review" is a SEPARATE bit —
+set it true when stakes call for an independent reviewer, at whatever depth. Do not raise depth in
+order to signal review.
 
 - NONE = engaging the org is the wrong call (answerable from context, trivial edit, tight iteration).
 - Route to the OWNER, not the department. If the ask arrives scoped to one employee's surface, name
@@ -167,8 +241,14 @@ function emit(out) {
   fs.writeFileSync(dest, lines.join('\n') + '\n', 'utf8');
   console.log(C.b('\nAlfred routing eval — prompts emitted\n'));
   console.log(`  ${lines.length} prompts -> ${dest}`);
-  console.log(C.d('\n  Run each prompt through the router under test, then write results as JSONL:'));
-  console.log(C.d('    {"id":"r01-secret-history","owner":"sec-secrets-hunter","depth":"direct"}'));
+  console.log(C.d('\n  Run each prompt through the router under test, then write results as JSONL.'));
+  console.log(C.d('  PERSIST EVERY FIELD THE ROUTER RETURNS. R3 captured only owner/depth/topology,'));
+  console.log(C.d('  so the three required classification fields were emitted and then dropped by the'));
+  console.log(C.d('  capture step — enforced in the prompt and nowhere in the measurement. --score'));
+  console.log(C.d('  now reports FIELD COMPLIANCE, which goes red if the capture regresses again:'));
+  console.log(C.d('    {"id":"r01-secret-history","owner":"sec-secrets-hunter","depth":"direct",'));
+  console.log(C.d('     "review":false,"topology":"T1","stakes":"S1","blocking_premises":"...",'));
+  console.log(C.d('     "gate":"proceed — because ...","why":"..."}'));
   console.log(C.d('\n  Score with:  node brain/routing-eval.mjs --score results.jsonl\n'));
 }
 
@@ -181,31 +261,64 @@ function score(file) {
   }
 
   let owner = 0, depth = 0, both = 0, missing = 0, topoOk = 0, topoTotal = 0;
+  let revOk = 0, revTotal = 0, fieldOk = 0;
   const behaviourMisses = [];
   const fails = [];
+  const par = parentage();
+  const FIELDS = ['owner', 'depth', 'topology', 'stakes', 'blocking_premises', 'gate', 'why'];
 
   for (const c of CASES) {
     const r = got.get(c.id);
     if (!r) { missing++; continue; }
-    const want = [c.expect].flat();
+
+    // Field-presence compliance. R3 claimed three REQUIRED classification fields and then measured
+    // none of them — they were emitted upstream and dropped by the capture step. By this project's
+    // own rule ("a policy with no observable output is not enforced") the mandate was half-enforced.
+    // It is now a reported number, so the gap is visible in the artifact instead of the transcript.
+    if (FIELDS.every((f) => r[f] !== undefined && r[f] !== '')) fieldOk++;
+
+    // A CLARIFY-arm case scores against whichever arm the router actually took.
+    const clarified = r.owner === 'CLARIFY';
+    const arm = (!clarified && c.onProceed) ? c.onProceed : c;
+    const want = [arm.expect].flat();
+    const norm = splitDepth(r.depth);
+
+    // Owner: exact match, or — for outcome-defined cases — membership in the subtree that owns the
+    // outcome. Bounded on purpose: pure behaviour-only scoring is gameable, since any agent plus the
+    // word "verify" would pass.
     const okOwner = want.includes(r.owner)
-      || (want.length > 1 && want.every((w) => (r.owner || '').includes(w)));
-    let okDepth = r.depth === c.depth;
-    if (c.topology) { topoTotal++; if (r.topology === c.topology) topoOk++; }
+      || (arm.subtree ? inSubtree(r.owner, arm.subtree, par) : false)
+      || (want.length > 1 && !arm.subtree && want.every((w) => (r.owner || '').includes(w)));
+
+    let okDepth = [arm.depth].flat().includes(norm.depth);
+
+    // Review is its own bit, scored only where the ground truth takes a position on it.
+    if (arm.review !== undefined) {
+      revTotal++;
+      const gotReview = norm.review !== undefined ? norm.review : Boolean(r.review);
+      if (gotReview === arm.review) revOk++;
+    }
+    // Topology is not scored on a CLARIFY answer — nothing has been spawned, so no shape has been
+    // paid for. The mirror of the depth-on-CLARIFY rule.
+    if (arm.topology && !clarified) { topoTotal++; if (r.topology === arm.topology) topoOk++; }
 
     // `requireEither` — amended cases where the right answer is not a single label but a BEHAVIOUR.
     // r21 may act on a rollback, but only with an independent recovery check or a stated causal
     // premise; r24 may commit to the program, but only after citing confirm-before-fanout. Scored
     // against the router's stated reasoning, because a claim it never made is one it cannot be
     // credited for. CLARIFY satisfies these by construction — nothing has been committed yet.
-    if (c.requireEither && r.owner !== 'CLARIFY') {
-      const why = `${r.why || ''} ${r.gate || ''}`.toLowerCase();
+    const needEither = arm.requireEither || (clarified ? null : c.requireEither);
+    if (needEither && !clarified) {
+      // blocking_premises is where the premise ACTUALLY lives, and R3's matcher did not look at it.
+      const why = `${r.why || ''} ${r.gate || ''} ${r.blocking_premises || ''}`.toLowerCase();
       const has = {
-        verifier: /verif|independent|confirm(ed|s)? (that )?login|recover/.test(why),
-        statedPremise: /premise|assum|if .*(does not|doesn't|not) recover|fallback|cause/.test(why),
+        verifier: /\bverif(y|ies|ied|ication)\b|\bindependent\b|\brecover(y|ed|s)?\b/.test(why),
+        // \bcaus... deliberately word-boundaried: the mandated gate format is "... — because ...",
+        // so a bare /cause/ matched EVERY format-compliant response and this check was vacuous.
+        statedPremise: /\bpremise\b|\bassum(e|ed|ption)\b|\bfallback\b|\bcaus(e|es|ed|al)\b|if .*(does not|doesn't|not) recover/.test(why),
         confirmBeforeFanout: /confirm[- ]before|present the plan|ceo (approval|sign|confirm)|before (the )?fan/.test(why),
       };
-      const need = Object.keys(c.requireEither);
+      const need = Object.keys(needEither);
       const met = need.some((k) => has[k]);   // "either" — any one satisfies
       if (!met) {
         okDepth = false;   // fold into the pass/fail so it cannot silently pass on owner alone
@@ -227,15 +340,31 @@ function score(file) {
   console.log(`  ROUTING ACCURACY  ${C.b(pct(owner))}  (${owner}/${n})   did it pick the right owner`);
   console.log(`  DEPTH ACCURACY    ${C.b(pct(depth))}  (${depth}/${n})   did it pay for the right chain`);
   console.log(`  BOTH              ${C.b(pct(both))}  (${both}/${n})`);
+  if (revTotal) {
+    console.log(`  REVIEW BIT        ${C.b(`${((revOk / revTotal) * 100).toFixed(1)}%`)}  `
+              + `(${revOk}/${revTotal})   did stakes call for an independent reviewer`);
+  }
   if (behaviourMisses.length) { console.log(); for (const b of behaviourMisses) console.log(`  ${C.y("behaviour")} ${b}`); }
   if (topoTotal) {
-    const tp = `${((topoOk / topoTotal) * 100).toFixed(1)}%`;
-    console.log(`  TOPOLOGY ACCURACY ${C.b(tp)}  (${topoOk}/${topoTotal})   did it pick the right shape`);
+    // Reported as a raw fraction, never as a headline percentage. At n=2 a single case moves the
+    // number 50 points, which is a sample-size artifact rather than a measurement.
+    const note = topoTotal < 8 ? C.y(`  UNDER-SAMPLED at n=${topoTotal} — not a rate`) : '';
+    console.log(`  TOPOLOGY          ${C.b(`${topoOk}/${topoTotal}`)}   did it pick the right shape${note}`);
+  }
+  console.log(`  FIELD COMPLIANCE  ${C.b(`${((fieldOk / n) * 100).toFixed(1)}%`)}  (${fieldOk}/${n})   `
+            + C.d('all 7 response fields present in the captured artifact'));
+  if (fieldOk < n) {
+    console.log(C.y(`    ${n - fieldOk} result(s) are missing required classification fields. If the `
+              + `router emitted\n    them and the capture step dropped them, the mandate is enforced `
+              + `in the prompt and\n    nowhere in the measurement — which is the failure this axis exists to expose.`));
   }
   if (missing) console.log(`  ${C.y(`${missing} case(s) had no result — counted as failures`)}`);
 
   // Over-engagement is scored separately: it is the failure that costs money rather than accuracy.
-  const neg = CASES.filter((c) => SENTINELS.has([c.expect].flat()[0]));
+  // Selected on CLARIFY/NONE appearing ANYWHERE in expect, not just first. Selecting on expect[0]
+  // let a ground-truth edit silently shrink this denominator from 8 to 6, and the resulting 6/6 was
+  // reported as a restoration when the fixed-denominator number was 7/8.
+  const neg = CASES.filter((c) => [c.expect].flat().some((w) => SENTINELS.has(w)));
   const negOk = neg.filter((c) => SENTINELS.has(got.get(c.id)?.owner)).length;
   console.log(`\n  ${C.d('over-engagement guard')}  ${negOk}/${neg.length} negative cases held `
             + C.d('(spawning on a NONE/CLARIFY is a pure cost leak)'));
@@ -244,8 +373,9 @@ function score(file) {
     console.log(C.b('\n  Failures\n'));
     for (const { c, r, okOwner, okDepth } of fails) {
       console.log(`  ${C.r(c.id)}  "${c.q.slice(0, 62)}${c.q.length > 62 ? '…' : ''}"`);
-      if (!okOwner) console.log(`     owner  want ${C.g([c.expect].flat().join('+'))}  got ${C.r(r?.owner ?? '—')}`);
-      if (!okDepth) console.log(`     depth  want ${C.g(c.depth)}  got ${C.r(r?.depth ?? '—')}`);
+      if (!okOwner) console.log(`     owner  want ${C.g([c.expect].flat().join('+'))}`
+                             + `${c.subtree ? C.d(` (or inside ${c.subtree})`) : ''}  got ${C.r(r?.owner ?? '—')}`);
+      if (!okDepth) console.log(`     depth  want ${C.g([c.depth].flat().join('|'))}  got ${C.r(splitDepth(r?.depth).depth ?? '—')}`);
       console.log(C.d(`     trap: ${c.trap}`));
       console.log();
     }
