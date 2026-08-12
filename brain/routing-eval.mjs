@@ -153,11 +153,22 @@ function check() {
       errs.push(`${c.id}: missing or trivial trap — a case with no plausible wrong answer is not `
               + `discriminating anything`);
     }
-    // Guard against the circularity this dataset exists to avoid.
-    if (!SENTINELS.has([c.expect].flat()[0])) {
-      const f = findFile([c.expect].flat()[0]);
+    // Guard against the circularity this dataset exists to avoid: a question lifted from the very
+    // charter it is supposed to be testing measures nothing but string matching. This guard already
+    // caught six cases written by this dataset's own author.
+    //
+    // R3.1: it used to check only expect[0], so a multi-owner case could be lifted verbatim from
+    // its SECOND listed owner's charter and pass. Same expect[0] narrowness that shipped r24 broken
+    // and silently shrank the over-engagement denominator — third instance of one bug. Now every
+    // candidate owner in every branch is checked, subtree roots included.
+    const candidates = [
+      ...[c.expect].flat(), c.subtree,
+      ...(c.onProceed ? [...[c.onProceed.expect].flat(), c.onProceed.subtree] : []),
+    ].filter((x) => x && !SENTINELS.has(x));
+    for (const cand of new Set(candidates)) {
+      const f = findFile(cand);
       if (f && fs.readFileSync(f, 'utf8').toLowerCase().includes(c.q.toLowerCase().slice(0, 40))) {
-        errs.push(`${c.id}: question is lifted verbatim from the target charter — circular`);
+        errs.push(`${c.id}: question is lifted verbatim from ${cand}'s charter — circular`);
       }
     }
   }
@@ -168,9 +179,16 @@ function check() {
   console.log(C.b('\nAlfred routing eval — dataset check\n'));
   console.log(C.d(`  ${CASES.length} cases · ${names.size} agents on disk`));
   console.log(C.d(`  depth mix: ${Object.entries(byDepth).map(([k, v]) => `${k}=${v}`).join('  ')}`));
-  const sentinel = CASES.filter((c) => SENTINELS.has([c.expect].flat()[0])).length;
+  // Counted with the SAME predicate --score uses, so the two can never disagree about the
+  // denominator. They disagreed once, silently, and the resulting number was reported as a win.
+  const sentinel = CASES.filter((c) => !c.preferProceed
+                                    && [c.expect].flat().some((w) => SENTINELS.has(w))).length;
+  const exempt = CASES.filter((c) => c.preferProceed).length;
   console.log(C.d(`  ${sentinel} negative cases (NONE/CLARIFY) — these catch over-engagement, `
-                + `which no pre-R2 check measured\n`));
+                + `which no pre-R2 check measured`));
+  if (exempt) console.log(C.d(`  ${exempt} case(s) exempt via preferProceed — ground truth prefers `
+                            + `acting; exempt by recorded adjudication, not by result\n`));
+  else console.log();
 
   if (errs.length) {
     for (const e of errs) console.log(`  ${C.r('FAIL')} ${e}`);
@@ -360,14 +378,47 @@ function score(file) {
   }
   if (missing) console.log(`  ${C.y(`${missing} case(s) had no result — counted as failures`)}`);
 
-  // Over-engagement is scored separately: it is the failure that costs money rather than accuracy.
-  // Selected on CLARIFY/NONE appearing ANYWHERE in expect, not just first. Selecting on expect[0]
-  // let a ground-truth edit silently shrink this denominator from 8 to 6, and the resulting 6/6 was
-  // reported as a restoration when the fixed-denominator number was 7/8.
-  const neg = CASES.filter((c) => [c.expect].flat().some((w) => SENTINELS.has(w)));
-  const negOk = neg.filter((c) => SENTINELS.has(got.get(c.id)?.owner)).length;
-  console.log(`\n  ${C.d('over-engagement guard')}  ${negOk}/${neg.length} negative cases held `
-            + C.d('(spawning on a NONE/CLARIFY is a pure cost leak)'));
+  // Over-engagement guard. Measures the failure that costs money rather than accuracy.
+  //
+  // The denominator DERIVES from current ground truth at score time and is never a frozen list.
+  // Selecting on expect[0] once let a ground-truth edit silently shrink it 8 -> 6, and the
+  // resulting 6/6 got reported as a restoration when the honest fixed-denominator number was 7/8.
+  // A case leaves this population only when the ground truth says proceeding is the PREFERRED
+  // answer (preferProceed), which is a recorded adjudication rather than a scoring convenience.
+  //
+  // HOLDS iff the router committed no unconfirmed spend: it clarified, stayed in-session, or
+  // emitted an explicit confirm-before-fanout gate. The gate counts because ORG.md §5c.2 treats
+  // stating the plan and waiting as the correct behaviour — and because the one-shot harness gives
+  // the router no second turn in which to honour or break that gate. Whether a gate is HONOURED is
+  // not tested here and cannot be, from a single artifact; that is R3.2's two-turn probe.
+  const neg = CASES.filter((c) => !c.preferProceed && [c.expect].flat().some((w) => SENTINELS.has(w)));
+  const heldBy = (r) => (SENTINELS.has(r?.owner) ? 'sentinel'
+    : /^confirm[- ]before[- ]fanout/i.test(r?.gate || '') ? 'gated' : null);
+  const negHeld = neg.filter((c) => heldBy(got.get(c.id)));
+  const gatedHolds = negHeld.filter((c) => heldBy(got.get(c.id)) === 'gated').length;
+  console.log(`\n  ${C.d('over-engagement guard')}  ${negHeld.length}/${neg.length} negative cases held `
+            + C.d('(no unconfirmed spend: sentinel answer or an explicit confirm-before-fanout gate)'));
+  if (gatedHolds) console.log(C.d(`    ${gatedHolds} held by gate rather than by sentinel — `
+                                + `gate HONOURING is untested offline (R3.2)`));
+
+  // Counterweight, so the guard cannot be gamed by gating everything. On a positive C1 case — one
+  // real owner, direct entry, no review called for — the correct gate is 'proceed'. Over-gating a
+  // typo is a cost failure in exactly the way over-spawning one is, and without this the cheapest
+  // way to a perfect guard would be to gate every answer in the set.
+  const c1 = CASES.filter((c) => !SENTINELS.has([c.expect].flat()[0]) && !c.onProceed
+                              && [c.depth].flat().join() === 'direct' && c.review !== true);
+  const overGated = c1.filter((c) => {
+    const g = got.get(c.id)?.gate;
+    return g && !/^proceed/i.test(g);
+  });
+  const c1Scored = c1.filter((c) => got.get(c.id)?.gate).length;
+  console.log(`  ${C.d('over-gating counterweight')}  ${c1Scored - overGated.length}/${c1Scored} `
+            + `C1 cases correctly gated 'proceed'` + (c1Scored < c1.length
+              ? C.y(`   ${c1.length - c1Scored} unscorable — no gate field captured`) : ''));
+  for (const c of overGated) {
+    console.log(`    ${C.r('over-gated')} ${c.id}: gate "${got.get(c.id).gate.slice(0, 48)}…" on a `
+              + `one-owner direct case`);
+  }
 
   if (fails.length) {
     console.log(C.b('\n  Failures\n'));

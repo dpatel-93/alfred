@@ -295,8 +295,14 @@ const ROUTING_CASES = [
     // plus the word "verify" in its rationale would otherwise pass. Depth is a LIST because both
     // shapes are defensible: devops-manager executing with sre verifying is direct+review; coo
     // owning the cross-manager T2 is full+review.
+    // BOTH branches score full credit. But PROCEED is the preferred answer per the recorded
+    // 2026-08-11 amendment above — a rollback is the reversible mitigation and the CEO asserted the
+    // causal premise by imperative — and CLARIFY is merely defensible. That asymmetry is why this
+    // case is preferProceed: it does not belong in the over-engagement denominator, where the
+    // ground truth's preferred answer is "do not spend". It leaves that population by adjudication,
+    // NOT by router improvement, and the report must say so wherever the guard number appears.
     q: 'the login is broken for everyone, roll it back',
-    expect: 'CLARIFY', depth: 'none',
+    expect: 'CLARIFY', depth: 'none', preferProceed: true,
     onProceed: {
       expect: 'coo', subtree: 'coo', depth: ['direct', 'full'], review: true,
       requireEither: { verifier: true, statedPremise: true },
