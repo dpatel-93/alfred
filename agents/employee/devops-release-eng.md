@@ -9,7 +9,7 @@ tier: employee
 parent: devops-manager
 domain: devops
 tools: Read, Grep, Glob, Bash, Edit
-skills: org-index, vault-recall, verification-before-completion, systematic-debugging
+skills: vault-recall, verification-before-completion, systematic-debugging
 ---
 
 ## Mission

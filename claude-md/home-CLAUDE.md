@@ -80,6 +80,35 @@ Engaging a VP for a one-line change is not thoroughness, it is waste — and it 
 
 ### How I execute
 
+0. **THE BREADTH GATE — run this first, before loading anything.** No skill, no `org-index`, no
+   ORG.md, no file read. One question, answered from the request text alone:
+
+   > **Does this genuinely require more than one specialty — people who would each need to read
+   > different material to answer their part?**
+
+   - **No → do the work in-session and stop here.** Do not classify, do not load the roster, do not
+     name an owner. Most requests end at this line, and that is the correct outcome, not a shortcut.
+   - **Yes → continue to step 1** and classify normally.
+
+   **Breadth, not size, and not difficulty.** This is measured, and it is easy to get backwards:
+
+   | Request | Gate | Why |
+   |---|---|---|
+   | "Cosmos or Table Storage?" — hard, one call | **stays** | one specialty, however hard |
+   | "migrate every call site off the old auth helper" — 12 files | **stays** | one discipline; splitting it is pure coordination overhead |
+   | "is the admin portal ready to ship?" | **engages** | security, delivery and product each read different things |
+
+   Why this is step 0 and not a consideration inside step 1: a procedure that must load the org to
+   decide whether to load the org has already spent what it was trying to save. Measured, the
+   classify-then-decide ritual costs **~200k tokens before any spawn happens**, and it is paid in
+   full on a one-line typo.
+
+   The numbers this comes from (12 head-to-head runs, R3.2, brain/R3-FINAL-REPORT.md §22):
+   small work **1.48× more expensive** than a single agent for an identical result; big work in one
+   discipline **1.02×**, i.e. nothing; big work spanning several disciplines **0.87×**, the only
+   case where the org pays. Quality was tied in all twelve runs. So the org is worth engaging in
+   exactly one situation, and this gate is the thing that finds it.
+
 1. **Classify complexity C0–C4** (ORG.md §5e) from the request text plus `org-index`. No spawn, no
    file read. This decides the SHAPE. Stakes and ambiguity are separate axes decided at steps 3–4.
 
@@ -91,12 +120,14 @@ Engaging a VP for a one-line change is not thoroughness, it is waste — and it 
    | **C3** | merit judged by a *different* specialty than the one building | **T2 build→verify→revise** |
    | **C4** | several C3 stages where a later one is worthless if an earlier fails | **T4 staged gates** |
 
-   **Load the `org-index` skill before classifying anything above C0.** Chartered agents preload it
-   via `skills:`; I have no frontmatter, so I must invoke it. Measured, not optional — without it
+   **Load the `org-index` skill once you are past the gate.** Chartered agents preload it via
+   `skills:`; I have no frontmatter, so I must invoke it. Measured, not optional — without it
    routing scored 1/3, with it 3/3 (ORG.md §5d). Descriptions say what an agent *does*; only the
-   index gives the parent chain and specialist skills.
+   index gives the parent chain and specialist skills. **Never load it to decide step 0** — that is
+   the cost the gate exists to avoid.
 
-2. **Apply the when-NOT test.** C0 stays in-session — say so, and just do the work.
+2. **Apply the when-NOT test.** C0 stays in-session — say so, and just do the work. If the breadth
+   gate was answered honestly this rarely fires, because C0 work never reaches step 1.
 
 3. **Pick the topology and route to the OWNER, not the department.** The routing table below names
    the *department*; `org-index` names the *owner*. For C1 spawn that owner directly — **no VP, no

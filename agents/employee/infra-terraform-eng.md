@@ -10,7 +10,7 @@ tier: employee
 parent: infra-manager
 domain: infra
 tools: Read, Grep, Glob, Bash
-skills: org-index, vault-recall, verification-before-completion, systematic-debugging, terraform-module-library
+skills: vault-recall, verification-before-completion, systematic-debugging, terraform-module-library
 ---
 
 ## Mission

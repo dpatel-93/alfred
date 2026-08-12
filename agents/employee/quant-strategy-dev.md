@@ -10,7 +10,7 @@ tier: employee
 parent: quant-manager
 domain: quant
 tools: Read, Grep, Glob, Bash, Write, Edit
-skills: org-index, vault-recall, verification-before-completion, backtesting-frameworks
+skills: vault-recall, verification-before-completion, backtesting-frameworks
 ---
 
 ## Mission

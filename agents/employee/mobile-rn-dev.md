@@ -9,7 +9,7 @@ tier: employee
 parent: mobile-manager
 domain: mobile
 tools: Read, Grep, Glob, Bash
-skills: org-index, vault-recall, verification-before-completion, systematic-debugging
+skills: vault-recall, verification-before-completion, systematic-debugging
 ---
 
 ## Mission

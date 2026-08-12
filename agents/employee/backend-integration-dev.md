@@ -10,7 +10,7 @@ tier: employee
 parent: backend-manager
 domain: backend
 tools: Read, Grep, Glob, Bash, Write, Edit
-skills: org-index, vault-recall, verification-before-completion, systematic-debugging, graph-api-rest, azure-runbook
+skills: vault-recall, verification-before-completion, systematic-debugging, graph-api-rest, azure-runbook
 ---
 
 ## Mission

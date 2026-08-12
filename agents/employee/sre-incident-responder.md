@@ -9,7 +9,7 @@ tier: employee
 parent: sre-manager
 domain: sre
 tools: Read, Grep, Glob, Bash
-skills: org-index, vault-recall, verification-before-completion, systematic-debugging
+skills: vault-recall, verification-before-completion, systematic-debugging
 ---
 
 ## Mission

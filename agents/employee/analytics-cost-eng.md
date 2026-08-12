@@ -9,7 +9,7 @@ tier: employee
 parent: analytics-manager
 domain: analytics
 tools: Read, Grep, Glob, Bash, WebSearch
-skills: org-index, vault-recall, verification-before-completion, systematic-debugging, zero-cost-azure, xlsx
+skills: vault-recall, verification-before-completion, systematic-debugging, zero-cost-azure, xlsx
 ---
 
 ## Mission

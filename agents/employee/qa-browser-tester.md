@@ -10,7 +10,7 @@ tier: employee
 parent: qa-manager
 domain: qa
 tools: Read, Write, Edit, Grep, Glob, Bash
-skills: org-index, browser, vault-recall, verification-before-completion
+skills: browser, vault-recall, verification-before-completion
 ---
 
 ## Mission

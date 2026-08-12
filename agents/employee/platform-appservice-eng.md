@@ -10,7 +10,7 @@ tier: employee
 parent: platform-manager
 domain: platform
 tools: Read, Grep, Glob, Bash, WebSearch
-skills: org-index, vault-recall, verification-before-completion, zero-cost-azure
+skills: vault-recall, verification-before-completion, zero-cost-azure
 ---
 
 ## Mission

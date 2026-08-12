@@ -10,7 +10,7 @@ tier: employee
 parent: data-manager
 domain: data
 tools: Read, Write, Edit, Grep, Glob, Bash
-skills: org-index, vault-recall, postgresql, verification-before-completion, systematic-debugging
+skills: vault-recall, postgresql, verification-before-completion, systematic-debugging
 ---
 
 ## Mission
