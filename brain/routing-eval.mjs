@@ -139,6 +139,14 @@ function check() {
         errs.push(`${c.id}: CLARIFY must carry depth 'none' — nothing has been spawned yet.`);
       }
     }
+    // A flag that parses but means nothing is a future bug. preferProceed only has meaning on a
+    // case with a CLARIFY arm — it says "the ground truth prefers the OTHER arm" — so on any case
+    // without one it silently exempts nothing while looking load-bearing.
+    if (c.preferProceed && !wants.includes('CLARIFY')) {
+      errs.push(`${c.id}: preferProceed on a case with no CLARIFY arm — the flag exempts a case `
+              + `from the over-engagement denominator by naming which arm the ground truth prefers, `
+              + `so it is meaningless here and would read as deliberate exemption to a future editor`);
+    }
     if (c.review !== undefined && typeof c.review !== 'boolean') {
       errs.push(`${c.id}: review must be a boolean — it is a separate axis from depth, not a suffix`);
     }

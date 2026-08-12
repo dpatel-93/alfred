@@ -310,6 +310,10 @@ line when Alfred costs more and completes no more.
 | Over-engagement | 7/7 | — | 6/8 | **7/7** steady-state · **7/8** frozen denominator |
 | Recurring context | 22,855 tok/turn | — | — | **~18,861** (−17%) |
 
+> **The R3 and R3.1 columns score the same transcripts — every point of difference between them is
+> ground-truth correction, not router improvement. The router's measured improvement is
+> baseline → R3: routing +6.5pp and one real guard case (`r24`).**
+
 **Reading these honestly:**
 
 - The R3.1 jump is a **ground-truth correction, not a router improvement**. `r05`–`r10` still
@@ -419,9 +423,20 @@ deterministic validator that has been proven red before being trusted. The org c
 
 Where it stands against the field: Magentic-One is a stronger *general task completion* engine with
 published external benchmarks Alfred has no equivalent of. Agentforce is a stronger *governed
-enterprise data* platform. ALFRED's distinct contribution is treating **restraint and topology cost
-as measured outcomes** rather than as instructions — and that contribution is now demonstrated at
-Layer 1 and still unproven at Layer 2.
+enterprise data* platform.
+
+On what is distinct, stated as the bounded search it actually is rather than as a novelty claim —
+a novelty claim is structurally unfalsifiable by the person making it:
+
+> In the material we reviewed, we found no multi-agent orchestrator that scores "do not engage the
+> orchestra" as a first-class eval outcome against ground truth. The nearest neighbours are real and
+> worth naming: cost-aware model routing (FrugalGPT, RouteLLM) treats cost as a first-class
+> objective but chooses among *models*, not organisational topologies; abstention benchmarks score
+> "don't answer", not "don't spawn"; dynamic team-sizing work (e.g. DyLAN) optimises agent-team
+> composition for cost but does not score restraint as a *correctness* outcome. This claim is one
+> counterexample from false, and we would rather receive the counterexample than defend the position.
+
+That contribution is demonstrated at Layer 1 and still unproven at Layer 2.
 
 The correct summary for an outside reader: *the mechanisms are not novel; the cost discipline and
 its instrumentation are the contribution; one layer of that is measured and one is not.*
@@ -430,8 +445,31 @@ its instrumentation are the contribution; one layer of that is measured and one 
 
 ## 19. Fable's adversarial final judgment
 
-*Pending. Requested from the principal architect; this section is deliberately left for it rather
-than written on its behalf.*
+*Committed verbatim as delivered by the principal architect. Not edited, summarised, or softened.*
+
+**Verdict: ship the report; bound the claims; the org is still unproven and the instrument is now real.**
+
+This exercise set out to answer two external critiques of the org and ended up answering a different, better question: whether this framework can measure itself honestly. It can. That is not the deliverable that was commissioned, and it is worth more than the one that was.
+
+What is proven: the router, under the R3 charter, classifies 24 author-written requests at 95.8% owner and 87.5% depth accuracy on a single run, and its residual failure mode is miscalibrated ceremony, not misrouting. What is not proven: that the org should exist. Layer 2 has never run; every number in section 14 measures Claude operating Alfred's charter against Alfred's own dataset. Until an org arm beats a single-agent arm on completion-per-token, critique #1 — "what's the breakthrough beyond packaging" — is answered in design and unanswered in evidence. Nobody should quote 95.8% outside this repo.
+
+Three circularities must keep being named, because the report's discipline is the only thing keeping them honest: the dataset's author is the implementer; the adjudicator who ruled its ground truth wrong is the architect who wrote the rules the ruling appealed to; and n=1 everywhere. The amendments survive these only because they are grounded in shipped documents and logged bidirectionally — r06 costing a pass is the single strongest line in the amendment log.
+
+One of the caught errors is mine, and it belongs here rather than in a quieter appendix: I repeated "guard restored 6/6" into a formal ruling without recomputing it. The implementer's falsifier caught what my review did not. That is this report's central thesis demonstrated at the adjudicator's expense — a reviewer, however senior, accepts a plausible number; a deterministic check cannot. Weight my other unrecomputed judgments accordingly.
+
+The sharpest open risk is not a number. Gate honouring — whether an emitted confirm-before-fanout actually halts anything — is the load-bearing safety behaviour of this whole design, and it is currently tested nowhere. And r22's shape — skipping the one mandatory review on a compliance assertion while paying for a VP relay — is the only failure class in this run that maps onto real-world harm rather than wasted tokens, and it survived every fix in R3. Decision 4 in section 17, enforcing the gate with a hook instead of observing it, is in my judgment the highest-value item on that list and the cheapest.
+
+Ship it. Approve runs A and B; hold every external claim until C. And keep the property that made this cycle work: every number in this report was allowed to get worse, and three of them did.
+
+---
+
+*Implementer's note, appended rather than edited into the text above.* Section 19 says "approve runs
+A and B." **Run A no longer exists to approve** — it was cancelled in §16 after the free
+re-extraction from retained transcripts produced its deliverable (field emission 23/23) at zero
+token cost. The live spend decision is **B only, ~0.5M**. This is recorded as a discrepancy rather
+than corrected in place, because the architect's judgment was committed verbatim by its own
+instruction and quietly reconciling it would be the exact behaviour this report was written to
+catch.
 
 ---
 
