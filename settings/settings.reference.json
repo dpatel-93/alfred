@@ -73,6 +73,11 @@
             "type": "command",
             "command": "cmd /c node C:/Users/dishi/.claude/helpers/alfred-fable-gate.mjs",
             "timeout": 30000
+          },
+          {
+            "type": "command",
+            "command": "cmd /c node C:/Users/dishi/.claude/helpers/alfred-gate-enforce.mjs",
+            "timeout": 30000
           }
         ]
       }

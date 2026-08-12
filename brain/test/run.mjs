@@ -39,6 +39,7 @@ const SUITES = [
   { name: 'install', file: 'install.mjs', browser: false },
   { name: 'brain', file: 'brain.mjs', browser: false },
   { name: 'fable-gate', file: 'fable-gate.mjs', browser: false },
+  { name: 'gate-enforce', file: 'gate-enforce.mjs', browser: false },
   { name: 'source', file: 'source.mjs', browser: false },
   { name: 'github', file: 'github.mjs', browser: false },
   { name: 'spend', file: 'spend.mjs', browser: false },
