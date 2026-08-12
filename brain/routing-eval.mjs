@@ -66,9 +66,23 @@ function check() {
       }
     }
     if (!DEPTHS.has(c.depth)) errs.push(`${c.id}: unknown depth "${c.depth}"`);
-    if ([c.expect].flat()[0] === 'CLARIFY' && c.depth !== 'none') {
-      errs.push(`${c.id}: CLARIFY must carry depth 'none' — nothing has been spawned yet, so no `
-              + `depth has been paid. This ambiguity cost 5 false failures on the first run.`);
+    // CLARIFY carries depth 'none' — nothing has been spawned yet, so no depth has been paid.
+    // This ambiguity cost 5 false failures on the first run.
+    //
+    // Checking only expect[0] left a hole I then fell into: a case listing CLARIFY as an
+    // ACCEPTABLE answer beside a real owner is unscorable on depth, because the correct depth
+    // depends on which acceptable answer the router gave — 'none' if it clarified, something
+    // else if it routed. The scorer compares against a single c.depth and cannot express that,
+    // so such a case fails on depth no matter what the router does. Catch the construction here
+    // rather than discovering it in a result set, where the temptation is to relabel the case.
+    const wants = [c.expect].flat();
+    if (wants.includes('CLARIFY') && c.depth !== 'none') {
+      errs.push(wants[0] === 'CLARIFY'
+        ? `${c.id}: CLARIFY must carry depth 'none' — nothing has been spawned yet.`
+        : `${c.id}: unscorable — CLARIFY is listed as acceptable alongside "${wants[0]}", but `
+        + `depth is "${c.depth}". Clarifying pays depth 'none' and routing pays "${c.depth}", `
+        + `so one accepted answer is always scored wrong. Split it into two cases, or make the `
+        + `behaviour (not the owner) the thing asserted via requireEither.`);
     }
     if (c.topology && !TOPOLOGIES.has(c.topology)) errs.push(`${c.id}: unknown topology "${c.topology}"`);
     if (!c.trap || c.trap.length < 30) {
