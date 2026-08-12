@@ -1,0 +1,439 @@
+# ALFRED R3 — Final Report
+
+**Prepared for:** the operator (CEO)
+**Architecture and adjudication:** Fable, principal systems architect
+**Implementation and measurement:** Opus
+**Date:** 2026-08-11 · **Head:** `1244e57` · **Range:** `7281f96~1..HEAD` (15 commits)
+
+---
+
+## 1. One-sentence verdict
+
+The two external critiques were both correct, both are now fixed and measured rather than argued
+against, and ALFRED's routing is demonstrably better than it was — but the honest headline is that
+this exercise's most valuable output is the first behavioural eval this framework has ever had,
+which caught its own author being wrong twice, in his own favour, before it caught the router being
+wrong at all.
+
+---
+
+## 2. The objective as I understand it
+
+> ALFRED must select and execute the least expensive organizational topology capable of reliably
+> producing a high-quality, verifiable outcome.
+
+The org chart is a capability map, a routing index, an escalation structure, an accountability
+structure, a verification structure, and a cost control. It is **not** a requirement to insert a VP,
+a manager, and an employee between you and every piece of work. The decision order is lexicographic:
+understand the objective, establish quality requirements, select a topology that can satisfy them,
+then among qualifying topologies pick the cheapest, execute with minimum agents/context/handoffs,
+and produce evidence.
+
+The failure mode being designed against is bureaucracy that looks like rigour.
+
+---
+
+## 3. The quality and verification constraints
+
+Cost may never be optimised by silently weakening correctness, grounding, assumption validation,
+security, compliance, independent review, user intent, required evidence, or delivery quality.
+
+Two rules operationalise this, and both shipped:
+
+**Stakes → evidence.** S0 reversible+private · S1 reversible+shared · S2 hard-to-reverse or
+outward-facing · S3 irreversible/security/compliance/money. Evidence tiers E0 (the artifact) → E3
+(independent review by a non-producing agent plus CEO approval).
+
+**The falsifiability rule.** Independent review is required **iff** no cheap deterministic falsifier
+exists **and** stakes ≥ S2. If a machine check exists — or can be written for less than a review
+spawn costs, measured at ~41k tokens — the check wins. A falsifier cannot hallucinate agreement; a
+reviewer can. This is the single most load-bearing decision in R3, and section 4 explains why.
+
+---
+
+## 4. What was wrong or incomplete in the current system
+
+**Critique 1 — "this is a hierarchical multi-agent swarm already done across the industry; what's
+the breakthrough beyond packaging?"** Substantially correct as stated. Alfred's *mechanisms* are not
+novel: Magentic-One has an orchestrator with specialised agents, Agentforce has governance and
+enterprise data access. What Alfred had that was genuinely different was a **cost-shaped** routing
+policy — but that difference was **asserted, never measured**. A hierarchy whose accuracy is
+unmeasured is a claim about a prompt, not a system. That was the honest core of the critique and it
+was fair.
+
+**Critique 2 — hierarchical error propagation produces "a beautifully organised wrong answer."**
+Correct, and it was the deeper of the two. Alfred had no plan-execute-evaluate-replan loop, no
+intent anchor surviving the chain, and no reviewer evaluating against the *original* request rather
+than the downstream interpretation. A four-level chain that agrees with itself is exactly the
+failure this org was most exposed to. Berkeley's MAST taxonomy (NeurIPS 2025) measures this: 41.8%
+of multi-agent failures are specification/decomposition, 36.9% inter-agent misalignment, 21.3%
+verification. Alfred's structure concentrated risk in the first and third.
+
+**What full analysis added, beyond the sampled two files:**
+
+- **Universal review was the wrong policy.** Requiring a reviewer everywhere pays ~41k tokens to
+  produce something that *looks like* evidence and, where a deterministic check existed, is strictly
+  worse than running the check.
+- **Descriptions were 7,183 tokens of recurring context** across 33 employee charters, most of it
+  worked examples that only the parent manager ever needed.
+- **The roster was load-bearing and absent.** Routing without a lightweight index scored 1/3; with
+  it, 3/3. Descriptions say what an agent *does*; only an index gives the parent chain.
+- **Two real bugs.** See section 9.
+
+**One diagnosis was withdrawn.** An early claim that decisions cost ~83k tokens because charters
+re-read ORG.md at runtime was **an artifact of my own eval prompt**, which instructed the router to
+read those files. No charter instructs a runtime ORG.md read; all 15 hits are citations. Returned to
+Fable, which voided that spec item and withdrew the associated claim.
+
+---
+
+## 5. What already worked and was preserved
+
+- **The org chart itself.** 71 agents, 55 chartered (5 VP / 17 manager / 33 employee) + 16
+  specialists. The Charter Contract — 9 mandatory body sections, normalised frontmatter, machine
+  validated — was already real governance and is untouched in substance.
+- **Tier-differentiated return contracts** (employee FINDINGS/DID-NOT-COVER/BLOCKERS; manager
+  VERDICT/CONFIRMED/REJECTED/COVERAGE/ESCALATED; VP ANSWER/EVIDENCE/STRUCK/CONFIDENCE/GAPS).
+- **The anti-relay rule** (§5b) — it turned out to be *more* right than the eval's own ground truth.
+- **The model-tier gate.** Fable is genuinely gated at spawn time by a hook, not by an instruction.
+- **`validate-org.mjs`** as the org's deterministic falsifier. Extended, not replaced.
+
+---
+
+## 6. How ALFRED differs from Magentic-One
+
+| | **Magentic-One** | **Agentforce** | **ALFRED** |
+|---|---|---|---|
+| Problem solved | General web/file task completion | Enterprise CRM action-taking with governance | Least-cost topology for a heterogeneous personal/professional estate |
+| Structure | Orchestrator + 4 fixed generalist agents | Topic/action library over CRM data | 71-agent org chart, 5 departments, explicit parentage |
+| Planning | **Task Ledger + Progress Ledger**, replan after 2 stalls | Deterministic topic routing | Complexity C0–C4 → topology T0–T4, stakes-gated evidence |
+| Model policy | **One model client for all agents** | Vendor-managed | **Per-tier routing** — Fable/Opus/Sonnet/Haiku/Ollama |
+| Restraint | Not an objective | N/A | **T0 "don't spawn" is a first-class, scored outcome** |
+| Benchmarks | GAIA 38%, WebArena 32.8%, AssistantBench 27.7%; ablation −21% to −39% | CRMArena-Pro: 58.3% single-turn, ~30% multi-turn; confidentiality awareness 0.0–2.9% | Routing 95.8%, depth 87.5% (n=24, single run) |
+
+**The differences that are real:**
+
+1. **Restraint is a scored outcome.** Magentic-One's ledger decides *how* to proceed; it has no
+   notion of "engaging the orchestrator is itself the wrong answer." Alfred scores that explicitly —
+   7 of 24 cases exist only to catch over-engagement. Given Anthropic's measurement that multi-agent
+   runs cost ~15× a chat turn, restraint is where the money is.
+2. **Per-tier model routing.** Magentic-One instantiates `MagenticOneGroupChat([agents],
+   model_client=...)` — one client. Alfred routes model tier by role, so bulk mechanical work never
+   touches a frontier model.
+3. **Stakes-gated verification with a falsifiability test.** Neither comparator asks "would a
+   deterministic check be cheaper and stronger than a reviewer here?"
+
+**The differences that are NOT real, stated plainly:**
+
+- **Human-in-the-loop is not unique to Alfred.** I claimed across two turns that Magentic-One cannot
+  ask a human. It has `approval_func` with `ApprovalRequest`/`ApprovalResponse`, documented for
+  gating code execution. I repeated that error before verifying against primary sources, and retract
+  it.
+- **Alfred has no cross-system benchmark.** Every number here is Alfred-vs-Alfred. See section 15.
+
+---
+
+## 7. The chosen architecture
+
+**Three orthogonal axes, never collapsed:**
+
+| Axis | Decides | Values |
+|---|---|---|
+| Complexity | topology | C0→T0 in-session · C1→T1 direct · C2→T1+verifier/T3 · C3→T2 build/verify/revise · C4→T4 staged gates |
+| Stakes | review | S0–S3 → evidence E0–E3, gated by the falsifiability rule |
+| Ambiguity | clarification | proceed · CLARIFY · confirm-before-fanout |
+
+**Intent integrity (§5c).** Every brief opens with `ORIGINAL ASK` — the operator's words verbatim,
+alongside the interpretation, never replacing it. This makes the *cheapest* agent in the chain the
+detector for the *most expensive* one's misreading, because it is the only layer that sees both.
+`ESCALATION REQUEST` handles scope wider than the routed owner; an `EVIDENCE` ledger separates
+VERIFIED from INFERRED.
+
+**Lazy escalation.** Route to the shallowest plausible owner. Over-deep costs `2 × depth` round trips
+on *every* request; too-shallow costs one extra hop on the *minority* that need it.
+
+**The decision that carries the most weight:** classification emits three **required fields** —
+`stakes`, `blocking_premises`, `gate` — rather than prose instructing the router to consider them.
+Fable's argument, which the measurement supports: *a policy with no observable output is not
+enforced, however carefully it is worded.* A field that must be emitted is falsifiable; one that
+must be remembered competes with everything else in the charter. The prose version failed to enter
+three consecutive routers' reasoning. The structural version produced, first try, on "the login is
+broken for everyone, roll it back":
+
+> **blocking_premises:** "That a recent deploy caused the outage and a revert is the right remedy —
+> if login broke from an expired cert/secret, an exhausted token, or an upstream identity-provider
+> failure, rolling back fixes nothing and burns the outage window"
+> **gate:** "confirm-before-fanout — because the request names no system, no environment, and no
+> target release, and a rollback is a production-mutating action"
+
+That is precisely the premise critique #2 was built around, surfaced because it had to be written
+down.
+
+---
+
+## 8. How topology selection minimises cost without lowering quality
+
+Selection is **feasible set, then cheapest by dominance** — never cheapest outright. A topology
+enters the feasible set only if it can satisfy that task's evidence tier; among those, the one with
+the fewest hops wins. Four mechanisms keep it honest:
+
+1. **The falsifiability rule** replaces a ~41k-token reviewer with a deterministic check wherever
+   one exists or can be written for less. Quality *rises*: a check cannot hallucinate agreement.
+2. **Anti-relay** collapses layers that add nothing — a manager with one employee is a hop that buys
+   no judgment.
+3. **The over-engagement guard** scores restraint as a first-class outcome, so "spawn nothing" is a
+   measurable win rather than an unmeasured virtue.
+4. **The over-gating counterweight** (added in `1244e57`) prevents the obvious exploit: without it,
+   the cheapest route to a perfect guard is to gate *every* answer. Gating a typo is a cost failure
+   in exactly the way spawning on one is.
+
+Cost reduction that is **not** quality reduction, measured: recurring context fell 22,855 → ~18,861
+tokens/turn (−17%) by moving worked examples out of 33 employee descriptions into an index the
+router loads once. The information did not disappear; it stopped being paid for on every turn.
+
+---
+
+## 9. What was implemented
+
+**Policy (edits to existing artifacts, no new framework):**
+- ORG.md §5c intent integrity, §5d latency + VPs off the critical path + lazy escalation,
+  §5e complexity classes C0–C4 and topologies T0–T4 with the T2 loop protocol.
+- The Chief-of-Staff charter rewritten from 5 to 8 execution steps.
+- Universal review replaced by S0–S3/E0–E3 plus the falsifiability rule.
+- The three required classification fields, in both CLAUDE.md and ORG.md.
+
+**Instrumentation (new, and the actual deliverable):**
+- `routing-eval.mjs` + 24 ground-truth cases — the first behavioural routing eval this framework has
+  had. Includes a **circularity guard** that rejects any question lifted from the charter it tests;
+  it caught six cases written by its own author.
+- `orchestration-eval.mjs` + 20 scenarios (5 trivial / 5 standard / 5 complex / 5 restraint) with a
+  completion-per-100k-token headline metric and a neutral capability schema so a competing
+  orchestrator can be scored without adopting Alfred's roster.
+- `gen-org-index.mjs` → the `org-index` skill (~3,107 tokens), generated from frontmatter and
+  drift-checked. Never hand-edited.
+- `validate-org.mjs` extended: uncharteredTargets, org-index drift, EVIDENCE-line presence. Each
+  proven red by deliberate injection before being trusted.
+
+**Two real bugs, found and fixed red-then-green:**
+- `alfred-fable-gate.mjs` called `appendFileSync` without `mkdir`. On any install where
+  `~/.claude/metrics/` did not already exist, this threw ENOENT into a deliberate never-break-a-spawn
+  catch — so **the model-policy audit trail was silently never written, forever**. Found by writing
+  the test that should already have existed.
+- The eval's own scorer had a **vacuous** premise matcher: `/cause/` matches "because", and the
+  mandated gate format is "… — because …", so every format-compliant response auto-passed. Now
+  word-boundaried and matching `blocking_premises`, where the premise actually lives.
+
+---
+
+## 10. What was removed or simplified
+
+Fable's constraint was explicit: *a design that only adds prompts, agents, files, topologies,
+instructions, or review layers is a failed design.* Net removals:
+
+- **Universal review — deleted.** Replaced by a stakes gate, so most tasks now pay for *no* reviewer.
+- **`full+review` — retired from the depth vocabulary.** It fused shape and stakes, two axes §5e
+  itself calls orthogonal, making "manager entry + independent review" literally inexpressible. Any
+  router that correctly wanted review had to claim VP depth to say so. The vocabulary is now one
+  value *smaller*.
+- **7,183 → 2,647 tokens** of employee descriptions. Examples now live in the index, not in every
+  turn's context.
+- **Owner enumeration in the scorer — deleted**, replaced by subtree membership derived from
+  parentage. Hand-lists rot; derived bounds don't.
+- **VP relays** removed from the routing path for bounded work, by policy and by ground truth.
+
+No new agents. No new framework. No CLI. No package.
+
+---
+
+## 11. Files changed
+
+`86 files changed, 3,647 insertions(+), 455 deletions(-)` across 15 commits.
+
+| Area | Files | Note |
+|---|---|---|
+| Agent charters | 71 | ORIGINAL ASK anchor, premise-divergence escalation, EVIDENCE line, `org-index` in `skills:`; 22 VP/manager files also got the progress check and cache-stability rule; 5 managers got the T2 loop protocol |
+| `brain/routing-eval*.mjs` | 3 | Harness + 24 cases + recorded baseline |
+| `brain/orchestration-eval*.mjs` | 2 | Benchmark harness + 20 scenarios |
+| `brain/test/` | 4 | `routing.mjs`, `orchestration.mjs`, `fable-gate.mjs` additions, wired into `run.mjs` |
+| `helpers/` | 3 | `gen-org-index.mjs` (new), `validate-org.mjs` (+80 lines), `alfred-fable-gate.mjs` (bug fix) |
+| `ORG.md` / `CLAUDE.md` | 2 | §5c/§5d/§5e; CoS charter rewrite |
+
+---
+
+## 12. Tests and validators run
+
+```
+node brain/test/run.mjs          483 passed, 0 failed
+node ~/.claude/helpers/validate-org.mjs
+                                 PASS — 71 agent files · 55 chartered
+                                 (5 VP / 17 mgr / 33 emp) · 60 skills known
+node brain/routing-eval.mjs --check       PASS
+node brain/orchestration-eval.mjs --check PASS
+```
+
+Test count rose 179 → 483 over the range. Every new validator was **proven red before being
+trusted** — org-index drift by injecting a phantom agent, the EVIDENCE check by stripping the line
+from a charter, the fable-gate audit trail by removing the `mkdir`.
+
+---
+
+## 13. Benchmark scenarios and scoring
+
+**Layer 1 — routing eval (built, run, scored).** 24 cases across clean single-owner routing,
+VP-boundary discrimination, stay-in-session cost leaks, confirm-before-fan-out, cross-domain, intent
+integrity, and topology selection. Scored on six axes: routing accuracy, depth accuracy, review bit,
+topology, field compliance, and the over-engagement guard with its over-gating counterweight. Every
+case carries a `trap` recording what a plausible-but-wrong router would answer; a case with no trap
+is not discriminating anything.
+
+**Layer 2 — orchestration benchmark (built and validated, NOT run).** 20 scenarios, deliberately
+including 5 restraint cases where Alfred should tie or lose to a single agent. Headline metric is
+**completion per 100k tokens**, not completion — a system that completes 5% more work for 3× the
+tokens has lost. Requires both an `alfred` and a `baseline` arm; the harness prints a blunt failure
+line when Alfred costs more and completes no more.
+
+---
+
+## 14. Measured results available now
+
+**Routing eval, 24 cases, single run, R3 transcripts re-scored under adjudicated ground truth:**
+
+| Axis | Baseline | R2 | R3 | **R3.1 adjudicated** |
+|---|---|---|---|---|
+| Routing accuracy | 72.7% | 75.0% | 79.2% | **95.8%** (23/24) |
+| Depth accuracy | 59.1% | 75.0% | 70.8% | **87.5%** (21/24) — gate ≥75% ✔ |
+| Both | — | — | 66.7% | **87.5%** (21/24) |
+| Review bit | — | — | — | 3/5 |
+| Topology | — | — | 2/2 | 1/1 — **under-sampled, not a rate** |
+| Field compliance | — | — | — | **0/24** |
+| Over-engagement | 7/7 | — | 6/8 | **7/7** adjudicated · **7/8** frozen denominator |
+| Recurring context | 22,855 tok/turn | — | — | **~18,861** (−17%) |
+
+**Reading these honestly:**
+
+- The R3.1 jump is a **ground-truth correction, not a router improvement**. `r05`–`r10` still
+  encoded the pre-R2 four-level philosophy; R2 deliberately changed the rules and the dataset never
+  caught up. Eleven amendments are logged with impact **in both directions** — `r06` is in the log
+  because it *costs* a pass, since an amendment list containing only cases the router lost is
+  indistinguishable from fitting data to results.
+- **The guard was never "restored."** On the frozen pre-amendment denominator it went 6/8 → 7/8:
+  **+1 real case** (`r24`), caused by the required-fields change. It reads 7/7 on adjudicated ground
+  truth only because `r21` left the population **by adjudication, not by router improvement**.
+- **Field compliance 0/24 is ours, not the router's.** R3 mandated three required fields and then
+  measured none of them — emitted upstream, dropped by the capture step, never scored. By the exact
+  principle this project shipped, the mandate was live in the prompt and absent from the system.
+- **Topology at n=1–2 is not a rate** and is never reported as a percentage.
+
+**The residual failure mode is miscalibrated ceremony, not misrouting.** All three remaining
+failures are about *how much* was bought, not *who* was picked: `r06` and `r10` **over-pay** (VP
+depth the rules don't command); `r22` **under-pays** — it skips the one review that *is* mandatory,
+on a compliance assertion, while relaying through a VP. That is a far more useful finding than a
+percentage, and it points at a specific fix rather than "try harder."
+
+---
+
+## 15. Results that remain unmeasured
+
+1. **No cross-system benchmark.** Every number is Alfred-vs-Alfred. The Magentic-One comparison in
+   section 6 is *documentary* — published benchmarks and source behaviour — never a head-to-head.
+   Alfred's 95.8% and Magentic-One's GAIA 38% **measure different things and must never be
+   juxtaposed as if they were comparable.**
+2. **No baseline arm.** Layer 2 has never run. Without it, Layer 1 measures *Claude*, not *Alfred* —
+   there is no evidence here that the org beats a single competent agent given the same request.
+3. **Gate honouring is untested.** Gate *emission* is now measured; whether a gate is *honoured* is
+   measured nowhere and cannot be, from a single-turn artifact. Fable ruled my "wrote the risk down
+   and proceeded anyway" reading over-reads it: the schema requires an owner on every answer, so
+   `gate=confirm-before-fanout` plus an owner is the only way it can express "here is the plan, now
+   waiting." R3.2 is the two-turn probe.
+4. **n=1.** One run of 24 cases, no variance estimate, no repeated trials.
+5. **Neutral-schema migration is 1/20**, so 19 scenarios are unusable in any cross-system run.
+6. **Latency was never instrumented**, despite "the Alfred layer feels slower" being the original
+   complaint that started this.
+
+---
+
+## 16. Estimated cost of the next benchmark run
+
+| Run | Scope | Estimated tokens | Buys |
+|---|---|---|---|
+| **A. Clean R4 routing run** | 24 cases, capture all 7 fields | ~1.8M | A field-compliance number that isn't 0/24; makes the over-gating counterweight scorable |
+| **B. R3.2 gate-honouring probe** | one follow-up per gated answer (~6–8 cases) | ~0.5M | The only untested load-bearing behaviour |
+| **C. Layer 2, both arms** | 20 scenarios × alfred + baseline | **~24.1M** | The first evidence the org beats a single agent — the actual answer to critique #1 |
+| **D. Cross-system** | + AutoGen install, OpenAI key, neutral harness | 24.1M + external API | Head-to-head vs Magentic-One |
+
+Recommendation: **A + B first** (~2.3M). They are cheap, they close the two gaps that are *our*
+defects rather than unknowns, and C is worth far more once the instrument is known-good. Running C
+on an instrument that silently dropped its own required fields would be spending 24M tokens to
+measure a harness bug.
+
+---
+
+## 17. Decisions requiring user approval
+
+| # | Decision | Recommendation |
+|---|---|---|
+| 1 | Spend ~2.3M on runs A+B | **Yes** — closes our own defects before spending 10× on C |
+| 2 | Spend ~24.1M on run C | Only after A+B are green |
+| 3 | **`dr-manager` is a relay by construction** — one employee, so it loses every anti-relay adjudication | Give it real breadth or fold it. Same question for `vendor-manager` |
+| 4 | **Enforce the gate rather than observe it** — a hook refusing spawns in any turn whose classification emitted a non-proceed gate | Structure beats exhortation; this is the same lesson that produced the three fields |
+| 5 | Delete ~2,600 lines unreachable from `settings.json` (`router.js`, `intelligence.cjs`, `learning-service.mjs`, `metrics-db.mjs`, `hook-handler.cjs`) | Verify once more, then delete |
+| 6 | No marketing/product owner agent exists | Add only if you actually route such work |
+
+---
+
+## 18. Enterprise positioning statement
+
+ALFRED is an **operating protocol** for AI work, not an agent and not a swarm. Its claim is
+economic, not capability-based: given a request, it selects the *least expensive organisational
+shape* that can still produce a verifiable outcome — and "no agent at all" is a first-class answer
+that it measures itself on.
+
+What makes that credible rather than aspirational is not the org chart, which is easy, but the
+instrumentation: a routing eval with a circularity guard, an over-engagement guard with an
+anti-gaming counterweight, ground-truth amendments logged with impact in both directions, and a
+deterministic validator that has been proven red before being trusted. The org chart is the claim.
+**The eval is the evidence, and until R3 there wasn't any.**
+
+Where it stands against the field: Magentic-One is a stronger *general task completion* engine with
+published external benchmarks Alfred has no equivalent of. Agentforce is a stronger *governed
+enterprise data* platform. ALFRED's distinct contribution is treating **restraint and topology cost
+as measured outcomes** rather than as instructions — and that contribution is now demonstrated at
+Layer 1 and still unproven at Layer 2.
+
+The correct summary for an outside reader: *the mechanisms are not novel; the cost discipline and
+its instrumentation are the contribution; one layer of that is measured and one is not.*
+
+---
+
+## 19. Fable's adversarial final judgment
+
+*Pending. Requested from the principal architect; this section is deliberately left for it rather
+than written on its behalf.*
+
+---
+
+## Appendix — conduct and limitations
+
+Fable directed that both self-corrections appear in the report, on the grounds that an eval catching
+its own author twice, against the author's favour, is the strongest evidence in the exercise that
+the discipline works.
+
+**Correction 1 — the ~83k-per-decision diagnosis was my harness's artifact.** My eval prompt told
+the router to read ORG.md; no charter does. Returned to Fable, which voided the spec item.
+
+**Correction 2 — "guard restored 6/6" was an artifact of my own ground-truth edit.** The guard
+selected negative cases on `expect[0]`; rewriting `r21`/`r24` to owner-first lists silently moved
+both out of the denominator, 8 → 6 — and both were exactly the two the guard had been failing. The
+fixed-denominator truth was 7/8. Caught by writing a falsifier for a *different* known defect and
+following it where it led. The wrong number had already been committed and reported; it was
+corrected in a follow-up commit rather than by amending history.
+
+**Also retracted:** the claim that Magentic-One cannot ask a human (it has `approval_func`), and the
+claim that `spend-ledger.mjs` was dead code (it is live and tested).
+
+**Method note.** Master was deliberately left **red** between commits `60be558` and `2b1687c`: two
+cases were genuinely unscorable and the correct construction was with the architect. Relabelling
+them to green the build, after having argued that the relabel improved my own numbers, would have
+been the exact failure this report is about. The `expect[0]` narrowness turned out to be **one bug
+in three places** — it shipped `r24` broken, silently shrank the guard denominator, and left the
+circularity guard under-covering multi-owner cases.
