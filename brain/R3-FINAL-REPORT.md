@@ -521,3 +521,63 @@ them to green the build, after having argued that the relabel improved my own nu
 been the exact failure this report is about. The `expect[0]` narrowness turned out to be **one bug
 in three places** — it shipped `r24` broken, silently shrank the guard denominator, and left the
 circularity guard under-covering multi-owner cases.
+
+---
+
+## 20. Verification against the original mandate (added 2026-08-12, post runs B and C-stage-1)
+
+The mandate set a final standard and thirteen success criteria. Scored honestly, with the
+evidence, after run B and the first stage of run C.
+
+**The standard:** *"ALFRED must not merely complete work cheaply. ALFRED must reliably produce
+high-quality, verifiable outcomes using the least expensive organizational topology capable of
+doing so."*
+
+**Verdict: the second half is now demonstrated. The first half is demonstrated. The two together
+are NOT — because on the one head-to-head that exists, the org costs more per unit of outcome than
+the same rules without the org.**
+
+| # | Criterion | Verdict | Evidence |
+|---|---|---|---|
+| 1 | Stay in-session when orchestration is waste | **YES** | 7/7 restraint guard; 5/5 restraint scenarios spawned nothing |
+| 2 | Reach one specialist directly for bounded work | **YES** | depth 87.5%; 14 of 24 cases route direct |
+| 3 | Assemble the right disciplines for complex work | **PARTIAL** | routing 95.8%, but the complex benchmark tier has never run |
+| 4 | Define quality criteria before consequential execution | **YES** | done-test + premise register are required per brief |
+| 5 | Validate important assumptions | **YES** | `blocking_premises` emitted 24/24; r19 falsified its own premise and stopped |
+| 6 | Close build/verify/revise loops | **UNPROVEN** | T2 protocol is shipped in 5 manager charters and never exercised in a measured run |
+| 7 | Stop programs at failed gates | **YES** | run B: 6/6 gates honoured, both live cases held |
+| 8 | Prevent self-certification | **YES** | stakes-gated independent review; EVIDENCE ledger separates VERIFIED from INFERRED |
+| 9 | Enforce model tiers | **YES** | hook-enforced at spawn; the audit-trail bug that made it unprovable is fixed |
+| 10 | Minimise unnecessary context and cost | **MIXED** | −17% recurring context, but +29% total on the only head-to-head |
+| 11 | Produce a coherent, high-quality outcome | **YES** | 5/5 vs 4/5 on stage 1 |
+| 12 | Produce evidence the outcome is valid | **YES** | this document, and every number in it is reproducible from committed artifacts |
+| 13 | **Choose the least expensive topology capable of satisfying the requirements** | **NO** | 0.0342 vs 0.0353 completion-per-100k. It chose correct topologies and still cost more |
+
+### The honest summary
+
+Alfred **selects** the right topology and **declines to engage** when engaging is waste — both
+measured, both real. What it does not yet do is make that selection *pay*. On five restraint
+scenarios it completed one more than the baseline and spent 1.29× the tokens doing it, so on the
+metric this project named as its objective it is behind.
+
+Where the overhead goes is visible and unglamorous: the charter and `org-index` are context that
+must be loaded before any classification happens, and on a one-line typo that overhead is 2.13× the
+entire cost of just fixing the typo. The framework's own rule — *don't spawn when the handoff costs
+more than the work* — is correctly obeyed, and the framework still pays a handoff-sized cost to
+decide not to hand off. **That is the central unresolved problem, and it is now measured rather
+than suspected.**
+
+### What would change the verdict
+
+Criterion 13 is a claim about the *whole* distribution of work, and stage 1 sampled only the end
+where the org is *least* useful — trivial and restraint tasks, where correct behaviour is to do
+nothing and the cheapest possible system wins by definition. The complex tier is where an org
+should earn back its overhead through parallelism and catching errors a single agent misses. That
+tier has not run. Until it does, the fair statement is: **Alfred loses on cheap work, by a
+measured margin, and is untested on the work it was built for.**
+
+Two things also stayed honest that a friendlier reading would have blurred: the baseline arm is not
+org-free (it inherits Alfred's standing rules, so this measures the org *structure*, not the org
+*idea*), and the one scenario Alfred won showed the baseline behaving differently across two runs
+of an identical prompt — so it is one observation, not a capability gap.
+
