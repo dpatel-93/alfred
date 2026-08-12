@@ -729,3 +729,48 @@ The decline test is now **more** justified, not less: the org is a 1.48× tax be
 best 0.87× above it, so the range where it pays is narrower than §21 implied. It does not change
 the direction of the fix — it raises the bar the gate must clear before engaging.
 
+---
+
+## 23. The breadth gate shipped and did not work (2026-08-12)
+
+Option A was implemented and verified. **It delivers ~4%. The prediction was ~30%, and the
+diagnosis behind that prediction was wrong.**
+
+| Task | After gate | Before | |
+|---|---|---|---|
+| typo | 606k / 10 turns | 880k / 14 turns | 0.69× |
+| "can you deploy this" | 783k / 12 | 707k / 11 | 1.11× |
+| answerable from context | 358k / 6 | 349k / 6 | 1.03× |
+| "roll it back" | 782k / 12 | 705k / 11 | 1.11× |
+| **small-task total** | **2.53M** | **2.64M** | **0.96×** |
+| `s12` cross-domain | 1.78M / 23 | 1.55M mean (1.33/1.40/1.93) | within prior range |
+
+**Behaviourally the gate is correct.** It fires and names itself in the transcripts — *"step 0
+breadth gate: one specialty (revert a bad deploy). Stays in-session — no spawn."* — and it still
+engages all three VPs on the cross-domain case, so it did not trade cost for quality.
+
+**Economically it is noise.** 0.96× on small work is inside the variance already measured elsewhere
+in this benchmark.
+
+### Why the diagnosis was wrong
+
+The ~200k gap was attributed to loading the roster before deciding not to use it. The roster is
+**~3,100 tokens**. It was never the cost.
+
+Cost tracks **turns**, because each turn re-reads accumulated context. Alfred takes roughly twice a
+plain agent's turns on small work — not because it loads an org chart, but because its charter
+prescribes classifying, emitting stakes/premises/gate, applying the when-NOT test, and grounding
+before answering. The gate removed turns where it could (typo: 14 → 10) and could not touch the
+rest, because those turns are spent on *the ritual the charter demands*, not on the hierarchy.
+
+**The expensive thing is the charter, not the org chart.** That is the third time in this exercise
+a cost was attributed to the wrong component, and the second time the correction came only after
+building the thing and measuring it.
+
+### What this leaves
+
+The org chart is now correctly lazy and costs almost nothing to skip. The remaining ~1.4× on small
+work belongs to ~9,200 tokens of standing instructions and the per-turn reasoning they require.
+Cutting that is a different project, and — given this file's track record — it should be **measured
+before it is cut**: establish which parts of the ritual change outcomes, then remove only the rest.
+
