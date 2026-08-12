@@ -774,3 +774,49 @@ work belongs to ~9,200 tokens of standing instructions and the per-turn reasonin
 Cutting that is a different project, and — given this file's track record — it should be **measured
 before it is cut**: establish which parts of the ritual change outcomes, then remove only the rest.
 
+---
+
+## 24. Charter ablation — the ritual pays only where the org pays (2026-08-12)
+
+Tested a **316-token** charter (breadth gate + route-to-owner + verifier-isn't-builder +
+ground-before-claiming + name-the-assumption + nothing-irreversible) against the full **4,112-token**
+one. A 13× cut.
+
+| Task | Minimal | Full | |
+|---|---|---|---|
+| typo | 608k / 10t | 606k / 10t | 1.00× |
+| "roll it back" | 675k / 11t | 782k / 12t | 0.86× |
+| ship-readiness (cross-domain) | 2,341k / 31t | 1,780k / 23t | **1.32×** |
+| total | 3.62M | 3.17M | **1.14× — worse** |
+
+**Premise-grounding survived the cut completely.** On "roll it back" the 316-token charter refused
+the rollback, grounded every claim in command output, named the blocking question and stated what it
+did not cover — substantively identical to the full charter. Two plain sentences did what the C0–C4
+taxonomy, required output fields, ORIGINAL ASK anchor, when-NOT test and merit contract were
+credited with.
+
+**But the taxonomy earns its keep on breadth.** Told only "route to the owner, not the manager," the
+minimal charter fanned out to **five employees flat** and had to reconcile them itself. The full
+charter classified C3 and spawned **three VPs** who each reconciled inside their own domain first —
+fewer agents, less reconciliation, 32% cheaper. The classification is not ceremony there; it picks a
+cheaper shape.
+
+### Where the cost actually lives — three wrong answers, then the right one
+
+1. ~~The org chart~~ — 3,100 tokens. Never the cost. The gate that removed it bought 4%.
+2. ~~The charter's length~~ — a 13× cut changed small-task cost by **0%**.
+3. ~~The classification ritual~~ — removing it made cross-domain work **worse**.
+4. **The verification discipline.** Both charter variants cost ~606k on a typo; a bare agent with
+   no charter costs **414k / 7 turns**. The whole gap is *grep for other instances, check git,
+   confirm the fix* — the two sentences that say ground a claim before making it. That is the
+   ~1.4× on small work, and it is present in every variant because it is the part that makes the
+   answers trustworthy.
+
+### The standing conclusion
+
+Quality was identical in every configuration tested all session. The org chart, the charter and the
+taxonomy are all roughly cost-neutral once the breadth gate is in place. **The remaining tax is the
+price of verification, and it is not overhead — it is the product.** The only lever left is whether
+verification should scale with stakes, which is a decision about risk appetite rather than a
+defect to fix.
+
