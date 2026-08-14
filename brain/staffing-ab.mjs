@@ -31,6 +31,11 @@ const CLAUDE_BIN = process.platform === 'win32'
   : 'claude';
 const OUT = path.join(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), 'staffing-ab-results.jsonl');
 
+const NEEDS_FIXTURE = new Set([
+  's16-typo', 's17-ambiguous-deploy', 's19-wrong-premise',
+  's02-secret-in-history', 's03-cve-reachability', 's04-pipeline-diagnosis',
+]);
+
 const TRIVIAL = [
   ['s01-azure-storage-scrape', 'find the current azure blob storage pricing tiers and what each is for'],
   ['s02-secret-in-history',    'worried a connection string slipped into git a few months back, can you find out'],
@@ -57,8 +62,17 @@ function armTo(arm) {
 const restore = () => { try { if (fs.existsSync(LIVE)) fs.rmSync(LIVE, { recursive: true, force: true }); } catch {} };
 for (const sig of ['exit', 'SIGINT', 'SIGTERM', 'uncaughtException']) process.on(sig, restore);
 
-function run(prompt, sandbox) {
-  fs.mkdirSync(sandbox, { recursive: true });
+const FIXTURE = path.join(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), 'make-staffing-fixture.mjs');
+
+function run(prompt, sandbox, withFixture) {
+  fs.rmSync(sandbox, { recursive: true, force: true });
+  if (withFixture) {
+    // Planted ground truth. Without it these scenarios test whether the model notices an empty
+    // folder, which is not the question — see the header of make-staffing-fixture.mjs.
+    execFileSync(process.execPath, [FIXTURE, sandbox], { stdio: 'pipe' });
+  } else {
+    fs.mkdirSync(sandbox, { recursive: true });
+  }
   const started = Date.now();
   let raw;
   try {
@@ -95,7 +109,7 @@ if (mode === '--startup') {
   for (const arm of ['ondemand', 'standing']) {
     armTo(arm);
     for (let i = 1; i <= 3; i++) {
-      const r = run('reply with exactly: OK', path.join(SANDBOXES, `startup-${arm}-${i}`));
+      const r = run('reply with exactly: OK', path.join(SANDBOXES, `startup-${arm}-${i}`), false);
       append({ kind: 'startup', arm, rep: i, ...r });
       console.log(`  ${arm.padEnd(9)} rep${i}  load=${(r.cacheCreate + r.cacheRead).toLocaleString().padStart(9)}  $${(r.cost || 0).toFixed(4)}${r.error ? '  ERR ' + r.error : ''}`);
     }
@@ -108,8 +122,8 @@ if (mode === '--startup') {
   for (const arm of ['ondemand', 'standing']) {
     armTo(arm);
     for (const [id, task] of suite) {
-      const r = run(task, path.join(SANDBOXES, `${arm}-${id}`));
-      append({ kind: 'scenario', arm, id, task, ...r });
+      const r = run(task, path.join(SANDBOXES, `${arm}-${id}`), NEEDS_FIXTURE.has(id));
+      append({ kind: 'scenario', arm, id, task, fixture: NEEDS_FIXTURE.has(id), ...r });
       console.log(`  ${arm.padEnd(9)} ${id.padEnd(28)} ${String(r.total || 0).padStart(9)} tok  ${String(r.turns ?? '-').padStart(3)}t  $${(r.cost || 0).toFixed(3)}${r.error ? '  ERR' : ''}`);
     }
   }
