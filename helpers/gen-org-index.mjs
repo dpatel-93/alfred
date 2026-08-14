@@ -15,8 +15,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-const ROOT = path.join(process.env.USERPROFILE || os.homedir(), '.claude', 'agents');
-const OUT = path.join(process.env.USERPROFILE || os.homedir(), '.claude', 'skills', 'org-index', 'SKILL.md');
+const ROOT = path.join(process.env.USERPROFILE || os.homedir(), '.claude', 'skills', 'orgagent', 'references', 'charters');
+const OUT = path.join(process.env.USERPROFILE || os.homedir(), '.claude', 'skills', 'orgagent', 'references', 'roster.md');
 
 const agents = [];
 (function walk(d) {
@@ -50,21 +50,18 @@ const rows = (tier) => agents.filter((a) => a.tier === tier)
             + `${a.skills.length ? a.skills.map((s) => `\`${s}\``).join(' ') : '—'} |`)
   .join('\n');
 
-const body = `---
-name: org-index
-description: "The Alfred roster in one preloaded table — every agent, its parent, and the surface it owns. Use when you need to know who owns a surface, who to delegate to, or who to escalate toward, INSTEAD of opening agents/ORG.md. Preloaded via the skills: frontmatter field, so it costs no tool call and no round trip."
----
+const body = `# Roster — every role Alfred can staff
 
-# Org Index
+**Generated from \`skills/orgagent/references/charters/**/*.md\`. Do not hand-edit — regenerate
+with \`node ~/.claude/helpers/gen-org-index.mjs\`.**
 
-**Generated from \`~/.claude/agents/**/*.md\`. Do not hand-edit — regenerate.**
+These are ROLE DEFINITIONS, not running agents. Nothing here is loaded into a session until
+\`orgagent\` is invoked, and nothing here spawns on its own. To staff one, compose it per
+\`orgagent\`'s brief template — the name in this table becomes the assembled agent's ROLE, and
+its \`charters/\` file is the long-form contract to read only if the one-line surface is not enough.
 
-This exists to remove a tool call from the critical path. Opening \`ORG.md\` (431 lines) to answer
-"who owns backups?" cost ~5-7s and ~20k tokens *at every level of the chain*. This table is
-preloaded with your charter, so the answer is already in your context.
-
-Read \`ORG.md\` itself only when you need the *contracts and rules* (§4 charter spec, §5 return
-shapes, §5b/§5c the structural rules) — not to look up a name.
+Read \`ORG.md\` for the *contracts and rules* (§4 charter spec, §5 return shapes, §5b/§5c the
+structural rules) — not to look up a name.
 
 ## Chain of command
 

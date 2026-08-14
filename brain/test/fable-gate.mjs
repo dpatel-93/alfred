@@ -86,7 +86,7 @@ await expect('empty stdin fails open', '', bare, 'allow', 3000);
 // --- 3. tier inherited from the agent charter, not the call ---------------
 {
   const env = home('fm', null);
-  const agentsDir = path.join(env.HOME, '.claude', 'agents', 'vp', 'deep');
+  const agentsDir = path.join(env.HOME, '.claude', 'skills', 'orgagent', 'references', 'charters', 'vp', 'deep');
   fs.mkdirSync(agentsDir, { recursive: true });
   const mk = (n, m) => fs.writeFileSync(path.join(agentsDir, `${n}.md`),
     `---\nname: ${n}\nmodel: ${m}\n---\n# ${n}\n`);
@@ -105,7 +105,7 @@ await expect('empty stdin fails open', '', bare, 'allow', 3000);
 // These four all previously returned allow, which is exactly how it leaked.
 {
   const env = home('implicit', null); // no token: proves the deny is local, not gate-dependent
-  const dir = path.join(env.HOME, '.claude', 'agents');
+  const dir = path.join(env.HOME, '.claude', 'skills', 'orgagent', 'references', 'charters');
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'fx-nomodel.md'), `---\nname: fx-nomodel\n---\n# x\n`);
 
@@ -158,7 +158,7 @@ await expect('empty stdin fails open', '', bare, 'allow', 3000);
 // against nothing but the charter files on disk.
 {
   const env = home('fm2', null);
-  const dir = path.join(env.HOME, '.claude', 'agents', 'vp');
+  const dir = path.join(env.HOME, '.claude', 'skills', 'orgagent', 'references', 'charters', 'vp');
   fs.mkdirSync(dir, { recursive: true });
 
   // Five real charters already exceed the old 4000-char frontmatter slice, so

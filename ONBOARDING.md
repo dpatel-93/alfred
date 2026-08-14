@@ -86,7 +86,7 @@ profile's contents.
 
 ## Step 6 — confirm and orient
 
-Tell them setup is done, where things landed (`~/.claude/agents`, `~/.claude/skills`, the
+Tell them setup is done, where things landed (`~/.claude/skills/orgagent/references/charters`, `~/.claude/skills`, the
 profile at `~/.claude/alfred-profile.md`), and how to start the HUD if they want it
 (`brain/Alfred.cmd` on Windows; check the README for the current macOS/Linux equivalent). If
 anything in the installer's output looked like a conflict or a skipped merge, say so plainly

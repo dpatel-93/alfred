@@ -17,7 +17,9 @@ import os from 'node:os';
 // --- Configuration ---------------------------------------------------------
 
 const CLAUDE_DIR = path.join(os.homedir(), '.claude');
-const AGENTS_DIR = path.join(CLAUDE_DIR, 'agents');
+// Charters moved out of ~/.claude/agents on 2026-08-14. They are role DEFINITIONS carried by the
+// `orgagent` skill, not standing agent definitions the harness loads into every session.
+const AGENTS_DIR = path.join(CLAUDE_DIR, 'skills', 'orgagent', 'references', 'charters');
 const SKILLS_DIR = path.join(CLAUDE_DIR, 'skills');
 const COMMANDS_DIR = path.join(CLAUDE_DIR, 'commands');
 const PLUGIN_CACHE = path.join(CLAUDE_DIR, 'plugins', 'cache');
@@ -482,7 +484,8 @@ function main() {
   }
 
   // 10. Every ORG.md row exists on disk
-  const orgFile = path.join(AGENTS_DIR, 'ORG.md');
+  // ORG.md sits beside charters/, not inside it — it is the rules doc, not a role definition.
+  const orgFile = path.join(AGENTS_DIR, '..', 'ORG.md');
   if (fs.existsSync(orgFile)) {
     const org = fs.readFileSync(orgFile, 'utf8');
     // Only actual table ROWS are the map. The surrounding prose legitimately names counter-examples

@@ -46,7 +46,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const AGENTS_DIR = path.join(os.homedir(), '.claude', 'agents');
+const AGENTS_DIR = path.join(os.homedir(), '.claude', 'skills', 'orgagent', 'references', 'charters');
 // Reading stdin is the one thing here that can block on something outside this
 // process, so it keeps its own bound. Everything the old timeout machinery
 // guarded — the abort controller, the server-timeout mirror, the harness

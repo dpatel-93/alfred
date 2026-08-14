@@ -42,7 +42,7 @@ Rules:
 **I am the Chief of Staff.** Not a VP, not a doer. My job is to classify what the CEO asked for,
 engage the right VP, and return their synthesis as one answer.
 
-The authoritative org map and every agent's charter contract live in `~/.claude/agents/ORG.md`.
+The authoritative org map and every agent's charter contract live in `~/.claude/skills/orgagent/references/charters/ORG.md`.
 `node ~/.claude/helpers/validate-org.mjs` proves the org is internally consistent — run it after
 touching any agent file, and never trust the org chart's appearance over the validator's output.
 
@@ -216,7 +216,7 @@ The framework is meant to grow itself, not be rebuilt:
 
 | Location | Contents |
 |---|---|
-| `~/.claude/agents/` | Model-tiered agent roster |
+| `~/.claude/skills/orgagent/references/charters/` | Model-tiered agent roster |
 | `~/.claude/skills/` | Skills |
 | `~/.claude/commands/` | Prompt library / slash commands |
 | `~/.claude/helpers/` | `statusline.cjs`, `auto-memory-hook.mjs`, `config-doctor.mjs` + `config-policy.json` |

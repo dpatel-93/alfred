@@ -13,7 +13,7 @@ import SCENARIOS from '../orchestration-eval-scenarios.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const EVAL = path.join(HERE, '..', 'orchestration-eval.mjs');
-const AGENTS = path.join(os.homedir(), '.claude', 'agents');
+const AGENTS = path.join(os.homedir(), '.claude', 'skills', 'orgagent', 'references', 'charters');
 const R = [];
 const T = (n, c, d = '') => R.push({ n, ok: !!c, d: String(d) });
 

@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 import CASES from './routing-eval-questions.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const AGENTS = path.join(os.homedir(), '.claude', 'agents');
+const AGENTS = path.join(os.homedir(), '.claude', 'skills', 'orgagent', 'references', 'charters');
 const SENTINELS = new Set(['NONE', 'CLARIFY']);
 // R3.1: 'full+review' is GONE. It fused two axes ORG.md §5e itself calls orthogonal — shape (how
 // deep a chain was paid for) and stakes (whether an independent reviewer was engaged). The fusion

@@ -52,7 +52,7 @@ const USAGE_LOG_PATH = path.join(os.homedir(), '.claude', 'metrics', 'ollama-usa
 let lastAskEngine = ASK_ENGINE;
 
 // --- Mission Control (OBSERVE side, read-only) configuration ---
-const AGENTS_DIR = path.join(os.homedir(), '.claude', 'agents');
+const AGENTS_DIR = path.join(os.homedir(), '.claude', 'skills', 'orgagent', 'references', 'charters');
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 const PROFILE_PATH = path.join(os.homedir(), '.claude', 'alfred-profile.md');
 const ORG_ACTIVE_MS = 20 * 1000;
