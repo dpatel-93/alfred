@@ -484,6 +484,72 @@ an Azure MCP server, point it at your own endpoint.
 
 ## Alfred orchestration
 
+### How work actually gets staffed
+
+Nothing is standing. There is no roster of agents loaded and waiting — the roles live inside
+one skill (`orgagent`) and a specialist is composed at the moment of need, then discarded.
+The first question decides whether any of that happens at all, and **most requests end there**.
+
+```mermaid
+flowchart TD
+    U["<b>YOU</b><br/>“build me a website to sell my photos”"]
+    U --> GATE{"<b>THE GATE</b> — asked first, every time<br/>Does this need more than one speciality?"}
+
+    GATE -->|"no · most requests"| SOLO["<b>Nobody is staffed</b><br/>Alfred does it itself — but still picks a<br/>model tier, still owes proof, and still names<br/>the check that would prove it wrong"]
+
+    GATE -->|yes| Q["<b>Four more questions</b><br/>1 · anything unclear? → asks you first<br/>2 · what shape? one · a lead · parallel · staged<br/>3 · what are the stakes? → sets the proof owed<br/>4 · what would prove this wrong?"]
+
+    Q --> BRIEF["<b>A brief per specialist</b><br/>what you own · what is NOT yours<br/>which skills to use · how we'd know it failed"]
+
+    BRIEF --> S1["Storefront"]
+    BRIEF --> S2["Payments"]
+    BRIEF --> S3["Where it runs"]
+    BRIEF --> S4["Protecting"]
+
+    S1 --> REC["<b>Reconciled into one answer</b><br/>disagreements surfaced, never averaged"]
+    S2 --> REC
+    S3 --> REC
+    S4 --> REC
+    REC --> OUT["Back to you — specialists go dark again"]
+
+    subgraph LIB ["SKILL LIBRARY · 41 names loaded, contents are not"]
+        direction TB
+        L0["orgagent — the org handbook"]
+        L1["taste"]
+        L2["context7"]
+        L3["zero-cost-azure"]
+        L4["prior-art"]
+        L5["… 36 more, never opened"]
+    end
+
+    L0 -. "opened once, to decide who" .-> Q
+    L1 -. "named in the brief" .-> S1
+    L2 -.-> S2
+    L3 -.-> S3
+    L4 -.-> S4
+
+    classDef gate fill:#D8EAEC,stroke:#0E6E77,stroke-width:2px,color:#16212A
+    classDef solo fill:#F0E3CD,stroke:#96601C,color:#16212A
+    classDef lib fill:#F5F8F9,stroke:#C3CED4,color:#16212A
+    class GATE gate
+    class SOLO solo
+    class L0,L1,L2,L3,L4,L5 lib
+```
+
+Two decisions then run on **every** job, including the ones with no specialists at all:
+**which model tier** (never left to default — the top tier is gated behind your explicit
+confirmation, and free local output is always reviewed before it counts), and **how much
+proof is owed** (scaled to what breaks if it is wrong). Independent review is only bought
+when no cheap deterministic check exists *and* stakes are high — a failing test cannot
+hallucinate agreement, a reviewer can.
+
+> **Want the full logic?** [`docs/how-alfred-decides.html`](docs/how-alfred-decides.html) is a
+> self-contained page — clone the repo and open it in any browser, no server or network
+> needed. Every box clicks through to the reasoning, the measured numbers behind it, how the
+> three-depth skill library is built, and how the brain captures decisions on its own.
+
+### The tiers
+
 Once installed, Claude Code in this project routes work down a fixed org chart
 instead of doing everything itself:
 
