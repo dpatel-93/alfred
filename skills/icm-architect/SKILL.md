@@ -18,7 +18,7 @@ Adapted from [RinDig/icm-architect](https://github.com/RinDig/icm-architect) (72
 **Apply it to:** project workspaces under `_Projects\`, the Alfred-Brain vault, research corpora,
 any recurring pipeline that emits a deliverable, and any folder that has grown past easy scanning.
 
-**Do NOT apply it to Alfred's own instruction files.** `CLAUDE.md`, `agents/ORG.md`, and the agent
+**Do NOT apply it to Alfred's own instruction files.** `CLAUDE.md`, `skills/orgagent/references/ORG.md`, and the role
 charters are deliberately larger than ICM's 60-line entry-file target, and that is a measured
 decision, not drift. Commit `d7ce052` ablated the Chief of Staff charter 13× (4,112 → 316 tokens)
 across three tasks and found total cost got **WORSE** — 1.14× — at identical quality, because the

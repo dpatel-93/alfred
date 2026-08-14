@@ -2,7 +2,7 @@
 name: agent-builder
 description: |
   Scaffolds a new Alfred org agent (VP, manager, or employee) that satisfies the full charter
-  contract in agents/ORG.md §4 and passes helpers/validate-org.mjs on the first run — not a rough
+  contract in skills/orgagent/references/ORG.md §4 and passes helpers/validate-org.mjs on the first run — not a rough
   draft to be fixed up later. Use when a real, recurring workload has no owner in the current org
   (a genuine capability gap, not just "this would be nice"), when adding a new department under an
   existing VP, or when the CEO says "we need an agent for X." Do NOT use for one-off tasks that fit
@@ -24,7 +24,7 @@ Before writing anything, check:
 - **Is this a real, recurring workload**, or a one-off task that fits an existing agent's scope?
   A new agent is organizational overhead — tools, a charter, a place in the routing table — that
   only pays for itself if the workload recurs.
-- **Does an existing specialist already cover this?** Check `agents/ORG.md` §7 (Reuse map) first —
+- **Does an existing specialist already cover this?** Check `skills/orgagent/references/ORG.md` §7 (Reuse map) first —
   several deep-domain specialists predate the org rebuild and are meant to be delegated to by name,
   not duplicated.
 - **Does it fit under an existing manager**, just needing that manager's "My team" table extended
@@ -112,7 +112,7 @@ way and passed every other check).
 4. **`## Skills I invoke`** — a table: skill name, when to use it. `vault-recall` first (check
    prior knowledge before re-deriving), plus `verification-before-completion` and
    `systematic-debugging` are near-universal. Every skill named here AND in frontmatter `skills:`
-   must actually exist — check `agents/ORG.md` §6 or `ls skills/`.
+   must actually exist — check `skills/orgagent/references/ORG.md` §6 or `ls skills/`.
 5. **`## Rules`** — the non-negotiables. What NOT to do, and what to do instead. This is where
    domain-specific policy lives (e.g. "Terraform only, never Bicep/ARM").
 6. **`## How I execute`** — numbered steps. For VP/manager tiers, this section MUST contain an
@@ -141,9 +141,9 @@ same frontmatter rules (tier: employee, model: haiku, no `Agent`/`Task` in tools
 - If it's a VP: add its "My team" row to the Chief of Staff's routing (the home-root `CLAUDE.md`)
   if it changes top-level routing.
 - If it's a manager: add a row to its parent VP's `## My team` table.
-- Update `agents/ORG.md` §3 (the org table) and its tally line (`N VPs · N managers · N employees`)
+- Update `skills/orgagent/references/ORG.md` §3 (the org table) and its tally line (`N VPs · N managers · N employees`)
   — the validator checks this tally against reality and fails if they disagree.
-- If it fills a real gap in `agents/ORG.md` §7 (Reuse map) or needs placement rules for the HUD
+- If it fills a real gap in `skills/orgagent/references/ORG.md` §7 (Reuse map) or needs placement rules for the HUD
   (`brain/org-map.json`), update those too — see that file's own header comment for its schema.
 
 ## Step 6 — validate, don't assume

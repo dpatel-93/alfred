@@ -40,7 +40,20 @@ try {
     Write-Step "Alfred v4 install (target: $ClaudeHome)"
     if ($DryRun) { Write-Warn2 "DRY RUN - no changes will be made" }
 
-    Copy-Merged (Join-Path $repoRoot "agents")   (Join-Path $ClaudeHome "agents")
+    # No agents/ any more. The 69 role definitions ship inside skills/orgagent/references/charters/
+    # and are loaded only when work is actually delegated (2026-08-14). A stale ~/.claude/agents
+    # from an older install would put every one of them back into every session, so clear it.
+    $legacyAgents = Join-Path $ClaudeHome "agents"
+    if (Test-Path $legacyAgents) {
+        $stamp  = Get-Date -Format "yyyyMMdd-HHmmss"
+        $parked = Join-Path $ClaudeHome "backups/legacy-agents-$stamp"
+        Write-Warn2 "Found a pre-2026-08-14 agents/ directory - moving it to $parked"
+        if (-not $DryRun) {
+            New-Item -ItemType Directory -Force (Split-Path $parked) | Out-Null
+            Move-Item $legacyAgents $parked
+        }
+    }
+
     Copy-Merged (Join-Path $repoRoot "skills")   (Join-Path $ClaudeHome "skills")
     Copy-Merged (Join-Path $repoRoot "commands") (Join-Path $ClaudeHome "commands")
     Copy-Merged (Join-Path $repoRoot "helpers")  (Join-Path $ClaudeHome "helpers")

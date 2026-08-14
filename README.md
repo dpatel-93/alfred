@@ -27,7 +27,7 @@ which chain of command, at what cost, against which notes and skills. It is not 
 worse place to type.
 
 The HUD, semantic search, and server code lives in `brain/`; the Claude Code
-framework it orchestrates lives in `agents/`, `skills/`, `commands/`, and
+framework it orchestrates lives in `skills/`, `commands/`, and
 `helpers/`. Everything is branded Alfred.
 
 ### The problem this is actually solving
@@ -90,7 +90,7 @@ different thing: **a small, curated, real chain of command inside Claude Code al
 
 | | Flat prompt collections | Multi-harness plugin marketplaces | **Alfred** |
 |---|---|---|---|
-| Roster shape | Large & flat (100s of specialists, no reporting structure) | Large & plugin-scoped (100s of agents, granular install) | Small & hierarchical — 55 agents in an actual chain of command |
+| Roster shape | Large & flat (100s of specialists, no reporting structure) | Large & plugin-scoped (100s of agents, granular install) | Small & hierarchical — 53 roles in a chain of command, staffed on demand |
 | Roster philosophy | Breadth: a specialist for nearly every framework/platform | Breadth via install-what-you-need | Curated: real, durable career roles only — no framework-of-the-month agents |
 | Structural validation | Not typically enforced | Yes — static + LLM-judge + reliability checks | Yes — every delegation target, skill reference, and capability claim is validated (`helpers/validate-org.mjs`) before it ships |
 | Cost-tier discipline | Model choice is usually per-agent, not policy-driven | Explicit model tiers per plugin | Explicit model tiers **tied to measured session cost**, enforced by a gate hook, not just documented |
@@ -115,7 +115,7 @@ Alfred's HUD is an **observe** surface, not a control panel. You run `claude` in
 terminal; the HUD shows you what that produced and what the framework has to work with.
 Nothing below is a mockup — every screenshot is the running product against a real install.
 The tallies in the left rail describe that whole install, so they count everything installed
-plugins contribute alongside Alfred's own; Alfred ships the 55 chartered agents set out below,
+plugins contribute alongside Alfred's own; Alfred ships the 53 chartered roles set out below,
 not the 89 the rail happens to see on this machine.
 
 **The Brain — your notes as an organ, lit by what has actually been touched.**
@@ -215,10 +215,10 @@ clean. Run it and you get yours.)*
   CLAUDE.md   (the constitution: who you are, how we work, hard rules)
         |
         v
-  agents/     (model-tiered: Fable -> Opus -> Sonnet -> Haiku -> local Ollama)
-        |
+  skills/     (loaded on demand: orgagent, vault-recall, evolve, ...)
+        |       orgagent carries the 53 roles; nothing is staffed until
+        |       work is actually delegated, then it composes the agent
         v
-  skills/     (loaded on demand: vault-recall, evolve, ollama-interns, ...)
         |
         v
   commands/   (slash-command prompt library: /fanout, /review-loop, /harvest, ...)
@@ -286,7 +286,7 @@ cd alfred
 ./install.sh               # preview first with: ./install.sh --dry-run
 ```
 Both installers are idempotent and merge-only: they back up anything about to be
-touched, copy `agents/`, `skills/`, `commands/`, and `helpers/` into `~/.claude/`
+touched, copy `skills/`, `commands/`, and `helpers/` into `~/.claude/`
 (merging, never deleting your own files), install the two `CLAUDE.md` files, and
 scaffold a blank `~/.claude/alfred-profile.md` if one doesn't already exist — fill
 it in by hand (see `claude-md/alfred-profile.template.md`) or just ask Claude to
@@ -502,7 +502,7 @@ deliberate about spawning multiple expensive Opus/Fable agents in parallel.
 
 ### The org chart
 
-55 chartered agents — 5 VPs, 17 managers, 33 employees — organized as a real reporting
+53 chartered roles — 5 VPs, 15 managers, 33 employees — organized as a real reporting
 structure, not a flat pile of specialists. Every one of them is validated structurally
 (`node ~/.claude/helpers/validate-org.mjs`): delegation targets must resolve, referenced
 skills must exist, and an agent forbidding itself from self-executing must actually lack
@@ -529,7 +529,7 @@ the tools to do so. Counts are enforced by the validator, not by this table.
 | | | `quant-manager` | `quant-strategy-dev`, `quant-risk-analyst` |
 
 Full charter contract (frontmatter schema, the nine required body sections, return
-contracts up the chain) lives in `agents/ORG.md`. Growth is deliberate: agents get added
+contracts up the chain) lives in `skills/orgagent/references/ORG.md`. Growth is deliberate: agents get added
 when a real, durable role is missing — not for every framework or platform that exists.
 Have an idea for a role that's missing? Open an issue; see [Contributing](#contributing).
 
@@ -611,7 +611,7 @@ just scaffolds a blank profile for you to fill in by hand.
 ### What is Alfred?
 
 Alfred (A.L.F.R.E.D. — Agentic Labor Force for Research, Engineering and Delivery) is a
-model-tiered agent orchestration framework for Claude Code. It ships 55 chartered agents in a
+model-tiered agent orchestration framework for Claude Code. It ships 53 chartered roles in a
 real reporting hierarchy, a skills and command library, a hook that enforces each agent's model
 tier at spawn time, and a local HUD over a plain-markdown folder of your own notes. It runs
 entirely on your machine and stores nothing remotely.
@@ -621,7 +621,7 @@ entirely on your machine and stores nothing remotely.
 Most take one of two shapes: a large flat roster of specialist prompts activated by name, or a
 multi-harness plugin marketplace targeting several coding tools from one source tree. Alfred
 optimises for a third thing — a small, curated chain of command that is deliberate about
-context. 55 agents with real reporting lines rather than hundreds sitting flat; delegation so
+context. 53 roles with real reporting lines rather than hundreds sitting flat; delegation so
 subagents absorb noise in their own context windows; model tiers enforced by a gate rather than
 suggested per agent; and a validator that proves every delegation target and skill reference
 resolves before it ships. See [the comparison table](#why-alfred-not-another-agent-orchestration-repo).

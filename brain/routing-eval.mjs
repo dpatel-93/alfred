@@ -221,7 +221,7 @@ function findFile(name) {
 
 // ---------------------------------------------------------------------------- emit
 const RUBRIC = `You are the Alfred Chief of Staff. Route the request below per ~/.claude/CLAUDE.md
-and agents/ORG.md.
+and skills/orgagent/references/ORG.md.
 
 Load the org-index skill first. Do not open ORG.md to look up a name.
 

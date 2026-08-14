@@ -58,7 +58,18 @@ trap 'echo "INSTALL FAILED" >&2; exit 1' ERR
 step "Alfred install (target: ${CLAUDE_HOME})"
 [ "$DRY_RUN" = "1" ] && warn "DRY RUN - no changes will be made"
 
-copy_merged "${REPO_ROOT}/agents"   "${CLAUDE_HOME}/agents"
+# No agents/ any more. The 69 role definitions ship inside skills/orgagent/references/charters/
+# and are loaded only when work is actually delegated (2026-08-14). A stale ~/.claude/agents from
+# an older install would put every one of them back into every session, so clear it.
+if [ -d "${CLAUDE_HOME}/agents" ]; then
+  parked="${CLAUDE_HOME}/backups/legacy-agents-$(date +%Y%m%d-%H%M%S)"
+  warn "Found a pre-2026-08-14 agents/ directory - moving it to ${parked}"
+  if [ "$DRY_RUN" != "1" ]; then
+    mkdir -p "$(dirname "${parked}")"
+    mv "${CLAUDE_HOME}/agents" "${parked}"
+  fi
+fi
+
 copy_merged "${REPO_ROOT}/skills"   "${CLAUDE_HOME}/skills"
 copy_merged "${REPO_ROOT}/commands" "${CLAUDE_HOME}/commands"
 copy_merged "${REPO_ROOT}/helpers"  "${CLAUDE_HOME}/helpers"

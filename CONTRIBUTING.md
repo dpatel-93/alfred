@@ -18,9 +18,9 @@ directly rather than merged from a PR.
 Alfred doesn't accept or review pull requests. This isn't a judgment on contribution quality —
 it's because the framework is deliberately curated rather than crowd-built:
 
-- The **agent roster** (`agents/`) is scoped on purpose. Roles get added when they're real,
+- The **role roster** (`skills/orgagent/references/charters/`) is scoped on purpose. Roles get added when they're real,
   durable career archetypes (a RAG pipeline engineer, a FinOps engineer) — not for every
-  framework or platform that exists (see `agents/ORG.md` for the full charter contract every
+  framework or platform that exists (see `skills/orgagent/references/ORG.md` for the full charter contract every
   agent must satisfy, and `helpers/validate-org.mjs` for how that gets enforced).
 - The **CLAUDE.md templates, onboarding flow, and installer** are the first thing a new
   operator experiences. Getting that experience right requires a single coherent voice, not a

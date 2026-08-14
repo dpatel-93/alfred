@@ -7,7 +7,7 @@ description: Decide which VP (or VPs) should own a request when the routing tabl
 
 The table in the home-root `CLAUDE.md` (installed by this framework — `%USERPROFILE%\CLAUDE.md`
 on Windows, `~/CLAUDE.md` on macOS/Linux) handles clean matches. This skill exists for the rest.
-The org map is `~/.claude/agents/ORG.md`; every VP's `description` field carries its own trigger
+The org map is `~/.claude/skills/orgagent/references/ORG.md`; every VP's `description` field carries its own trigger
 conditions and worked examples, which are the ground truth when this guidance is unclear.
 
 ## Step 0 — should the org be engaged at all?

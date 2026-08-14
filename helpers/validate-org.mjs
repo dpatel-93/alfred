@@ -238,15 +238,15 @@ function main() {
     }
   }
   // --- R2: org-index drift ---------------------------------------------------------------------
-  // org-index is generated from these same files and preloaded into every chartered agent, so a
+  // roster.md is generated from these same files and is what orgagent routes from, so a
   // stale index is a roster that lies with authority. Cheaper to catch here than to debug a
   // misroute later.
-  const idxPath = path.join(os.homedir(), '.claude', 'skills', 'org-index', 'SKILL.md');
+  const idxPath = path.join(os.homedir(), '.claude', 'skills', 'orgagent', 'references', 'roster.md');
   if (fs.existsSync(idxPath)) {
     const idx = fs.readFileSync(idxPath, 'utf8');
     for (const a of chartered) {
       if (!new RegExp(`\\|\\s*\`${a.fm.name}\`\\s*\\|`).test(idx)) {
-        err('skills/org-index/SKILL.md', `missing \`${a.fm.name}\` — regenerate: `
+        err('skills/orgagent/references/roster.md', `missing \`${a.fm.name}\` — regenerate: `
           + `node ~/.claude/helpers/gen-org-index.mjs`);
         continue;
       }
