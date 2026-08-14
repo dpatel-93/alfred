@@ -1,5 +1,5 @@
 ---
-name: "Cache Guardian"
+name: cache-guardian
 description: "Enforce stable prompt prefix ordering across swarm members so Claude's prompt cache hits at 90%+. Use when designing system prompts, agent templates, or multi-agent message layouts where each agent shares overlapping context (CLAUDE.md, MCP tool list, project files). Cuts token cost by 50–80% on repeated sessions."
 ---
 

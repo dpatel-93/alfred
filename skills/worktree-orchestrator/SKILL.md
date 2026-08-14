@@ -1,5 +1,5 @@
 ---
-name: "Worktree Orchestrator"
+name: worktree-orchestrator
 description: "Spawn parallel Claude Code subagents in isolated git worktrees so they edit the same repo concurrently without merge collisions. Use when running multi-file refactors, parallel feature work, or any swarm where 2+ agents will write to overlapping files. Requires git repo. Falls back gracefully for non-git directories."
 ---
 

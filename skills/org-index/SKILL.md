@@ -1,5 +1,5 @@
 ---
-name: "Org Index"
+name: org-index
 description: "The Alfred roster in one preloaded table — every agent, its parent, and the surface it owns. Use when you need to know who owns a surface, who to delegate to, or who to escalate toward, INSTEAD of opening agents/ORG.md. Preloaded via the skills: frontmatter field, so it costs no tool call and no round trip."
 ---
 

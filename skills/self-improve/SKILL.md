@@ -1,5 +1,5 @@
 ---
-name: "Self-Improve"
+name: self-improve
 description: "Audit Alfred (agents, skills, hooks, commands, CLAUDE.md, MCP config) against the latest reputable Anthropic + Claude Code best practices and propose/apply concrete updates with cited sources. Use when the user asks to 'self-improve', 'audit the setup', 'check for updates', or 'modernize Alfred / our skills / our agents'. Defaults to a dry-run report; only writes changes when the user explicitly confirms."
 ---
 
@@ -79,6 +79,22 @@ curl -s https://api.github.com/repos/OWNER/REPO | jq '{stars: .stargazers_count,
 
 A repo that's archived or hasn't been pushed in 90+ days does not qualify
 regardless of star count.
+
+### Run the deterministic checks FIRST
+
+Both are machine checks, so they cannot hallucinate agreement the way a review can.
+Run them before any research — findings they produce are grounded by definition, and
+they cost a fraction of a reviewing subagent.
+
+```bash
+node ~/.claude/helpers/validate-org.mjs        # agent roster consistency
+node ~/.claude/helpers/validate-library.mjs    # skill/helper duplication, drift, dead files
+```
+
+`validate-library` catches the failure class that let 12 stale copies of a plugin's
+skills accumulate unnoticed: local skills duplicating a plugin, run artifacts committed
+inside a skill folder, frontmatter drifted from folder names, and helpers with no caller.
+Report every ERROR it emits; treat WARN as a candidate, not a verdict.
 
 ## Audit dimensions
 

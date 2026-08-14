@@ -1,5 +1,5 @@
 ---
-name: postgresql-table-design
+name: postgresql
 description: Use this skill when designing or reviewing a PostgreSQL-specific schema. Covers best-practices, data types, indexing, constraints, performance patterns, and advanced features
 ---
 

@@ -1,5 +1,5 @@
 ---
-name: "Async Supervisor"
+name: async-supervisor
 description: "Run long subagents in the background and reattach when they complete. Use for tasks that take more than ~30 seconds (test suites, large refactors, multi-step research) so the parent agent stays responsive instead of blocking. Pairs with run_in_background and the Monitor tool."
 ---
 

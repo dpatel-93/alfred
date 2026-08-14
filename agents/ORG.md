@@ -666,10 +666,11 @@ truth for ownership, not this table (rebuild it from `agents/**/*.md` if the two
 any agent or directly to the Chief of Staff/operator, the way a shared-services pool serves every
 department rather than belonging to one:
 
-- *Web research* (Firecrawl CLI actions): `firecrawl` `firecrawl-agent` `firecrawl-crawl`
-  `firecrawl-download` `firecrawl-interact` `firecrawl-map` `firecrawl-scrape` `firecrawl-search`
-- *Web research* (integrating Firecrawl into product code, not just using it): `firecrawl-build-interact`
-  `firecrawl-build-onboarding` `firecrawl-build-scrape` `firecrawl-build-search`
+- *Web research* (search, scrape, crawl, map, download, interact): the `firecrawl-cli` plugin skill
+  and its siblings, supplied by the official firecrawl plugin. Alfred keeps no local copies — 12
+  stale hand-copies were archived on 2026-08-14 after `validate-library` found 8 byte-identical to
+  the plugin's own version. Use the plugin; it is the maintained one.
+- *Web research* (integrating Firecrawl into product code, not just using it): `firecrawl-build`
 - *Framework self-maintenance*: `evolve` (turn repetition into a skill/command/agent),
   `self-improve` (audit Alfred against current Anthropic best practices), `skill-builder`
   (scaffold a new skill correctly), `agent-builder` (scaffold a new org agent that passes
