@@ -14,6 +14,7 @@ const days = Math.max(1, parseInt(process.argv[2] ?? '7', 10) || 7);
 const cutoff = Date.now() - days * 86400_000;
 const projectsDir = path.join(os.homedir(), '.claude', 'projects');
 const ollamaLog = path.join(os.homedir(), '.claude', 'metrics', 'ollama-usage.jsonl');
+const peerLog = path.join(os.homedir(), '.claude', 'metrics', 'peer-usage.jsonl');
 const C = { r: '\x1b[0m', b: '\x1b[1m', cyan: '\x1b[36m', grn: '\x1b[32m', yel: '\x1b[33m', gray: '\x1b[90m' };
 
 // --- Collect transcript files ---
@@ -67,6 +68,19 @@ if (fs.existsSync(ollamaLog)) {
   }
 }
 
+// --- Tally subscription peers (Gemini / Grok, written by peer-run.mjs) ---
+const peers = {}; // provider -> {in, out, calls}
+if (fs.existsSync(peerLog)) {
+  for (const line of fs.readFileSync(peerLog, 'utf8').split('\n')) {
+    let j; try { j = JSON.parse(line); } catch { continue; }
+    if (!j.ts || Date.parse(j.ts) < cutoff) continue;
+    const t = (peers[`${j.provider}/${j.model ?? 'default'}`] ??= { in: 0, out: 0, calls: 0 });
+    t.in += j.in_tokens ?? 0;
+    t.out += j.out_tokens ?? 0;
+    t.calls++;
+  }
+}
+
 // --- Report ---
 const fmt = (n) => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : String(n);
 console.log(`${C.b}${C.cyan}== Claude usage, last ${days}d ==${C.r}  (${totalMsgs} assistant messages)`);
@@ -86,6 +100,16 @@ for (const [model, t] of Object.entries(local)) {
   localTotal += t.in + t.out;
   console.log(`  ${model.padEnd(26)} in ${C.grn}${fmt(t.in).padStart(7)}${C.r}  out ${C.grn}${fmt(t.out).padStart(7)}${C.r}  calls ${t.calls}`);
 }
-const pct = cloudTotal + localTotal ? Math.round((localTotal / (cloudTotal + localTotal)) * 100) : 0;
-console.log(`${C.b}totals:${C.r} cloud ${C.yel}${fmt(cloudTotal)}${C.r} (incl. cache-writes) · local ${C.grn}${fmt(localTotal)}${C.r} · interns carried ${C.b}${pct}%${C.r} of token load`);
+console.log(`${C.b}${C.cyan}== Subscription peers (Gemini / Grok), last ${days}d ==${C.r}`);
+let peerTotal = 0;
+if (!Object.keys(peers).length) console.log(`  ${C.gray}no logged peer calls (peer-run.mjs writes the log)${C.r}`);
+for (const [key, t] of Object.entries(peers)) {
+  peerTotal += t.in + t.out;
+  console.log(`  ${key.padEnd(26)} in ${C.grn}${fmt(t.in).padStart(7)}${C.r}  out ${C.grn}${fmt(t.out).padStart(7)}${C.r}  calls ${t.calls}`);
+}
+const offloaded = localTotal + peerTotal;
+const grand = cloudTotal + offloaded;
+const pct = grand ? Math.round((offloaded / grand) * 100) : 0;
+console.log(`${C.b}totals:${C.r} cloud ${C.yel}${fmt(cloudTotal)}${C.r} (incl. cache-writes) · local ${C.grn}${fmt(localTotal)}${C.r} · peers ${C.grn}${fmt(peerTotal)}${C.r} · offloaded ${C.b}${pct}%${C.r} of token load`);
+console.log(`${C.gray}peer tokens are flat-rate (subscription) — they cost nothing marginal, unlike cloud${C.r}`);
 console.log(`${C.gray}official plan limits: run /usage in the CLI (server-side, not in transcripts)${C.r}`);
