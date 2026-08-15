@@ -9,6 +9,10 @@
 //
 // APPROVAL: providers marked approval:"ask-per-use" must have the operator's explicit yes for
 // THIS call before this script is run. Being logged in is not permission. See home CLAUDE.md.
+//
+// THE ONE EXEMPTION: --selftest. It sends a FIXED prompt, ignores every argument and stdin, and
+// so cannot carry the operator's data off the machine. That is why it needs no approval — the
+// exemption is enforced by this code path, not by anyone remembering the rule.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -22,6 +26,11 @@ const home = os.homedir();
 const registryPath = path.join(home, '.claude', 'helpers', 'providers.json');
 const metricsDir = path.join(home, '.claude', 'metrics');
 const TIMEOUT_MS = Number(process.env.ALFRED_PROVIDER_TIMEOUT_MS ?? 600_000);
+
+// The self-test prompt is a constant on purpose. It carries no operator content, which is the
+// entire reason --selftest is exempt from the approval gate. Do not make it configurable.
+const SELFTEST_TOKEN = 'ALFRED_OK';
+const SELFTEST_PROMPT = `Reply with exactly the token ${SELFTEST_TOKEN} and nothing else.`;
 
 function loadRegistry() {
   if (!fs.existsSync(registryPath)) die(`registry not found at ${registryPath}`, 1);
@@ -44,12 +53,13 @@ function expandPath(p) {
 // --- Argument parsing ---
 
 function parseArgs(argv) {
-  const opts = { role: null, model: null, effort: null, list: false };
+  const opts = { role: null, model: null, effort: null, list: false, selftest: false };
   const words = [];
   let provider = null;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--list') { opts.list = true; continue; }
+    if (a === '--selftest') { opts.selftest = true; continue; }
     if (a === '--role' && argv[i + 1]) { opts.role = argv[++i]; continue; }
     if (a === '--model' && argv[i + 1]) { opts.model = argv[++i]; continue; }
     if (a === '--effort' && argv[i + 1]) { opts.effort = argv[++i]; continue; }
@@ -172,8 +182,13 @@ if (spec.transport === 'host') {
   die(`'${provider}' is the HOST that runs Alfred — reach it through the Agent tool, not provider-run.`, 1);
 }
 
-const prompt = [argPrompt, readStdin()].filter(Boolean).join('\n\n');
+// --selftest DISCARDS argPrompt and stdin rather than merging them. That is what makes the
+// approval exemption safe: there is no path by which operator content reaches the provider here.
+const prompt = opts.selftest ? SELFTEST_PROMPT : [argPrompt, readStdin()].filter(Boolean).join('\n\n');
 if (!prompt.trim()) die('empty prompt (pass text as an argument or on stdin)', 1);
+if (opts.selftest && argPrompt) {
+  console.error(`note: --selftest ignores any prompt or stdin by design; sending the fixed probe only.`);
+}
 
 // --model wins over --role; --role looks the model up in the registry for this provider.
 const model = opts.model ?? (opts.role ? spec.roles?.[opts.role] ?? null : null);
@@ -186,6 +201,27 @@ const out = spec.transport === 'ollama-http'
   ? await runOllama(spec, prompt, model)
   : runCli(spec, prompt, model, opts.effort);
 
+const elapsed = Date.now() - started;
+
+if (opts.selftest) {
+  const passed = out.text.includes(SELFTEST_TOKEN);
+  const detail = `${spec.label} · ${out.model ?? model ?? 'default'} · ${elapsed}ms · ${out.inTokens} in / ${out.outTokens} out`;
+  console.log(passed
+    ? `PASS  ${provider} reachable and responding — ${detail}`
+    : `FAIL  ${provider} responded but did not echo ${SELFTEST_TOKEN} — ${detail}\n      got: ${out.text.slice(0, 200)}`);
+  logUsage(provider, spec, {
+    ts: new Date().toISOString(),
+    model: out.model ?? model ?? 'default',
+    role: 'selftest',
+    in_tokens: out.inTokens,
+    out_tokens: out.outTokens,
+    prompt_chars: prompt.length,
+    response_chars: out.text.length,
+    duration_ms: elapsed,
+  });
+  process.exit(passed ? 0 : 4);
+}
+
 process.stdout.write(out.text);
 
 logUsage(provider, spec, {
@@ -196,5 +232,5 @@ logUsage(provider, spec, {
   out_tokens: out.outTokens,
   prompt_chars: prompt.length,
   response_chars: out.text.length,
-  duration_ms: Date.now() - started,
+  duration_ms: elapsed,
 });

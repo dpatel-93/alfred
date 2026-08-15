@@ -98,6 +98,11 @@ For anything installed but not signed in, give them the exact login command the 
 them run it — you cannot log in on their behalf, and their session may block the installer scripts
 anyway. Then re-run the detection so the result is evidence rather than assumption.
 
+Detection only proves a provider is *installed and signed in*. To prove it actually answers, run
+`node ~/.claude/helpers/provider-run.mjs <id> --selftest`, which sends a fixed probe and prints
+PASS or FAIL. It needs no approval even for gated providers, because it discards any prompt and
+stdin and so cannot carry the user's content anywhere.
+
 Two things to say out loud, because both cost real money if misunderstood:
 
 - **A consumer subscription is not API access.** Gemini, Grok and Codex all bill their chat

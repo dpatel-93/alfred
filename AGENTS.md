@@ -96,6 +96,15 @@ Rules:
 - **How to ask.** One line, before spending: what the peer would be asked, why Claude is the worse
   tool for it, and which peer. Then wait. If the CEO says no, do it on Claude and move on — do not
   re-ask, and do not treat a peer as a fallback when Claude work is going badly.
+- **THE ONE EXEMPTION — connectivity checks need no approval.**
+  `node ~/.claude/helpers/provider-run.mjs <provider> --selftest` sends a FIXED probe, discards any
+  prompt and stdin, and prints PASS/FAIL. Run it freely: after a login, when a call fails, or when
+  a provider has been idle long enough that its session may have lapsed.
+  The gate protects the CEO's *content* leaving the machine, and this path structurally cannot
+  carry any — verified: identical input-token count with and without operator text appended.
+  **This exemption is the `--selftest` code path, not a judgement call.** Any prompt Alfred composes
+  is work and needs approval, however trivial it looks. Never hand-roll a "quick test" prompt to
+  claim this exemption — if it is not `--selftest`, it is a peer call and it gets asked for.
 - **Peers are sideways, not upward.** They sit beside the org, not in the chain of command, and are
   reached through `node ~/.claude/helpers/provider-run.mjs <provider> "<prompt>"` so usage is logged
   and visible in `/tokens`. Once approved, three jobs only: (a) bulk work that would otherwise burn
