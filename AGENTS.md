@@ -20,13 +20,43 @@ if it cannot delegate at all, do the work yourself but keep the verification obl
 
 ## Connected providers
 
-| id | provider | cost | approval |
-|---|---|---|---|
-| `claude` | Claude (Anthropic) | subscription | no gate |
-| `gemini` | Gemini (Google, via Antigravity CLI) | subscription | **ask first, every use** |
-| `grok` | Grok (xAI, via Grok Build CLI) | subscription | **ask first, every use** |
-| `codex` | Codex (OpenAI) | subscription | **ask first, every use** |
-| `ollama` | Ollama (local models) | local | no gate |
+| id | provider | specialism | cost | approval |
+|---|---|---|---|---|
+| `claude` | Claude (Anthropic) | — | subscription | no gate |
+| `gemini` | Gemini (Google, via Antigravity CLI) | THE READER — volume and senses | subscription | **ask first, every use** |
+| `grok` | Grok (xAI, via Grok Build CLI) | THE SCOUT — the live world, right now | subscription | **ask first, every use** |
+| `codex` | Codex (OpenAI) | — | subscription | **ask first, every use** |
+| `ollama` | Ollama (local models) | — | local | no gate |
+
+**Route to a provider for its specialism, not to save tokens.** Cost is the tiebreak, never the
+reason — a cheap answer from the wrong specialist is not a saving.
+
+### `gemini` — THE READER — volume and senses
+
+**Route here for:**
+- Anything enormous: sprawling docs, whole-codebase reads, long transcripts. 1M-token context.
+- Anything visual or recorded: it natively ingests images, audio and video (900 images, ~1h video, ~9.5h audio per call) rather than needing them described.
+- Fast first-pass analysis where latency matters — fastest of the three at ~138 t/s.
+- OVERFLOW CAPACITY: `agy models` also serves claude-opus-4-6-thinking and claude-sonnet-4-6 on the Google subscription. Verified working. Useful when Anthropic limits are the binding constraint.
+
+**Never route here for:**
+- Image GENERATION. Gemini's image models are excellent but the Antigravity CLI exposes no image command — that capability is not reachable from here. Do not promise it.
+- Anything needing AI Studio, which is a website, not a callable surface.
+
+### `grok` — THE SCOUT — the live world, right now
+
+**Route here for:**
+- Anything whose answer is happening NOW: is this service degraded for other people, is this breaking change biting anyone, what are developers actually saying about this library.
+- Native X search and web search are built-in tools, not add-ons. Live access to X posts and developer chatter is the one thing no other provider has.
+- Contrarian angles — a deliberately different read on a design or conclusion.
+- Very large single-pass reads (2M context) where Gemini is busy or unavailable.
+
+**Never route here for:**
+- ESTABLISHING FACTS. Grok measured ~64% hallucination on AA-Omniscience where Claude measured 0%. It is fast and confidently wrong often enough that its output must never be treated as settled.
+- Anything that feeds a decision without a Claude verification pass in between.
+
+**Output contract:** LEAD, NOT FACT. Everything Grok returns is a lead to verify, never a finding to act on. Report it as 'Grok reports X — unverified' and ground it before it reaches a decision. This is not optional politeness; it is the documented failure mode of this provider.
+
 
 - Discover what this machine can reach: `node ~/.claude/helpers/provider-setup.mjs`
 - Dispatch to a provider: `node ~/.claude/helpers/provider-run.mjs <id> "<prompt>" [--role manager]`
@@ -107,12 +137,23 @@ Rules:
   claim this exemption — if it is not `--selftest`, it is a peer call and it gets asked for.
 - **Peers are sideways, not upward.** They sit beside the org, not in the chain of command, and are
   reached through `node ~/.claude/helpers/provider-run.mjs <provider> "<prompt>"` so usage is logged
-  and visible in `/tokens`. Once approved, three jobs only: (a) bulk work that would otherwise burn
-  Claude limits, (b) reading material too large to be worth a Claude context, (c) **adversarial
-  second opinion** — the one thing the interns cannot do, because a peer is a different frontier
-  model with different training, so its disagreement is real evidence where Claude-checking-Claude
-  is not. Worth PROPOSING for the "refute this" seat in an E2/E3 verification with no deterministic
-  falsifier — proposing, not assuming.
+  and visible in `/tokens`. Route to a peer for its SPECIALISM, not to save tokens — cost is the
+  tiebreak, never the reason. `providers.json` carries each one's `routeFor` / `neverRouteFor`.
+
+  | Peer | Specialism | Propose it when |
+  |---|---|---|
+  | **gemini** | THE READER — volume and senses | Something enormous (1M context) or visual/recorded. It ingests images, audio and video natively rather than needing them described. Also serves Claude Opus 4.6 / Sonnet 4.6 on Google's subscription — overflow capacity when Anthropic limits bind. |
+  | **grok** | THE SCOUT — the live world, right now | The answer exists in the present moment: is this degraded for others, is this breaking change biting anyone, what are developers actually saying. Native X search is the one capability no other provider has. |
+
+- **GROK'S OUTPUT IS A LEAD, NEVER A FACT.** It measured ~64% hallucination on AA-Omniscience where
+  Claude measured 0%. Report it as *"Grok reports X — unverified"* and ground it before it touches a
+  decision. Grok finds the thread; Claude checks whether the thread is real. Routing Grok for
+  *discovery* is playing to its strength; routing it for *truth* is the documented way to get burned.
+- **Do not promise image generation.** Gemini's image models are excellent and the Antigravity CLI
+  exposes no way to reach them. Multimodal INPUT works; generation does not.
+- A peer remains the right proposal for the "refute this" seat in an E2/E3 verification with no
+  deterministic falsifier — a different frontier model's disagreement is real evidence where
+  Claude-checking-Claude is not. Proposing, not assuming.
 - **Peer output is a draft, exactly like intern output** — never shipped unreviewed. A peer is
   cheaper than Claude but not more trustworthy, and it has not read this framework's context.
 - Peers are agentic CLIs that can edit files and run commands. Invoke them prompt-only; never pass

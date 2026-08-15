@@ -53,15 +53,31 @@
     "loginCmd": "agy  (first run opens a browser; use a Google AI Pro/Ultra account)",
     "authPaths": ["~/.gemini/antigravity-cli"],
     "apiKeyEnv": "GEMINI_API_KEY",
+    "overflowModels": {
+      "_comment": "Antigravity also serves these on the GOOGLE subscription — verified 2026-08-15. Reach with --model when Anthropic limits are the binding constraint, not by default.",
+      "c-suite": "claude-opus-4-6-thinking",
+      "manager": "claude-sonnet-4-6"
+    },
     "cost": "subscription",
     "approval": "ask-per-use",
-    "notes": "Gemini CLI's Google login was retired 2026-06-18 for consumer tiers; Antigravity CLI is the only subscription login path. GEMINI_API_KEY is the metered alternative.",
+    "specialism": "THE READER — volume and senses",
+    "routeFor": [
+      "Anything enormous: sprawling docs, whole-codebase reads, long transcripts. 1M-token context.",
+      "Anything visual or recorded: it natively ingests images, audio and video (900 images, ~1h video, ~9.5h audio per call) rather than needing them described.",
+      "Fast first-pass analysis where latency matters — fastest of the three at ~138 t/s.",
+      "OVERFLOW CAPACITY: `agy models` also serves claude-opus-4-6-thinking and claude-sonnet-4-6 on the Google subscription. Verified working. Useful when Anthropic limits are the binding constraint."
+    ],
+    "neverRouteFor": [
+      "Image GENERATION. Gemini's image models are excellent but the Antigravity CLI exposes no image command — that capability is not reachable from here. Do not promise it.",
+      "Anything needing AI Studio, which is a website, not a callable surface."
+    ],
+    "notes": "Gemini CLI's Google login was retired 2026-06-18 for consumer tiers; Antigravity CLI is the only subscription login path. GEMINI_API_KEY is the metered alternative. Note ~17k input tokens of fixed overhead per headless call, which burns quota faster than the prompt size suggests.",
     "roles": {
-      "c-suite": null,
-      "vp": null,
-      "manager": null,
-      "employee": null,
-      "intern": null
+      "c-suite": "gemini-3.1-pro-high",
+      "vp": "gemini-3.1-pro-high",
+      "manager": "gemini-3.7-flash-high",
+      "employee": "gemini-3.7-flash-medium",
+      "intern": "gemini-3.7-flash-low"
     }
   },
 
@@ -85,7 +101,19 @@
     "apiKeyEnv": "XAI_API_KEY",
     "cost": "subscription",
     "approval": "ask-per-use",
-    "notes": "A consumer SuperGrok / X Premium+ subscription does NOT include xAI API credits — they are separate billing tracks. Sign in; do not buy API credits to use this.",
+    "specialism": "THE SCOUT — the live world, right now",
+    "routeFor": [
+      "Anything whose answer is happening NOW: is this service degraded for other people, is this breaking change biting anyone, what are developers actually saying about this library.",
+      "Native X search and web search are built-in tools, not add-ons. Live access to X posts and developer chatter is the one thing no other provider has.",
+      "Contrarian angles — a deliberately different read on a design or conclusion.",
+      "Very large single-pass reads (2M context) where Gemini is busy or unavailable."
+    ],
+    "neverRouteFor": [
+      "ESTABLISHING FACTS. Grok measured ~64% hallucination on AA-Omniscience where Claude measured 0%. It is fast and confidently wrong often enough that its output must never be treated as settled.",
+      "Anything that feeds a decision without a Claude verification pass in between."
+    ],
+    "outputContract": "LEAD, NOT FACT. Everything Grok returns is a lead to verify, never a finding to act on. Report it as 'Grok reports X — unverified' and ground it before it reaches a decision. This is not optional politeness; it is the documented failure mode of this provider.",
+    "notes": "A consumer SuperGrok / X Premium+ subscription does NOT include xAI API credits — they are separate billing tracks. Sign in; do not buy API credits to use this. Grok Build natively reads AGENTS.md, CLAUDE.md and ~/.claude/skills — Alfred's charter already loads in it (verified via 'grok inspect').",
     "roles": {
       "c-suite": null,
       "vp": null,
