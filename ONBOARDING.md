@@ -84,7 +84,35 @@ mechanical file placement only, and the explicit "Check ~/.claude/alfred-profile
 already in each charter is what connects the two — nothing about the installer needs to know the
 profile's contents.
 
-## Step 6 — confirm and orient
+## Step 6 — connect their models
+
+Run `node ~/.claude/helpers/provider-setup.mjs` and show them the result. It is read-only: it
+detects what is installed and signed in, sends no prompts, and costs nothing.
+
+Alfred orchestrates **roles** (c-suite, vp, manager, employee, intern), not vendors, so it does not
+require any particular provider — Claude, Gemini via Antigravity, Grok, Codex and local Ollama can
+each fill roles. **Do not assume they have Claude.** Whatever came back ready is what they have;
+one provider is enough to start.
+
+For anything installed but not signed in, give them the exact login command the tool printed and let
+them run it — you cannot log in on their behalf, and their session may block the installer scripts
+anyway. Then re-run the detection so the result is evidence rather than assumption.
+
+Two things to say out loud, because both cost real money if misunderstood:
+
+- **A consumer subscription is not API access.** Gemini, Grok and Codex all bill their chat
+  subscription and their API separately. Signing in uses capacity they already pay for; an API key
+  charges them a second time for the same models. Recommend the login route unless they say
+  otherwise.
+- **Ask before every non-host call.** Providers marked *ask first* in the registry are never invoked
+  without the operator's explicit yes for that specific use. Being signed in is not permission. If
+  they would rather grant standing permission, that is their call to make and record in their own
+  CLAUDE.md — but the default ships closed.
+
+If they want a non-Claude agent to host Alfred, run `node ~/.claude/helpers/export-agents-md.mjs`
+in the project to emit `AGENTS.md`, which Grok Build and Codex read natively.
+
+## Step 7 — confirm and orient
 
 Tell them setup is done, where things landed (`~/.claude/skills/orgagent/references/charters`, `~/.claude/skills`, the
 profile at `~/.claude/alfred-profile.md`), and how to start the HUD if they want it

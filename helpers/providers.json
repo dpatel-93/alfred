@@ -1,0 +1,151 @@
+{
+  "_comment": [
+    "Alfred provider registry — every model surface Alfred can dispatch work to.",
+    "",
+    "Alfred's ORG ROLES (c-suite, vp, manager, employee, intern) are provider-neutral: they",
+    "describe a job, not a vendor. This file is the only place that says which model fills which",
+    "role for a given provider, so a user with Gemini + Ollama and no Claude still gets a working",
+    "org. Add a provider by adding a block here — no code change required.",
+    "",
+    "cost: 'subscription' = flat rate already paid, zero marginal cost per call",
+    "      'metered'      = billed per token, real money per call",
+    "      'local'        = runs on the user's own hardware, free",
+    "",
+    "roles: model id per org role. null means 'let the provider pick its default'.",
+    "approval: 'ask-per-use' means Alfred MUST get the operator's yes before each call."
+  ],
+
+  "claude": {
+    "label": "Claude (Anthropic)",
+    "transport": "host",
+    "bin": "claude",
+    "binFallbacks": [],
+    "versionArgs": ["--version"],
+    "loginCmd": "claude  (sign in on first run, or /login)",
+    "authPaths": ["~/.claude/.credentials.json"],
+    "cost": "subscription",
+    "approval": "none",
+    "notes": "Usually the HOST that runs Alfred itself. Reached as the main loop and via the Agent tool, not through provider-run.",
+    "roles": {
+      "c-suite": "opus",
+      "vp": "opus",
+      "manager": "sonnet",
+      "employee": "haiku",
+      "intern": null
+    }
+  },
+
+  "gemini": {
+    "label": "Gemini (Google, via Antigravity CLI)",
+    "transport": "cli",
+    "bin": "agy",
+    "binFallbacks": [
+      "%LOCALAPPDATA%/agy/bin/agy.exe",
+      "~/.agy/bin/agy"
+    ],
+    "versionArgs": ["--version"],
+    "headless": {
+      "argv": ["-p", "{prompt}"],
+      "jsonArgv": ["--output-format", "json"],
+      "modelFlag": "--model",
+      "effortFlag": "--effort"
+    },
+    "loginCmd": "agy  (first run opens a browser; use a Google AI Pro/Ultra account)",
+    "authPaths": ["~/.gemini/antigravity-cli"],
+    "apiKeyEnv": "GEMINI_API_KEY",
+    "cost": "subscription",
+    "approval": "ask-per-use",
+    "notes": "Gemini CLI's Google login was retired 2026-06-18 for consumer tiers; Antigravity CLI is the only subscription login path. GEMINI_API_KEY is the metered alternative.",
+    "roles": {
+      "c-suite": null,
+      "vp": null,
+      "manager": null,
+      "employee": null,
+      "intern": null
+    }
+  },
+
+  "grok": {
+    "label": "Grok (xAI, via Grok Build CLI)",
+    "transport": "cli",
+    "bin": "grok",
+    "binFallbacks": [
+      "~/.grok/bin/grok.exe",
+      "~/.grok/bin/grok"
+    ],
+    "versionArgs": ["--version"],
+    "headless": {
+      "argv": ["-p", "{prompt}"],
+      "jsonArgv": ["--output-format", "json"],
+      "modelFlag": "--model",
+      "effortFlag": null
+    },
+    "loginCmd": "grok login  (SuperGrok or X Premium+ account)",
+    "authPaths": ["~/.grok/auth.json"],
+    "apiKeyEnv": "XAI_API_KEY",
+    "cost": "subscription",
+    "approval": "ask-per-use",
+    "notes": "A consumer SuperGrok / X Premium+ subscription does NOT include xAI API credits — they are separate billing tracks. Sign in; do not buy API credits to use this.",
+    "roles": {
+      "c-suite": null,
+      "vp": null,
+      "manager": null,
+      "employee": null,
+      "intern": null
+    }
+  },
+
+  "codex": {
+    "label": "Codex (OpenAI)",
+    "transport": "cli",
+    "bin": "codex",
+    "binFallbacks": [
+      "~/.codex/bin/codex.exe",
+      "~/.codex/bin/codex"
+    ],
+    "versionArgs": ["--version"],
+    "headless": {
+      "argv": ["exec", "{prompt}"],
+      "jsonArgv": [],
+      "modelFlag": "--model",
+      "effortFlag": null
+    },
+    "loginCmd": "codex login  (add --device-code if no browser is available)",
+    "authPaths": ["~/.codex/auth.json"],
+    "apiKeyEnv": "OPENAI_API_KEY",
+    "cost": "subscription",
+    "approval": "ask-per-use",
+    "notes": "Included at no extra cost with ChatGPT Plus/Pro/Business/Edu/Enterprise. Headless is 'codex exec', which never prompts — so --sandbox is the safety control there.",
+    "roles": {
+      "c-suite": null,
+      "vp": null,
+      "manager": null,
+      "employee": null,
+      "intern": null
+    }
+  },
+
+  "ollama": {
+    "label": "Ollama (local models)",
+    "transport": "ollama-http",
+    "bin": "ollama",
+    "binFallbacks": [
+      "%LOCALAPPDATA%/Programs/Ollama/ollama.exe",
+      "/usr/local/bin/ollama"
+    ],
+    "versionArgs": ["--version"],
+    "endpoint": "http://localhost:11434/api/generate",
+    "loginCmd": "none needed — run 'ollama serve', then 'ollama pull <model>'",
+    "authPaths": [],
+    "cost": "local",
+    "approval": "none",
+    "notes": "Free and private — nothing leaves the machine, so no approval gate. Batch workers: a cold model load costs 1-2 min, so batch calls rather than making one-off latency-sensitive ones.",
+    "roles": {
+      "c-suite": null,
+      "vp": null,
+      "manager": null,
+      "employee": "qwen3.5:9b",
+      "intern": "qwen3.5:4b"
+    }
+  }
+}
