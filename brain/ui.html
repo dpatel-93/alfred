@@ -4836,11 +4836,23 @@
   var panelBody = document.getElementById('panel-body');
   var connectedList = document.getElementById('connected-list');
 
-  // Parses a very small inline subset (bold, code, wiki-links, md links) into
-  // an array of DOM nodes/strings for safe appending — never uses innerHTML.
+  // Parses a very small inline subset (bold, italic, code, wiki-links, md
+  // links) into an array of DOM nodes/strings for safe appending — never uses
+  // innerHTML.
+  //
+  // The italic rule is appended LAST in the alternation on purpose: group
+  // numbers are assigned by opening-paren order, so adding it anywhere earlier
+  // would silently renumber m[3]/m[5]/m[6] and break wiki-links and md links.
+  //
+  // Its word-boundary guards are what make it safe to run over this corpus at
+  // all. Plain `_(.+?)_` would eat the middle of every snake_case identifier
+  // the panes display — TWENTY_FIRST_API_KEY, enabledMcpjsonServers' siblings,
+  // helper filenames — turning "FIRST_API" into italics. Requiring a non-word
+  // character on both flanks means an underscore inside a word can never open
+  // or close emphasis, which is the same rule real markdown uses.
   function inlineNodes(text) {
     var out = [];
-    var pattern = /`([^`]+)`|\*\*([^*]+)\*\*|\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]*))?\]\]|\[([^\]]+)\]\(([^)]+)\)/g;
+    var pattern = /`([^`]+)`|\*\*([^*]+)\*\*|\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]*))?\]\]|\[([^\]]+)\]\(([^)]+)\)|(?<![A-Za-z0-9_])_([^_\n]+)_(?![A-Za-z0-9_])/g;
     var last = 0;
     var matches = text.matchAll(pattern);
     for (var m of matches) {
@@ -4871,6 +4883,8 @@
         } else {
           out.push(m[5] + ' (' + href + ')');
         }
+      } else if (m[7] !== undefined) {
+        out.push(el('em', null, [m[7]]));
       }
       last = m.index + m[0].length;
     }

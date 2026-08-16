@@ -95,14 +95,39 @@ try {
   fs.rmSync(ROOT, { recursive: true, force: true });
   fs.mkdirSync(HOME_DIR, { recursive: true });
 
+  // Seed a pre-2026-08-14 agents/ directory so the installer's legacy handling
+  // is exercised rather than assumed. Roles stopped shipping as standing agent
+  // definitions on that date and now live inside skills/orgagent, so a leftover
+  // agents/ dir would quietly re-register 69 stale charters on every session.
+  const legacyAgents = path.join(CLAUDE_HOME, 'agents');
+  fs.mkdirSync(legacyAgents, { recursive: true });
+  fs.writeFileSync(path.join(legacyAgents, 'stale-vp.md'), '---\nname: stale-vp\n---\n\nA charter from before the move.\n');
+
   let ranOk = true, runErr = '';
   try { runInstaller(HOME_DIR, CLAUDE_HOME); } catch (err) { ranOk = false; runErr = err.message; }
   chk('the installer runs to completion', ranOk, runErr.slice(0, 300));
 
-  for (const d of ['agents', 'skills', 'commands', 'helpers']) {
+  // 'agents' is deliberately absent from this list — see the legacy assertions
+  // below. Asserting it populated was a stale expectation that failed on every
+  // run after the move, which is worse than no coverage: a permanently red
+  // check trains everyone to read the suite as "1 known failure" and stop
+  // looking.
+  for (const d of ['skills', 'commands', 'helpers']) {
     const n = walk(path.join(CLAUDE_HOME, d)).length;
     chk(`${d}/ is populated`, n > 0, `${n} files`);
   }
+
+  // What replaced agents/: the role definitions ship inside the orgagent skill.
+  const charterDir = path.join(CLAUDE_HOME, 'skills', 'orgagent', 'references', 'charters');
+  const charterCount = walk(charterDir).filter((p) => p.toLowerCase().endsWith('.md')).length;
+  chk('role charters install under skills/orgagent/references/charters/', charterCount > 0, `${charterCount} charters`);
+
+  // And the legacy directory is parked, not left in place to be re-registered.
+  chk('a pre-existing agents/ directory is moved out of the way',
+    !fs.existsSync(legacyAgents), fs.existsSync(legacyAgents) ? 'agents/ still present after install' : '');
+  const parked = walk(path.join(CLAUDE_HOME, 'backups')).filter((p) => p.endsWith('stale-vp.md'));
+  chk('and its contents are preserved in backups/, never deleted', parked.length === 1,
+    `${parked.length} copies found`);
 
   const settingsPath = path.join(CLAUDE_HOME, 'settings.json');
   let settings = null;

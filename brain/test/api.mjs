@@ -293,6 +293,47 @@ for (const { it, d } of mcpDetails) {
 }
 chk('mcp config previews mask every literal env/header value', secretLeaks.length === 0, secretLeaks.join(', ').slice(0, 300));
 
+// --- inlineNodes' emphasis rule must not eat snake_case -------------------
+// The italic rule added to renderMarkdown is the dangerous kind of regex: a
+// naive `_(.+?)_` italicises the middle of every snake_case identifier these
+// panes display — TWENTY_FIRST_API_KEY becomes TWENTY<em>FIRST</em>API_KEY, and
+// it reads as styling rather than as corruption, so nobody reports it.
+//
+// The pattern is lifted out of the SHIPPED ui.html rather than restated here.
+// A copy of the regex would keep passing after someone edited the real one,
+// which is the specific way this class of test rots.
+const uiSrc = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname).replace(/^\/([A-Za-z]:)/, '$1'), '..', 'ui.html'), 'utf8');
+const patternLine = /var pattern = (\/.*\/g);/.exec(uiSrc);
+chk('inlineNodes\' inline pattern is still findable in ui.html', !!patternLine, 'pattern line not found — this test can no longer see what ships');
+
+if (patternLine) {
+  // eslint-disable-next-line no-eval
+  const inlinePattern = eval(patternLine[1]);
+  const emphasised = (text) => {
+    const found = [];
+    for (const m of text.matchAll(new RegExp(inlinePattern.source, 'g'))) {
+      if (m[7] !== undefined) found.push(m[7]);
+    }
+    return found;
+  };
+
+  const CASES = [
+    ['A _real emphasis_ span', ['real emphasis'], 'plain prose emphasis still works'],
+    ['TWENTY_FIRST_API_KEY', [], 'a screaming-snake env var is left whole'],
+    ['some_snake_case_name here', [], 'a lowercase snake_case identifier is left whole'],
+    ['enabledMcpjsonServers and disabled_mcp_servers', [], 'mixed identifiers are left whole'],
+    ['_leading and trailing_ both flank whitespace', ['leading and trailing'], 'emphasis at a line edge works'],
+    ['a _b_ and c_d_e', ['b'], 'emphasis next to an identifier does not bleed into it'],
+  ];
+  const emphasisFailures = [];
+  for (const [input, want, why] of CASES) {
+    const got = emphasised(input);
+    if (JSON.stringify(got) !== JSON.stringify(want)) emphasisFailures.push(`${why}: ${JSON.stringify(input)} -> ${JSON.stringify(got)}, wanted ${JSON.stringify(want)}`);
+  }
+  chk('the emphasis rule italicises prose and never splits snake_case identifiers',
+    emphasisFailures.length === 0, emphasisFailures.join(' | ').slice(0, 400));
+}
+
 // --- WS5 unified search manifest ---
 // The contract the in-page fuzzy matcher depends on. Every assertion here is a
 // field openSearchHit() dereferences, so a silent shape change in the manifest
