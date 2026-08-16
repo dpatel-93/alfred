@@ -175,6 +175,10 @@ const typeThresholds = [
   ['command', 'user', 8], ['command', 'plugin', 15],
   ['hook', 'user', 3], ['hook', 'plugin', 6],
   ['instruction', 'user', 2],
+  // MCP servers come from ~/.claude.json, ~/.mcp.json and enabled plugins.
+  // No plugin threshold: which plugins are switched on is the operator's call
+  // and a suite that fails when they turn one off is testing their preferences.
+  ['mcp', 'user', 3],
 ];
 for (const [type, origin, min] of typeThresholds) {
   const n = countOf(type, origin);
@@ -243,6 +247,51 @@ chk('hook item markdown contains its own command and real script source',
   amHookDetail.s===200 && typeof amHookDetail.d?.markdown==='string'
   && amHookDetail.d.markdown.includes('auto-memory-hook.mjs') && amHookDetail.d.markdown.includes('AutoMemoryBridge'),
   `got ${amHookDetail.s} hookName=${amHook?.name} mdLen=${amHookDetail.d?.markdown?.length}`);
+
+// MCP items are synthesized from JSON config, so they get the same two checks
+// hooks get — the preview really renders, and it renders the right server —
+// plus the one that only MCP needs: the redaction actually holds. An API key
+// pasted literally into `headers` is the normal way people configure a remote
+// server, and this pane is screenshotted for the README.
+const mcpItems = Array.isArray(items) ? items.filter((it) => it.type === 'mcp') : [];
+chk('/api/library returns mcp items to exercise', mcpItems.length > 0, `got ${mcpItems.length}`);
+
+const mcpDetails = [];
+for (const it of mcpItems) {
+  const d = await j('/api/library/item?id=' + encodeURIComponent(it.id));
+  mcpDetails.push({ it, d });
+}
+chk('every mcp item resolves to 200 with non-empty markdown',
+  mcpDetails.length > 0 && mcpDetails.every((x) => x.d.s === 200 && typeof x.d.d?.markdown === 'string' && x.d.d.markdown.length > 0),
+  mcpDetails.find((x) => x.d.s !== 200)?.it?.id || '');
+
+chk('mcp markdown names its transport and where it is declared',
+  mcpDetails.every((x) => /\*\*Transport\*\*/.test(x.d.d?.markdown || '') && /\*\*Declared in\*\*/.test(x.d.d?.markdown || '')),
+  mcpDetails.find((x) => !/\*\*Transport\*\*/.test(x.d.d?.markdown || ''))?.it?.id || '');
+
+// Parse the JSON block back out and assert every env/header value either
+// references a ${VAR} (a NAME, safe — `Bearer ${TOKEN}` is the common shape) or
+// is fully masked, AND that nothing outside a reference is long enough to be a
+// credential. A literal surviving here is a published secret, so this is the
+// falsifier that matters most on this pane.
+const PLACEHOLDER = /\$\{[A-Za-z_][A-Za-z0-9_]*\}/g;
+const CREDENTIAL_RUN = /[A-Za-z0-9_-]{12,}/;
+const secretLeaks = [];
+for (const { it, d } of mcpDetails) {
+  const block = /```json\n([\s\S]*?)\n```/.exec(d.d?.markdown || '');
+  if (!block) { secretLeaks.push(`${it.id}: no json block`); continue; }
+  let cfg;
+  try { cfg = JSON.parse(block[1]); } catch { secretLeaks.push(`${it.id}: unparsable json block`); continue; }
+  for (const key of ['env', 'headers']) {
+    for (const [k, v] of Object.entries(cfg[key] || {})) {
+      const s = String(v).trim();
+      if (s === '' || /^•+$/.test(s)) continue;
+      if (s.match(PLACEHOLDER) && !CREDENTIAL_RUN.test(s.replace(PLACEHOLDER, ' '))) continue;
+      secretLeaks.push(`${it.id}: ${key}.${k}`);
+    }
+  }
+}
+chk('mcp config previews mask every literal env/header value', secretLeaks.length === 0, secretLeaks.join(', ').slice(0, 300));
 
 // --- WS5 unified search manifest ---
 // The contract the in-page fuzzy matcher depends on. Every assertion here is a

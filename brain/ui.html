@@ -1556,6 +1556,7 @@
         <button class="filter-chip" data-filter="skill">Skills</button>
         <button class="filter-chip" data-filter="command">Commands</button>
         <button class="filter-chip" data-filter="hook">Hooks</button>
+        <button class="filter-chip" data-filter="mcp">MCP</button>
         <button class="filter-chip" data-filter="instruction">Instructions</button>
       </div>
       <div class="filter-chips" data-filter-group="library-origin">
@@ -3152,7 +3153,7 @@
 
   // ============================================================
   // LIBRARY — searchable/filterable master-detail view of every skill,
-  // command, hook, and instruction on disk, backed by GET /api/library
+  // command, hook, MCP server and instruction on disk, backed by GET /api/library
   // (ungated, same posture as /api/agent-directory) for the list and
   // GET /api/library/item?id=<id> for an item's full text. Replaces the old
   // card-grid Skills Library view and the now-404ing /api/skills-directory.
@@ -3165,7 +3166,10 @@
   var libraryOriginFilter = 'all';
   var libraryQuery = '';
   var librarySelected = null; // item id currently shown in the preview pane
-  var LIBRARY_TYPE_ACCENT = { skill: 'var(--mint)', command: 'var(--blue)', hook: 'var(--amber)', instruction: 'var(--violet)' };
+  // MCP takes the cyan "instrument / trim" token rather than a fifth warm hue:
+  // amber and orange are a coin-toss apart at badge size, and an MCP server IS
+  // an external instrument bolted onto the setup, so the semantic already fits.
+  var LIBRARY_TYPE_ACCENT = { skill: 'var(--mint)', command: 'var(--blue)', hook: 'var(--amber)', instruction: 'var(--violet)', mcp: 'var(--alfred-cyan)' };
 
   function libraryListRow(it) {
     var row = el('div', 'list-row', []);
@@ -3217,10 +3221,11 @@
         head.appendChild(typeBadge);
         head.appendChild(el('span', 'badge ' + (out.data.origin === 'plugin' ? 'idle' : 'live'), [out.data.origin || 'unknown']));
         if (out.data.source) head.appendChild(el('div', 'preview-source', [out.data.source]));
-        // Hooks have no file of their own — they are synthesized from the
-        // settings.json that registers them — so they get no edit entry point
-        // here. Editing that settings.json is a Protocols row.
-        if (out.data.type !== 'hook') head.appendChild(editSourceButton(id));
+        // Hooks and MCP servers have no file of their own — each is synthesized
+        // from one key inside a JSON config that holds much else besides — so
+        // they get no edit entry point here. Editing that config is a Protocols
+        // row, and `claude mcp add/remove` is the supported path for servers.
+        if (out.data.type !== 'hook' && out.data.type !== 'mcp') head.appendChild(editSourceButton(id));
         preview.appendChild(head);
         var md = el('div');
         preview.appendChild(md);
@@ -5119,6 +5124,7 @@
   var SEARCH_KIND_LABEL = {
     note: 'note', agent: 'agent', skill: 'skill',
     command: 'command', hook: 'hook', instruction: 'instruction',
+    mcp: 'MCP server',
   };
 
   function fuzzySearch(q, limit) {
@@ -5692,7 +5698,7 @@
         document.getElementById('stat-notes').textContent = fc.total.toLocaleString();
         var parts = [
           [fc.notes, 'notes'], [fc.agents, 'agents'], [fc.skill, 'skills'],
-          [fc.command, 'cmds'], [fc.hook, 'hooks'], [fc.instruction, 'instr'],
+          [fc.command, 'cmds'], [fc.hook, 'hooks'], [fc.mcp, 'mcp'], [fc.instruction, 'instr'],
         ].filter(function (p) { return p[0] > 0; })
          .map(function (p) { return p[0] + ' ' + p[1]; });
         bd.textContent = parts.join(' · ');

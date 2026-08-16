@@ -2868,7 +2868,7 @@ function getSkillsMap() {
 }
 
 // GET /api/library and GET /api/library/item — unified, browsable list of
-// every skill/command/hook/instruction from BOTH ~/.claude (origin 'user')
+// every skill/command/hook/MCP-server/instruction from BOTH ~/.claude (origin 'user')
 // and installed plugins (origin 'plugin'). Replaces /api/skills-directory
 // (one commit old, no external consumers). Ungated like /api/agent-directory
 // and the old skills-directory route — same class of local-config metadata.
@@ -3255,6 +3255,312 @@ function addLibraryHookItems(map) {
   }
 }
 
+// --- MCP servers (user config files + enabled plugins) --------------------
+// "Installed and connected" means declared in a config file THIS machine reads
+// at startup. Deliberately NOT the catalogue of MCP servers that exist in the
+// world — that list is enormous, changes without the operator doing anything,
+// and belongs to a directory/marketplace surface, not to the Library, whose
+// whole premise is "what is actually wired into my setup right now".
+//
+// Four sources, named the way Claude Code itself scopes them:
+//   ~/.claude.json     `mcpServers`                → user scope, always active
+//   ~/.claude.json     `projects[<dir>].mcpServers` → project scope, active only in that dir
+//   ~/.mcp.json        `mcpServers`                → checked-in scope, gated by
+//                                                    enabled/disabledMcpjsonServers
+//   <plugin>/.mcp.json                             → plugin scope, ENABLED plugins only
+//
+// Servers reached through claude.ai (Figma, Gmail, the Economic Index) are
+// absent on purpose: they are configured account-side and leave nothing on
+// disk, so this process cannot report them without guessing. A pane that
+// guesses is worse than one that is honestly partial.
+const USER_CLAUDE_JSON_PATH = path.join(os.homedir(), '.claude.json');
+const HOME_MCP_JSON_PATH = path.join(os.homedir(), '.mcp.json');
+const REDACTED = '•'.repeat(8);
+
+// A config value is safe to display only when it is entirely a ${VAR}
+// reference — that NAMES a secret, it is not one. Anything else is a literal
+// that may BE the credential (an API key pasted straight into `headers` is the
+// common shape), and these panes get screenshotted for the README. This
+// over-redacts harmless values like `npm_config_update_notifier: "false"`,
+// which is the correct direction to be wrong in: the alternative is guessing
+// from key names, and that heuristic fails open.
+// `Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}` is the shape half the remote servers
+// use, and masking it whole hides the useful half (which variable to set) to
+// protect the useless half (the word "Bearer"). So: a value survives only if it
+// references at least one ${VAR} AND everything outside those references is too
+// short to be a credential. `false` has no reference and gets masked — harmless
+// over-redaction, and the correct direction to be wrong in.
+const ENV_PLACEHOLDER_RE = /\$\{[A-Za-z_][A-Za-z0-9_]*\}/g;
+const CREDENTIAL_RUN_RE = /[A-Za-z0-9_-]{12,}/;
+const SECRET_ARG_RE = /(key|token|secret|password|passwd|pwd|credential|auth)/i;
+
+function redactConfigValue(v) {
+  const s = String(v ?? '');
+  if (!s) return s;
+  const t = s.trim();
+  if (!t.match(ENV_PLACEHOLDER_RE)) return REDACTED;
+  const literalParts = t.replace(ENV_PLACEHOLDER_RE, ' ');
+  return CREDENTIAL_RUN_RE.test(literalParts) ? REDACTED : t;
+}
+
+// Best-effort, not a guarantee: `--api-key XYZ` and `--token=XYZ` are the two
+// shapes servers actually use, and both are worth catching. An argv that hides
+// a credential some other way will still show it — which is why the JSON block
+// below is a summary of what is configured, never a copy-paste source.
+function redactArgs(args) {
+  const out = [];
+  let redactNext = false;
+  for (const raw of args) {
+    const s = String(raw);
+    if (redactNext) { out.push(REDACTED); redactNext = false; continue; }
+    const eq = s.indexOf('=');
+    if (s.startsWith('-') && eq !== -1 && SECRET_ARG_RE.test(s.slice(0, eq))) { out.push(s.slice(0, eq + 1) + REDACTED); continue; }
+    if (s.startsWith('-') && SECRET_ARG_RE.test(s)) { out.push(s); redactNext = true; continue; }
+    out.push(s);
+  }
+  return out;
+}
+
+// Host and path identify the server; userinfo and query string are where a
+// remote MCP endpoint carries its key, so neither is ever displayed.
+function redactUrl(u) {
+  const raw = String(u ?? '');
+  try {
+    const parsed = new URL(raw);
+    parsed.username = '';
+    parsed.password = '';
+    if (parsed.search) parsed.search = '?…';
+    return parsed.toString();
+  } catch {
+    return raw.split('?')[0];
+  }
+}
+
+function readJsonSafe(file) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; }
+}
+
+// Two file shapes are in the wild and both are correct for where they live:
+// ~/.claude.json and ~/.mcp.json wrap the servers in `mcpServers`, while a
+// plugin's own .mcp.json puts them at the top level. Assuming the wrapper cost
+// this pane the entire plugin category on the first run — the `github` server
+// was configured, enabled, and simply absent. Detected by comparing the list
+// against `claude mcp list`, which is the only check that could have caught it.
+function mcpServerMap(parsed) {
+  if (!parsed || typeof parsed !== 'object') return {};
+  if (parsed.mcpServers && typeof parsed.mcpServers === 'object') return parsed.mcpServers;
+  // Top-level shape: keep only values that actually describe a server, so a
+  // stray metadata key never renders as a phantom entry.
+  const out = {};
+  for (const [name, cfg] of Object.entries(parsed)) {
+    if (cfg && typeof cfg === 'object' && !Array.isArray(cfg) && (cfg.command || cfg.url)) out[name] = cfg;
+  }
+  return out;
+}
+
+// Per-project MCP overrides live in ~/.claude.json under projects[<dir>], and
+// that is the record Claude Code actually honours:
+//   enabledMcpjsonServers / disabledMcpjsonServers — the remembered answer to
+//     the "trust this .mcp.json?" prompt, kept per project
+//   disabledMcpServers — a server switched off in that project, by plain name
+//     or as "plugin:<plugin>:<name>" for one a plugin ships
+//
+// The user-level enabledMcpjsonServers in settings.local.json is deliberately
+// NOT consulted. This machine lists "stitch" there and `claude mcp list` still
+// reports it as pending approval — so trusting that key would print a confident
+// "approved" over a server that is not loaded, which is precisely the lie this
+// pane exists to avoid. Caught by diffing the pane against `claude mcp list`;
+// nothing internal to the HUD could have found it.
+function mcpProjectOverrides() {
+  const j = readJsonSafe(USER_CLAUDE_JSON_PATH) || {};
+  const approved = new Map();
+  const declined = new Map();
+  const switchedOff = new Map();
+  const push = (m, k, dir) => { if (!m.has(k)) m.set(k, []); m.get(k).push(dir); };
+  for (const [dir, cfg] of Object.entries(j.projects || {})) {
+    for (const n of (cfg && cfg.enabledMcpjsonServers) || []) push(approved, n, dir);
+    for (const n of (cfg && cfg.disabledMcpjsonServers) || []) push(declined, n, dir);
+    for (const n of (cfg && cfg.disabledMcpServers) || []) push(switchedOff, n, dir);
+  }
+  return { approved, declined, switchedOff };
+}
+
+function projectCount(list) {
+  const n = (list || []).length;
+  return `${n} project${n === 1 ? '' : 's'}`;
+}
+
+function mcpTransport(cfg) {
+  const declared = String((cfg && cfg.type) || '').toLowerCase();
+  if (declared) return declared;
+  return cfg && cfg.url ? 'http' : 'stdio';
+}
+
+// The one-line "what does this actually run/reach" that the list row shows.
+// Tildified for the same reason every other Library row is: a locally-built
+// server is launched by absolute path, and that path carries the account name
+// into any screenshot of this pane.
+function mcpEndpoint(cfg) {
+  if (cfg && cfg.url) return redactUrl(cfg.url);
+  const args = Array.isArray(cfg && cfg.args) ? redactArgs(cfg.args) : [];
+  return tildify([cfg && cfg.command, ...args].filter(Boolean).map(String).join(' ')) || '(no command)';
+}
+
+function redactedMcpConfig(cfg) {
+  const out = {};
+  for (const [k, v] of Object.entries(cfg || {})) {
+    if (k === 'env' || k === 'headers') {
+      out[k] = Object.fromEntries(Object.entries(v || {}).map(([ek, ev]) => [ek, redactConfigValue(ev)]));
+    } else if (k === 'url') {
+      out[k] = redactUrl(v);
+    } else if (k === 'args' && Array.isArray(v)) {
+      out[k] = redactArgs(v);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+function mcpMarkdown(cfg, { scope, source, status }) {
+  const transport = mcpTransport(cfg);
+  const envKeys = Object.keys((cfg && cfg.env) || {});
+  const headerKeys = Object.keys((cfg && cfg.headers) || {});
+  // A bullet list, not one paragraph per field: renderMarkdown() turns each
+  // blank-line-separated block into its own <p>, which spaced six short facts
+  // down the length of the pane. It also has no `_emphasis_` rule — only
+  // `**bold**`, backticks and links — so nothing here uses underscores, which
+  // would render as literal underscores rather than italics.
+  const lines = [
+    `- **Transport** — ${transport}`,
+    `- **${cfg && cfg.url ? 'Endpoint' : 'Command'}** — \`${mcpEndpoint(cfg)}\``,
+    `- **Scope** — ${scope}`,
+    `- **Declared in** — \`${source}\``,
+  ];
+  if (status) lines.push(`- **Status** — ${status}`);
+  if (envKeys.length) lines.push(`- **Environment** — ${envKeys.join(', ')} (names only — values are never displayed)`);
+  if (headerKeys.length) lines.push(`- **Headers** — ${headerKeys.join(', ')} (names only — values are never displayed)`);
+  return lines.join('\n')
+    + '\n\n**Configuration**\n\n```json\n'
+    + tildify(JSON.stringify(redactedMcpConfig(cfg), null, 2))
+    + '\n```\n\nSecrets are masked, so this is a summary of what is configured — not a copy-paste source.\n';
+}
+
+function addOneMcpItem(map, { id, name, cfg, origin, scope, source, status }) {
+  if (!cfg || typeof cfg !== 'object') return;
+  const transport = mcpTransport(cfg);
+  // Status leads the endpoint on purpose: "awaiting approval" changes what the
+  // operator does next, and the 200-char cap should eat the command line rather
+  // than the fact that a server is not actually loaded.
+  map.set(id, {
+    id, type: 'mcp', name,
+    description: truncateDescription([transport, status, scope, mcpEndpoint(cfg)].filter(Boolean).join(' · ')),
+    origin, source, usedBy: [],
+    markdown: mcpMarkdown(cfg, { scope, source, status }),
+  });
+}
+
+// `enabledPlugins` keys are "<plugin>@<marketplace>" and the value is a real
+// boolean — a plugin present in the cache but switched off ships no tools into
+// any session, so listing its MCP server would be a straight lie about what is
+// connected.
+function enabledPluginKeys() {
+  const settings = readJsonSafe(SETTINGS_PATH) || {};
+  const out = [];
+  for (const [key, on] of Object.entries(settings.enabledPlugins || {})) {
+    if (on !== true) continue;
+    const at = key.lastIndexOf('@');
+    if (at <= 0) continue;
+    out.push({ plugin: key.slice(0, at), marketplace: key.slice(at + 1) });
+  }
+  return out;
+}
+
+// Scanned independently of getPluginVersionDirs(): that helper drops any
+// version dir with no skills/commands/agents/hooks, and a plugin whose entire
+// contribution IS an MCP server has exactly zero of those.
+function pluginMcpFiles() {
+  const found = [];
+  for (const { plugin, marketplace } of enabledPluginKeys()) {
+    const pluginDir = path.join(PLUGIN_CACHE_ROOT, marketplace, plugin);
+    let versions;
+    try { versions = fs.readdirSync(pluginDir, { withFileTypes: true }); } catch { continue; }
+    let best = null;
+    for (const entry of versions) {
+      if (!entry.isDirectory()) continue;
+      const file = path.join(pluginDir, entry.name, '.mcp.json');
+      let mtimeMs;
+      try { mtimeMs = fs.statSync(file).mtimeMs; } catch { continue; } // no .mcp.json in this version dir
+      if (!best || mtimeMs > best.mtimeMs) best = { version: entry.name, file, mtimeMs };
+    }
+    if (best) found.push({ plugin, marketplace, version: best.version, file: best.file });
+  }
+  return found;
+}
+
+function addLibraryMcpItems(map) {
+  const ov = mcpProjectOverrides();
+
+  // 1. ~/.claude.json — user scope, plus any project-scoped servers it holds.
+  const userJson = readJsonSafe(USER_CLAUDE_JSON_PATH) || {};
+  for (const [name, cfg] of Object.entries(userJson.mcpServers || {})) {
+    const off = ov.switchedOff.get(name);
+    addOneMcpItem(map, {
+      id: `mcp:user:${name}`, name, cfg, origin: 'user',
+      scope: 'user — active in every project', source: '~/.claude.json',
+      // No status line when there is no override: the scope already says
+      // "active in every project" and repeating it as a status reads as two
+      // separate facts when it is one.
+      status: off ? `switched off in ${projectCount(off)}` : null,
+    });
+  }
+  for (const [projectDir, projectCfg] of Object.entries(userJson.projects || {})) {
+    for (const [name, cfg] of Object.entries((projectCfg && projectCfg.mcpServers) || {})) {
+      addOneMcpItem(map, {
+        id: `mcp:project:${projectDir}:${name}`, name, cfg, origin: 'user',
+        scope: `project — only in ${tildify(projectDir)}`,
+        source: '~/.claude.json', status: null,
+      });
+    }
+  }
+
+  // 2. ~/.mcp.json — the checked-in-config shape. Claude Code asks before
+  // trusting these, and records the answer in settings; reporting a server as
+  // connected when the operator declined it would be the exact failure this
+  // pane exists to prevent.
+  const homeMcp = readJsonSafe(HOME_MCP_JSON_PATH);
+  for (const [name, cfg] of Object.entries(mcpServerMap(homeMcp))) {
+    const yes = ov.approved.get(name);
+    const no = ov.declined.get(name);
+    const parts = [];
+    if (yes) parts.push(`approved in ${projectCount(yes)}`);
+    if (no) parts.push(`declined in ${projectCount(no)}`);
+    addOneMcpItem(map, {
+      id: `mcp:mcpjson:${name}`, name, cfg, origin: 'user',
+      scope: 'file — declared in ~/.mcp.json', source: '~/.mcp.json',
+      status: parts.length ? parts.join(', ')
+        : 'awaiting approval — Claude Code asks the first time it is used in a project',
+    });
+  }
+
+  // 3. Enabled plugins that ship their own server. A plugin can be enabled
+  // globally and still be switched off inside a given project, so the two
+  // states are reported separately rather than collapsed into "on".
+  for (const p of pluginMcpFiles()) {
+    const parsed = readJsonSafe(p.file);
+    if (!parsed) continue;
+    for (const [name, cfg] of Object.entries(mcpServerMap(parsed))) {
+      const off = ov.switchedOff.get(`plugin:${p.plugin}:${name}`);
+      addOneMcpItem(map, {
+        id: `mcp:plugin:${p.marketplace}/${p.plugin}/${name}`, name, cfg, origin: 'plugin',
+        scope: `plugin — ships with ${p.plugin}`,
+        source: `${p.marketplace}/${p.plugin}@${p.version}`,
+        status: off ? `plugin enabled, but switched off in ${projectCount(off)}` : 'enabled',
+      });
+    }
+  }
+}
+
 function buildLibraryMap() {
   const map = new Map(); // id -> entry
   const usedByMap = buildLibraryUsedByMap();
@@ -3262,6 +3568,7 @@ function buildLibraryMap() {
   addLibraryCommandItems(map);
   addLibraryInstructionItems(map);
   addLibraryHookItems(map);
+  addLibraryMcpItems(map);
   return map;
 }
 
@@ -4018,14 +4325,14 @@ function buildBrainActivity(index) {
 // cached maps those views read, so the number in the rail can never disagree
 // with what clicking through actually shows.
 function buildFileCounts(index) {
-  const out = { notes: index.notes.length, agents: 0, skill: 0, command: 0, hook: 0, instruction: 0 };
+  const out = { notes: index.notes.length, agents: 0, skill: 0, command: 0, hook: 0, mcp: 0, instruction: 0 };
   try { out.agents = getCharterMap().size; } catch { /* unreadable roster — leave 0 */ }
   try {
     for (const item of getLibraryMap().values()) {
       if (out[item.type] != null) out[item.type] += 1;
     }
   } catch { /* library scan failed — the notes/agents figures are still honest */ }
-  out.total = out.notes + out.agents + out.skill + out.command + out.hook + out.instruction;
+  out.total = out.notes + out.agents + out.skill + out.command + out.hook + out.mcp + out.instruction;
   return out;
 }
 
