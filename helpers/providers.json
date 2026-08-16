@@ -153,6 +153,49 @@
     }
   },
 
+  "omniroute": {
+    "label": "OmniRoute (self-hosted gateway to ~340 providers)",
+    "transport": "openai-http",
+    "bin": "omniroute",
+    "binFallbacks": [
+      "%APPDATA%/npm/omniroute.cmd",
+      "~/.local/bin/omniroute"
+    ],
+    "versionArgs": ["--version"],
+    "endpoint": "http://localhost:20128/v1/chat/completions",
+    "dashboard": "http://localhost:20128",
+    "loginCmd": "npm install -g omniroute, then 'omniroute' to start the gateway; connect providers in the dashboard at http://localhost:20128",
+    "authPaths": ["~/.omniroute"],
+    "apiKeyEnv": "OMNIROUTE_API_KEY",
+    "cost": "subscription",
+    "approval": "ask-per-use",
+    "specialism": "THE RESERVE — capacity when the bench is empty, and a deliberately different take",
+    "gate": "LAST RESORT OR DELIBERATE CHOICE — never a default, never a convenience.",
+    "routeFor": [
+      "EXHAUSTION: Claude AND Gemini AND Grok are all out of usage. Not one of them — all three. This is the primary reason this provider exists.",
+      "DELIBERATE ALTERNATIVE: the operator explicitly wants a community/open-source model's take on something, as a different perspective rather than as a cheaper one."
+    ],
+    "neverRouteFor": [
+      "Anything, ever, while Claude has capacity. This is not an overflow valve for convenience or cost — Gemini's overflowModels are the sanctioned overflow path and they serve Claude models on Google's subscription.",
+      "ANY work touching secrets, credentials, client data, or a WORK-mode context. The gateway is local but the providers behind it are third parties, and its free tiers are precisely the ones with the least favourable data terms.",
+      "Establishing facts. Same rule as Grok: output is a lead to verify, not a finding."
+    ],
+    "outputContract": "DRAFT ONLY, PROVENANCE NAMED. Always report which underlying model actually answered — the gateway routes dynamically, so 'OmniRoute said X' is not a source. Say 'OmniRoute via <model> reports X — unverified'.",
+    "notes": [
+      "Self-hosted: `npm install -g omniroute` then `omniroute` runs a local gateway on port 20128 exposing an OpenAI-compatible API. Nothing is proxied through a vendor's server — but the PROVIDERS it forwards to are third parties, so the data-handling rule above still binds fully.",
+      "Added 2026-08-16 at the operator's explicit instruction, with exactly the two routing conditions above. The conditions are the point of the entry: without them this is a general-purpose cheap-tokens valve, which is the thing Alfred's Claude-first rule exists to prevent.",
+      "'auto' model selection is available but should NOT be used — it makes the answering model unknowable, which breaks the output contract above. Name a model explicitly.",
+      "MIT licensed. Free tiers exist (Kiro AI, OpenCode Free); treat any free tier as having unfavourable data terms until its terms are read."
+    ],
+    "roles": {
+      "c-suite": null,
+      "vp": null,
+      "manager": null,
+      "employee": null,
+      "intern": null
+    }
+  },
+
   "ollama": {
     "label": "Ollama (local models)",
     "transport": "ollama-http",

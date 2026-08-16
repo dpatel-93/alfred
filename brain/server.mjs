@@ -245,23 +245,83 @@ function loadIndex() {
   return indexCache.value;
 }
 
+// Edge provenance — every link is tagged with how confidently it resolved:
+//
+//   extracted — the link names its target exactly as written (basename matches
+//               the note title character-for-character, and any path it carries
+//               matches where the note actually lives). No guessing involved.
+//   inferred  — resolved only after normalising: case-folded, or a written path
+//               that had to be discarded to find a match.
+//   ambiguous — the name matches several notes and the link gave us nothing to
+//               choose between them. We pick deterministically and say so.
+//
+// This exists because the vault genuinely collides: six notes are titled
+// "README". The old code built `byKey` with `new Map(notes.map(...))`, so those
+// six collapsed to whichever loaded last, and EVERY [[README]] link — including
+// [[Business/README]], whose path was thrown away by linkKey() — drew an edge to
+// that one note. That is a wrong edge, silently, and it is the concrete reason
+// this is a correctness fix and not a cosmetic one. Alfred's charter says never
+// present a finding as verified when the chain says it was inferred; the graph
+// was breaking that rule at the edge level.
+function classifyLink(rawLink, target, candidateCount, pathMatched) {
+  const written = rawLink.split('/').pop().split('\\').pop().trim();
+  const hasPath = rawLink.includes('/') || rawLink.includes('\\');
+
+  if (candidateCount > 1 && !pathMatched) return 'ambiguous';
+  if (written !== target.title) return 'inferred';       // needed case-folding
+  if (hasPath && !pathMatched) return 'inferred';        // wrote a path that didn't match
+  return 'extracted';
+}
+
 function buildGraph() {
   if (graphCache) return graphCache;
   const index = loadIndex();
-  const byKey = new Map(index.notes.map((n) => [noteKey(n.title), n]));
+
+  // key -> [notes], not key -> note. Collisions are real and must survive
+  // the lookup table rather than being silently overwritten by it.
+  const byKey = new Map();
+  for (const n of index.notes) {
+    const k = noteKey(n.title);
+    if (!byKey.has(k)) byKey.set(k, []);
+    byKey.get(k).push(n);
+  }
+
+  const norm = (p) => (p || '').replace(/\\/g, '/').replace(/\.md$/i, '').toLowerCase();
 
   const degree = new Map();
   const links = [];
   const seen = new Set();
+  const stats = { extracted: 0, inferred: 0, ambiguous: 0, unresolved: 0 };
 
   for (const n of index.notes) {
     for (const rawLink of n.links || []) {
-      const target = byKey.get(linkKey(rawLink));
+      const candidates = byKey.get(linkKey(rawLink)) || [];
+      if (candidates.length === 0) { stats.unresolved++; continue; }
+
+      // Path-aware disambiguation. This is the part that fixes the wrong edge:
+      // when the link writes [[Business/README]], prefer the README that
+      // actually lives in Business/ over whichever one happened to index last.
+      let target = candidates[0];
+      let pathMatched = false;
+      if (rawLink.includes('/') || rawLink.includes('\\')) {
+        const want = norm(rawLink);
+        const hit = candidates.find((c) => norm(c.path) === want || norm(c.path).endsWith('/' + want));
+        if (hit) { target = hit; pathMatched = true; }
+      }
+      // Deterministic fallback so the same vault always yields the same graph.
+      if (!pathMatched && candidates.length > 1) {
+        target = [...candidates].sort((a, b) => a.path.localeCompare(b.path))[0];
+      }
+
       if (!target || target.path === n.path) continue;
       const pairKey = [n.path, target.path].sort().join('::');
       if (seen.has(pairKey)) continue;
       seen.add(pairKey);
-      links.push({ source: n.path, target: target.path });
+
+      const provenance = classifyLink(rawLink, target, candidates.length, pathMatched);
+      stats[provenance]++;
+
+      links.push({ source: n.path, target: target.path, provenance });
       degree.set(n.path, (degree.get(n.path) || 0) + 1);
       degree.set(target.path, (degree.get(target.path) || 0) + 1);
     }
@@ -276,7 +336,7 @@ function buildGraph() {
     degree: degree.get(n.path) || 0,
   }));
 
-  graphCache = { nodes, links };
+  graphCache = { nodes, links, stats };
   return graphCache;
 }
 

@@ -1968,7 +1968,9 @@
     nodeById = {};
     nodes.forEach(function (n) { nodeById[n.id] = n; });
     links = data.links
-      .map(function (l) { return { source: nodeById[l.source], target: nodeById[l.target] }; })
+      .map(function (l) {
+        return { source: nodeById[l.source], target: nodeById[l.target], provenance: l.provenance };
+      })
       .filter(function (l) { return l.source && l.target; });
     seedPositions();
 
@@ -4518,6 +4520,21 @@
         ctx.shadowColor = '#63e6b5';
         ctx.shadowBlur = dim ? 0 : 10;
         ctx.lineWidth = 1.5;
+      } else if (l.provenance === 'ambiguous') {
+        // The link name matches several notes and gave us nothing to choose
+        // between them — we picked one deterministically. Amber and dashed so
+        // it never reads as a fact the graph is sure about.
+        ctx.strokeStyle = dim ? 'rgba(214,158,74,0.08)' : 'rgba(214,158,74,0.45)';
+        ctx.shadowBlur = 0;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 4]);
+      } else if (l.provenance === 'inferred') {
+        // Resolved only after normalising the name. Real, but softer and dashed:
+        // the charter says never draw an inference the same way as a fact.
+        ctx.strokeStyle = dim ? 'rgba(' + ACCENT_RGB + ',0.04)' : 'rgba(' + ACCENT_RGB + ',0.13)';
+        ctx.shadowBlur = 0;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 5]);
       } else {
         ctx.strokeStyle = dim ? 'rgba(' + ACCENT_RGB + ',0.05)' : 'rgba(' + ACCENT_RGB + ',0.22)';
         ctx.shadowBlur = 0;
@@ -4539,6 +4556,9 @@
       }
       ctx.stroke();
       ctx.shadowBlur = 0;
+      // Dash state is sticky on the canvas context — reset it here or every
+      // later stroke (nodes, rings, pulses, OPS lines) inherits the dash.
+      ctx.setLineDash([]);
     });
 
     // signal pulses
@@ -5975,7 +5995,16 @@
   var graphPromise = fetch('/api/graph').then(function (r) { return r.json(); }).then(function (data) {
     buildGraphState(data);
     brainNodesCache = nodes; brainLinksCache = links; brainNodeByIdCache = nodeById; brainPulsesCache = pulses;
-    document.getElementById('stat-links').textContent = data.links.length;
+    var linkStat = document.getElementById('stat-links');
+    linkStat.textContent = data.links.length;
+    // Provenance breakdown on hover: solid edges named their target exactly,
+    // dashed ones needed normalising, amber ones matched several notes.
+    if (data.stats) {
+      linkStat.title = data.stats.extracted + ' extracted (solid) · '
+        + data.stats.inferred + ' inferred (dashed) · '
+        + data.stats.ambiguous + ' ambiguous (amber) · '
+        + data.stats.unresolved + ' unresolved links point at notes that do not exist';
+    }
     return data;
   }).catch(function (err) {
     console.error('Failed to load graph', err);

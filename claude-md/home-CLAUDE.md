@@ -75,6 +75,20 @@ Rules:
   |---|---|---|
   | **gemini** | THE READER — volume and senses | Something enormous (1M context) or visual/recorded. It ingests images, audio and video natively rather than needing them described. Also serves Claude Opus 4.6 / Sonnet 4.6 on Google's subscription — overflow capacity when Anthropic limits bind. |
   | **grok** | THE SCOUT — the live world, right now | The answer exists in the present moment: is this degraded for others, is this breaking change biting anyone, what are developers actually saying. Native X search is the one capability no other provider has. |
+  | **omniroute** | THE RESERVE — capacity when the bench is empty | **Two conditions only, set by the CEO 2026-08-16.** (1) EXHAUSTION: Claude *and* Gemini *and* Grok are all out of usage — all three, not one. (2) DELIBERATE ALTERNATIVE: the CEO explicitly wants a community/open-source model's take as a *different perspective*. Never as a cheaper or more convenient route while Claude has capacity. |
+
+- **OmniRoute is a reserve, not an overflow valve.** The sanctioned overflow path when Anthropic
+  limits bind is Gemini's `overflowModels`, which serve actual Claude models on Google's
+  subscription. OmniRoute is the tier below that: reached only when the whole bench is empty, or
+  when a genuinely different lineage of model is the point of the exercise. It still requires
+  per-use approval like any peer.
+- **Name the model, always.** OmniRoute is a router — "OmniRoute says X" is not a source. Pass an
+  explicit `--model`; `provider-run.mjs` refuses to call it without one, precisely so the answering
+  model is always knowable. Report as *"OmniRoute via `<model>` reports X — unverified."*
+- **Local gateway, third-party providers.** It runs on this machine, so nothing is proxied through
+  a vendor's server — but the backends it forwards to are third parties, and its free tiers are the
+  ones with the least favourable data terms. The peer data-handling rule binds in full: no secrets,
+  no credentials, no client data, nothing from a WORK-mode context.
 
 - **GROK'S OUTPUT IS A LEAD, NEVER A FACT.** It measured ~64% hallucination on AA-Omniscience where
   Claude measured 0%. Report it as *"Grok reports X — unverified"* and ground it before it touches a

@@ -145,6 +145,49 @@ async function runOllama(spec, prompt, model) {
   return { text: j.response ?? '', inTokens: j.prompt_eval_count ?? 0, outTokens: j.eval_count ?? 0, model };
 }
 
+// OpenAI-compatible chat endpoint (OmniRoute's local gateway, and anything else
+// that speaks the same shape). Deliberately refuses to run without an explicit
+// model: this transport fronts a router that picks a backend dynamically, so an
+// unnamed model makes the answering system unknowable — and the registry's
+// output contract for such providers requires naming who actually answered.
+async function runOpenAiHttp(spec, prompt, model) {
+  if (!model) {
+    die(`${spec.label} needs an explicit --model or --role.\n` +
+        `  This transport fronts a router, so 'auto' would leave the answering model unknown —\n` +
+        `  and unknown provenance breaks the reporting contract for this provider.`, 1);
+  }
+  const key = spec.apiKeyEnv ? process.env[spec.apiKeyEnv] : null;
+  const headers = { 'Content-Type': 'application/json' };
+  if (key) headers.Authorization = `Bearer ${key}`;
+
+  const res = await fetch(spec.endpoint, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], stream: false }),
+  }).catch(() => null);
+
+  if (!res) {
+    die(`${spec.label} unreachable at ${spec.endpoint}\n  Start it with: ${spec.loginCmd}`, 2);
+  }
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    if (res.status === 401 || res.status === 403) {
+      die(`${spec.label} rejected the key (${res.status}).\n` +
+          `  Set ${spec.apiKeyEnv} to the key from ${spec.dashboard ?? 'the dashboard'}.`, 2);
+    }
+    die(`${spec.label} returned ${res.status}: ${body.slice(0, 500)}`, 3);
+  }
+  const j = await res.json();
+  return {
+    text: j.choices?.[0]?.message?.content ?? '',
+    inTokens: j.usage?.prompt_tokens ?? 0,
+    outTokens: j.usage?.completion_tokens ?? 0,
+    // The router may answer with a different model than the one requested —
+    // report what actually served the call, not what we asked for.
+    model: j.model ?? model,
+  };
+}
+
 // --- Usage logging (ollama keeps its own log so existing reporting stays intact) ---
 
 function logUsage(providerId, spec, record) {
@@ -199,7 +242,9 @@ if (opts.role && !spec.roles?.hasOwnProperty(opts.role)) {
 const started = Date.now();
 const out = spec.transport === 'ollama-http'
   ? await runOllama(spec, prompt, model)
-  : runCli(spec, prompt, model, opts.effort);
+  : spec.transport === 'openai-http'
+    ? await runOpenAiHttp(spec, prompt, model)
+    : runCli(spec, prompt, model, opts.effort);
 
 const elapsed = Date.now() - started;
 
