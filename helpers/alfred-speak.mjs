@@ -42,6 +42,11 @@ const DEFAULTS = {
   volume: 95,
   maxChars: 700,
   minChars: 2,
+  // The HUD's spoken welcome. Separate from `enabled` because wanting Claude to
+  // read its answers and wanting the dashboard to greet you are different
+  // appetites — and the greeting fires without you having asked for anything.
+  // `enabled: false` still silences it: talk-back off means the machine is quiet.
+  greetOnEnter: true,
 };
 
 // The config file is deliberately per-machine (alfred-sync never copies it), so
@@ -317,6 +322,8 @@ const HELP = `alfred-speak - Claude Code talk-back
   rate <-10..10>  set speaking speed (0 = normal, higher = faster)
   test            speak a sample line with the current settings
   say "<text>"    speak arbitrary text now
+  greet "<text>"  speak a HUD welcome — obeys both switches, silent if either is off
+  welcome on|off  enable or disable the HUD's spoken welcome
   dry             print what the last response would sound like, without speaking
   install         register the scheduled task that launches the speaker
   uninstall       remove the scheduled task
@@ -428,6 +435,28 @@ function runCli(argv) {
       if (!arg) return console.log('Usage: say "<text>"');
       speak(cleanForSpeech(arg, cfg.maxChars), { ...cfg, minChars: 1 });
       return;
+
+    case 'welcome': {
+      if (arg !== 'on' && arg !== 'off') return console.log('Usage: welcome on|off');
+      cfg.greetOnEnter = arg === 'on';
+      saveConfig(cfg);
+      console.log(`HUD welcome ${cfg.greetOnEnter ? 'ENABLED' : 'DISABLED'}.`);
+      return;
+    }
+
+    // Unlike `say`, this is machine-triggered: the HUD fires it when the landing
+    // page is dismissed, without the operator having asked for anything. So it
+    // obeys BOTH switches and reports which one silenced it — a greeting that
+    // simply does not arrive is indistinguishable from a broken speaker, and
+    // that ambiguity has already cost this project a debugging session.
+    case 'greet': {
+      if (!arg) return console.log('Usage: greet "<text>"');
+      if (!cfg.enabled) return console.log('skipped: talk-back is off (speak on)');
+      if (cfg.greetOnEnter === false) return console.log('skipped: welcome is off (welcome on)');
+      const spoken = speak(cleanForSpeech(arg, cfg.maxChars), { ...cfg, minChars: 1 });
+      console.log(spoken ? 'spoken' : 'skipped: no speech engine available');
+      return;
+    }
 
     case 'dry': {
       const t = latestTranscript();
