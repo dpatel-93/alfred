@@ -44,7 +44,12 @@ function configuredVault() {
 function resolveVaultDir() {
   return process.env.ALFRED_VAULT || process.env.JARVIS_VAULT || configuredVault() || DEFAULT_VAULT;
 }
-const INDEX_PATH = path.join(__dirname, 'index.json');
+// Overridable, and it MUST be: the index path was fixed while the vault path was
+// not, so pointing a second server at a different vault silently rebuilt this
+// file against it and destroyed the real index. That is exactly what a test
+// doing the right thing (its own throwaway vault) did. Anything that overrides
+// ALFRED_VAULT must override ALFRED_INDEX too.
+const INDEX_PATH = process.env.ALFRED_INDEX || path.join(__dirname, 'index.json');
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const EMBED_MODEL = 'nomic-embed-text';
 // Retired claude-flow-era note copies live in _Archive — never index them.

@@ -53,8 +53,16 @@ chk('the symlink genuinely differs from its target',
 
 // --- Boot the server against the symlinked path ----------------------------
 
+// ALFRED_INDEX is not optional here. Without it this server rebuilds the REAL
+// brain/index.json against this throwaway vault and destroys the operator's
+// index — which is precisely what happened the first time this test was run.
 const child = spawn(process.execPath, [SERVER], {
-  env: { ...process.env, ALFRED_VAULT: linkVault, PORT: String(PORT) },
+  env: {
+    ...process.env,
+    ALFRED_VAULT: linkVault,
+    ALFRED_INDEX: path.join(realVault, 'test-index.json'),
+    PORT: String(PORT),
+  },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 let serverLog = '';

@@ -20,7 +20,9 @@ const PORT = parseInt(process.env.PORT, 10) || 7777;
 // to the LAN — there is no configuration switch for this on purpose.
 const BIND_HOST = '127.0.0.1';
 const FRIENDLY_PORT = 80;
-const INDEX_PATH = path.join(__dirname, 'index.json');
+// Must track index-vault.mjs exactly — see the note there. A server reading one
+// index path while the indexer writes another is a silent, confusing failure.
+const INDEX_PATH = process.env.ALFRED_INDEX || path.join(__dirname, 'index.json');
 const UI_PATH = path.join(__dirname, 'ui.html');
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const EMBED_MODEL = 'nomic-embed-text';
