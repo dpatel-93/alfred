@@ -36,6 +36,16 @@
         "hooks": [
           {
             "type": "command",
+            "command": "cmd /c node C:/Users/dishi/.claude/helpers/alfred-sync.mjs pull",
+            "timeout": 25000
+          },
+          {
+            "type": "command",
+            "command": "cmd /c node C:/Users/dishi/.claude/helpers/vault-memory-sync.cjs pull",
+            "timeout": 15000
+          },
+          {
+            "type": "command",
             "command": "cmd /c node C:/Users/dishi/.claude/helpers/auto-memory-hook.mjs import",
             "timeout": 8000
           },
@@ -54,6 +64,11 @@
             "type": "command",
             "command": "cmd /c node C:/Users/dishi/.claude/helpers/vault-memory-sync.cjs sync",
             "timeout": 15000
+          },
+          {
+            "type": "command",
+            "command": "cmd /c node C:/Users/dishi/.claude/helpers/alfred-sync.mjs push",
+            "timeout": 30000
           }
         ]
       }
