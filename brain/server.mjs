@@ -2668,8 +2668,21 @@ async function handleNote(req, res, url) {
   // settable at runtime, and a guard comparing against a stale root would
   // start rejecting every legitimate note the moment it changed.
   const vaultRoot = resolveVaultDir();
-  const vaultReal = fs.realpathSync(vaultRoot);
-  const candidate = path.resolve(vaultRoot, reqPath);
+  // Both sides of the containment check must come from the SAME root. Resolving
+  // the candidate against vaultRoot while comparing it against vaultReal makes
+  // every note fail the instant the two differ - which is never on Windows and
+  // always on macOS, where OneDrive lives behind a symlink
+  // (~/OneDrive -> ~/Library/CloudStorage/OneDrive-*) and /tmp and /var are
+  // symlinks too. That mismatch 403s the entire vault, not just edge cases.
+  let vaultReal;
+  try {
+    vaultReal = fs.realpathSync(vaultRoot);
+  } catch {
+    // A configured folder that does not exist is a setup problem, not an
+    // attempted escape; say which folder so it is actionable.
+    return sendJson(res, 404, { error: `vault folder not found: ${vaultRoot}` });
+  }
+  const candidate = path.resolve(vaultReal, reqPath);
   const rel = path.relative(vaultReal, candidate);
   if (rel.startsWith('..') || path.isAbsolute(rel)) {
     return sendJson(res, 403, { error: 'path escapes vault directory' });
