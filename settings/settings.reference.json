@@ -53,6 +53,11 @@
             "type": "command",
             "command": "cmd /c node C:/Users/dishi/.claude/helpers/config-doctor.mjs",
             "timeout": 10000
+          },
+          {
+            "type": "command",
+            "command": "cmd /c node C:/Users/dishi/.claude/helpers/project-note-check.mjs",
+            "timeout": 15000
           }
         ]
       }
