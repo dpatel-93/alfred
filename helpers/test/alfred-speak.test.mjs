@@ -41,9 +41,9 @@ check('table rows removed', !clean(withTable).includes('Sharpe'), clean(withTabl
 check('urls become "a link"', clean('See https://code.claude.com/docs/en/voice x').includes('a link'));
 check('raw url not spoken', !clean('See https://code.claude.com/docs x').includes('http'));
 
-const winPath = 'Edited C:\\Users\\dishi\\.claude\\settings.json now.';
+const winPath = 'Edited C:\\Users\\alice\\.claude\\settings.json now.';
 check('windows paths become "a file path"', clean(winPath).includes('a file path'), clean(winPath));
-check('windows path not spoken', !clean(winPath).includes('dishi'), clean(winPath));
+check('windows path not spoken', !clean(winPath).includes('alice'), clean(winPath));
 
 const posixPath = 'Wrote to /home/user/project/file.txt today.';
 check('posix paths become "a file path"', clean(posixPath).includes('a file path'), clean(posixPath));
@@ -101,7 +101,7 @@ check('extreme rates are clamped to intelligible speeds',
 
 check('a path with spaces is quoted', shQuote('/tmp/my file.txt') === `'/tmp/my file.txt'`, shQuote('/tmp/my file.txt'));
 check("an apostrophe in a path cannot break out of the quoting",
-  shQuote("/tmp/dishi's file.txt") === `'/tmp/dishi'\\''s file.txt'`, shQuote("/tmp/dishi's file.txt"));
+  shQuote("/tmp/alice's file.txt") === `'/tmp/alice'\\''s file.txt'`, shQuote("/tmp/alice's file.txt"));
 
 const macCmd = buildMacCommand('/tmp/speak me.txt', { voice: 'Samantha', rate: 1 });
 check('names the configured voice', macCmd.includes(`say -v 'Samantha'`), macCmd);
