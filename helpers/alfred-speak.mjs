@@ -52,6 +52,23 @@ const DEFAULTS = {
   // sentence away. 'full' restores reading the entire response aloud.
   brevity: 'brief',
   briefSentences: 2,
+  // 'edge'   — Microsoft's neural voices. Natural, free, uncapped, needs the
+  //            network, and falls back to 'system' automatically when it fails.
+  // 'system' — the built-in OS voice. Instant and always available; on Windows
+  //            that means the 2013-era SAPI voices, which is the sound this
+  //            setting exists to get away from.
+  engine: 'edge',
+  edgeVoice: 'en-GB-RyanNeural',
+};
+
+/** The neural voices worth naming — the shortlist, not the full catalogue. */
+const EDGE_VOICES = {
+  ryan: 'en-GB-RyanNeural',
+  sonia: 'en-GB-SoniaNeural',
+  ava: 'en-US-AvaNeural',
+  emma: 'en-US-EmmaNeural',
+  andrew: 'en-US-AndrewNeural',
+  brian: 'en-US-BrianNeural',
 };
 
 // The config file is deliberately per-machine (alfred-sync never copies it), so
@@ -290,7 +307,19 @@ function buildMacCommand(textFile, cfg) {
     ? `say -v ${shQuote(cfg.voice)} -r ${wpm} -f ${file} || ` : '';
   // If the configured voice is not installed, fall back to the system voice
   // rather than saying nothing. The rm always runs, so nothing is left behind.
-  return `${withVoice}say -r ${wpm} -f ${file}; rm -f ${file}`;
+  const sayChain = `${withVoice}say -r ${wpm} -f ${file}`;
+
+  if (cfg.engine !== 'edge') return `${sayChain}; rm -f ${file}`;
+
+  // Neural first, `say` as the safety net — the same order Windows uses, so a
+  // machine that is offline still speaks rather than going quiet. afplay ships
+  // with macOS and handles MP3, so there is nothing extra to install.
+  const mp3 = shQuote(`${textFile}.mp3`);
+  const synth = shQuote(path.join(HERE, 'alfred-tts-edge.mjs'));
+  const node = shQuote(process.execPath);
+  return `if ${node} ${synth} --text-file ${file} --out ${mp3} --voice ${shQuote(cfg.edgeVoice)}`
+    + ` --rate ${Number(cfg.rate) || 0} >/dev/null 2>&1; then afplay ${mp3}; else ${sayChain}; fi;`
+    + ` rm -f ${file} ${mp3}`;
 }
 
 function speakMac(clean, cfg) {
@@ -384,8 +413,10 @@ const HELP = `alfred-speak - Claude Code talk-back
 
   on | off        enable or disable talk-back
   status          show current settings and whether the launcher is installed
-  list            list installed voices
-  voice <name>    set the voice (use a name from 'list')
+  engine edge|system   neural voices (needs network) or the built-in one
+  neural <name>   set the neural voice: ryan, sonia, ava, emma, andrew, brian
+  list            list installed system voices
+  voice <name>    set the SYSTEM voice (use a name from 'list')
   rate <-10..10>  set speaking speed (0 = normal, higher = faster)
   test            speak a sample line with the current settings
   say "<text>"    speak arbitrary text now
@@ -454,11 +485,18 @@ function runCli(argv) {
       console.log(`Talk-back ${cfg.enabled ? 'ENABLED' : 'DISABLED'}.`);
       return;
 
-    case 'status':
+    case 'status': {
       console.log(JSON.stringify(cfg, null, 2));
       console.log(`config:    ${CONFIG_PATH}`);
       console.log(`launcher:  ${taskInstalled() ? 'installed' : 'NOT INSTALLED - run: install'}`);
+      // The neural engine has one dependency that is NOT in the repo, so a
+      // freshly cloned machine silently falls back to the system voice. Saying
+      // so here is the difference between "sounds wrong" and a two-word fix.
+      const edgeReady = fs.existsSync(path.join(HERE, 'node_modules', 'msedge-tts'));
+      console.log(`neural:    ${edgeReady ? `ready (${cfg.edgeVoice})`
+        : 'NOT AVAILABLE - run `npm install` in this folder; using the system voice until then'}`);
       return;
+    }
 
     case 'install': {
       if (!IS_WINDOWS) { console.log('Nothing to install on this platform — macOS speaks via built-in `say`.'); return; }
@@ -497,7 +535,13 @@ function runCli(argv) {
 
     case 'test':
       speak('Talk-back is working. This is how Claude will read its answers to you.', cfg);
-      console.log(`Speaking a test line using "${cfg.voice || 'system default'}" at rate ${cfg.rate}.`);
+      // Name the engine that will actually be used. This line used to report
+      // the SYSTEM voice unconditionally, so a successful neural run looked
+      // like a fallback and a real fallback looked correct.
+      console.log(cfg.engine === 'edge'
+        ? `Speaking a test line with the neural voice "${cfg.edgeVoice}" at rate ${cfg.rate}.`
+        + ' If it sounds robotic, the neural engine failed — check .alfred-speak-last.json.'
+        : `Speaking a test line using the system voice "${cfg.voice || 'default'}" at rate ${cfg.rate}.`);
       return;
 
     case 'say':
@@ -514,6 +558,33 @@ function runCli(argv) {
       console.log(cfg.brevity === 'full'
         ? 'Speaking the FULL response.'
         : `Speaking the lead ${cfg.briefSentences} sentence(s) only.`);
+      return;
+    }
+
+    case 'engine': {
+      if (arg !== 'edge' && arg !== 'system') return console.log('Usage: engine edge|system');
+      cfg.engine = arg;
+      saveConfig(cfg);
+      console.log(arg === 'edge'
+        ? `Using the neural voice (${cfg.edgeVoice}), falling back to the system voice when offline.`
+        : 'Using the built-in system voice only.');
+      speak('Engine switched.', { ...cfg, minChars: 1 });
+      return;
+    }
+
+    // Named separately from `voice`, which sets the SYSTEM voice. One command
+    // setting two unrelated catalogues depending on hidden state is the kind of
+    // thing that silently does nothing and looks like a bug in the speaker.
+    case 'neural': {
+      if (!arg) {
+        console.log(`Usage: neural <name>\n  ${Object.entries(EDGE_VOICES).map(([k, v]) => `${k} (${v})`).join('\n  ')}`);
+        return;
+      }
+      cfg.edgeVoice = EDGE_VOICES[arg.toLowerCase()] || arg;
+      cfg.engine = 'edge';
+      saveConfig(cfg);
+      console.log(`Neural voice set to "${cfg.edgeVoice}".`);
+      speak(`This is ${arg}. Talk-back will sound like this from now on.`, { ...cfg, minChars: 1 });
       return;
     }
 

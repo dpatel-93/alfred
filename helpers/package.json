@@ -1,0 +1,10 @@
+{
+  "name": "alfred-helpers",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Runtime dependencies for the Alfred helper scripts. Only talk-back needs one: msedge-tts, which fetches Microsoft's neural voices. Everything else here is standard library on purpose. Install with `npm install` in this directory; if it is missing, talk-back falls back to the built-in system voice and says so rather than going silent.",
+  "type": "module",
+  "dependencies": {
+    "msedge-tts": "^2.0.7"
+  }
+}

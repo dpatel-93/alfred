@@ -24,3 +24,6 @@ helpers/alfred-speak.config.json
 helpers/.alfred-speak-queue.txt
 helpers/.alfred-speak.pid
 helpers/.alfred-greeting.json
+helpers/node_modules/
+helpers/.alfred-speak-last.json
+helpers/package-lock.json
