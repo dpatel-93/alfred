@@ -26,6 +26,7 @@ if it cannot delegate at all, do the work yourself but keep the verification obl
 | `gemini` | Gemini (Google, via Antigravity CLI) | THE READER — volume and senses | subscription | **ask first, every use** |
 | `grok` | Grok (xAI, via Grok Build CLI) | THE SCOUT — the live world, right now | subscription | **ask first, every use** |
 | `codex` | Codex (OpenAI) | — | subscription | **ask first, every use** |
+| `omniroute` | OmniRoute (self-hosted gateway to ~340 providers) | THE RESERVE — capacity when the bench is empty, and a deliberately different take | subscription | **ask first, every use** |
 | `ollama` | Ollama (local models) | — | local | no gate |
 
 **Route to a provider for its specialism, not to save tokens.** Cost is the tiebreak, never the
@@ -57,6 +58,19 @@ reason — a cheap answer from the wrong specialist is not a saving.
 
 **Output contract:** LEAD, NOT FACT. Everything Grok returns is a lead to verify, never a finding to act on. Report it as 'Grok reports X — unverified' and ground it before it reaches a decision. This is not optional politeness; it is the documented failure mode of this provider.
 
+### `omniroute` — THE RESERVE — capacity when the bench is empty, and a deliberately different take
+
+**Route here for:**
+- EXHAUSTION: Claude AND Gemini AND Grok are all out of usage. Not one of them — all three. This is the primary reason this provider exists.
+- DELIBERATE ALTERNATIVE: the operator explicitly wants a community/open-source model's take on something, as a different perspective rather than as a cheaper one.
+
+**Never route here for:**
+- Anything, ever, while Claude has capacity. This is not an overflow valve for convenience or cost — Gemini's overflowModels are the sanctioned overflow path and they serve Claude models on Google's subscription.
+- ANY work touching secrets, credentials, client data, or a WORK-mode context. The gateway is local but the providers behind it are third parties, and its free tiers are precisely the ones with the least favourable data terms.
+- Establishing facts. Same rule as Grok: output is a lead to verify, not a finding.
+
+**Output contract:** DRAFT ONLY, PROVENANCE NAMED. Always report which underlying model actually answered — the gateway routes dynamically, so 'OmniRoute said X' is not a source. Say 'OmniRoute via <model> reports X — unverified'.
+
 
 - Discover what this machine can reach: `node ~/.claude/helpers/provider-setup.mjs`
 - Dispatch to a provider: `node ~/.claude/helpers/provider-run.mjs <id> "<prompt>" [--role manager]`
@@ -78,10 +92,10 @@ A thin layer over native Claude Code primitives — no external orchestration pa
 | Rank | Model | Role |
 |---|---|---|
 | **CEO** | The operator running this install — the only human in the loop. See `~/.claude/alfred-profile.md` for who that is. | Direction, approvals |
-| **C-suite** | Opus by default; Fable is GATED — used only when the operator explicitly confirms it for a session/task | Architecture, orchestration, synthesis — delegates aggressively, never does bulk work itself |
-| **VPs** | Opus | Hard debugging, design review, adversarial verification |
+| **C-suite** | **Sonnet by default** — the everyday driver. Escalates to Opus on its own for complex work and review (see the escalation rule below); Fable is GATED — used only when the operator explicitly confirms it for a session/task | Architecture, orchestration, synthesis — delegates aggressively, never does bulk work itself |
+| **VPs** | Opus | Hard debugging, design review, adversarial verification — **auto-engaged whenever a task is complex or a review is needed, no approval required** |
 | **Managers** | Sonnet | Default coding subagents — reviews Employee output |
-| **Employees** | Haiku | Parallel search/research/bulk mechanical work |
+| **Employees** | Haiku | Quick lookups, grep/file sweeps, web search, research, doc summarisation, bulk mechanical work — **the default for anything fast and bounded** |
 | **Interns** | Local Ollama (`qwen3.5:9b`, `qwen3.5:4b`, `qwen2.5-coder:1.5b`, `nomic-embed-text` via `ollama run` in Bash) | Free — drafts/summaries/embeddings only |
 | **Peers** | Any other connected provider — Gemini (`agy`), Grok (`grok`), Codex (`codex`) | **CEO approval required per use — ask first, every time.** Zero marginal cost once approved: bulk sweeps, long-context reads, genuinely independent second opinions |
 
@@ -101,6 +115,21 @@ org: the roles are the same, the fills differ. Where no provider can fill a role
 rather than silently promoting a weaker model into it.
 
 Rules:
+- **THE ESCALATION LADDER (CEO decision, 2026-08-16). Sonnet is the floor, not the ceiling.**
+  The session model is Sonnet and most work finishes there. Escalation is automatic and needs no
+  approval — reaching for Opus when the work earns it is the correct behaviour, not an indulgence;
+  so is staying on Sonnet when it does not.
+
+  | Reach for | When |
+  |---|---|
+  | **Haiku** | Anything fast and bounded: file/grep sweeps, web search, research, reading docs, summarising, classification, "find me X". Fan out freely — this is the default for lookup work. |
+  | **Sonnet** | The default. All ordinary coding, edits, refactors, analysis, and the main session itself. |
+  | **Opus** | Complex or high-stakes work, and **every review/adversarial-verification seat**: hard debugging that survived one Sonnet pass, architecture and design decisions, security or compliance judgement, anything at stakes S2+, and reviewing another agent's output. Auto-engage — do not ask. |
+  | **Fable** | GATED. Only when the CEO explicitly confirms it for that session or task; `alfred-fable-gate.mjs` enforces this at spawn time. |
+
+  Two failure modes, equally bad: doing Haiku work on Opus (waste), and letting a Sonnet main
+  session grind on a problem an Opus VP would settle in one pass (false economy). If a task has
+  been attempted twice without progress, that is the signal to escalate, not to try harder.
 - Spawn independent subagents in parallel, in one message.
 - Pass `model` explicitly per the table above — never let a subagent default silently.
 - Use worktree isolation (`isolation: "worktree"`) for parallel code-writing agents.
@@ -144,6 +173,20 @@ Rules:
   |---|---|---|
   | **gemini** | THE READER — volume and senses | Something enormous (1M context) or visual/recorded. It ingests images, audio and video natively rather than needing them described. Also serves Claude Opus 4.6 / Sonnet 4.6 on Google's subscription — overflow capacity when Anthropic limits bind. |
   | **grok** | THE SCOUT — the live world, right now | The answer exists in the present moment: is this degraded for others, is this breaking change biting anyone, what are developers actually saying. Native X search is the one capability no other provider has. |
+  | **omniroute** | THE RESERVE — capacity when the bench is empty | **Two conditions only, set by the CEO 2026-08-16.** (1) EXHAUSTION: Claude *and* Gemini *and* Grok are all out of usage — all three, not one. (2) DELIBERATE ALTERNATIVE: the CEO explicitly wants a community/open-source model's take as a *different perspective*. Never as a cheaper or more convenient route while Claude has capacity. |
+
+- **OmniRoute is a reserve, not an overflow valve.** The sanctioned overflow path when Anthropic
+  limits bind is Gemini's `overflowModels`, which serve actual Claude models on Google's
+  subscription. OmniRoute is the tier below that: reached only when the whole bench is empty, or
+  when a genuinely different lineage of model is the point of the exercise. It still requires
+  per-use approval like any peer.
+- **Name the model, always.** OmniRoute is a router — "OmniRoute says X" is not a source. Pass an
+  explicit `--model`; `provider-run.mjs` refuses to call it without one, precisely so the answering
+  model is always knowable. Report as *"OmniRoute via `<model>` reports X — unverified."*
+- **Local gateway, third-party providers.** It runs on this machine, so nothing is proxied through
+  a vendor's server — but the backends it forwards to are third parties, and its free tiers are the
+  ones with the least favourable data terms. The peer data-handling rule binds in full: no secrets,
+  no credentials, no client data, nothing from a WORK-mode context.
 
 - **GROK'S OUTPUT IS A LEAD, NEVER A FACT.** It measured ~64% hallucination on AA-Omniscience where
   Claude measured 0%. Report it as *"Grok reports X — unverified"* and ground it before it touches a

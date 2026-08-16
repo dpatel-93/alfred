@@ -28,14 +28,19 @@ procedures of its trade**. That third thing is the Charter.
 ```
 CEO ................ The operator running this install. The only human. Gives direction,
                      approves, decides. See ~/.claude/alfred-profile.md for who that is.
-Chief of Staff ..... The main session (Opus). Classifies the request, engages ONE VP
-                     (or several in parallel for genuinely cross-domain work), and reports
-                     the VP's synthesis back to the CEO. Never does the work itself.
+Chief of Staff ..... The main session (Sonnet by default). Classifies the request, engages
+                     ONE VP (or several in parallel for genuinely cross-domain work), and
+                     reports the VP's synthesis back to the CEO. Never does the work itself.
+                     Escalates to an Opus VP on its own whenever the work is complex or
+                     needs review — that escalation needs no approval.
 VP ................. Opus. Owns a domain. Decomposes into manager-sized workstreams,
                      spawns managers, adjudicates their reports, returns ONE verdict.
+                     Also holds every review / adversarial-verification seat.
 Manager ............ Sonnet. Owns a discipline. Decomposes into employee-sized tasks,
                      spawns employees in parallel, verifies their output, rolls up.
 Employee ........... Haiku. Does one bounded thing well and returns a structured result.
+                     The default for anything fast and bounded: grep sweeps, web search,
+                     research, doc reading, summarising. Fan out freely here.
 Intern ............. Local Ollama via `node ~/.claude/helpers/intern-run.mjs <model> "<prompt>"`.
                      Drafts, bulk summaries, classification, embeddings. NEVER shipped unreviewed.
 ```

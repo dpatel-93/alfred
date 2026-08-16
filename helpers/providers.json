@@ -27,7 +27,7 @@
     "approval": "none",
     "notes": "Usually the HOST that runs Alfred itself. Reached as the main loop and via the Agent tool, not through provider-run.",
     "roles": {
-      "c-suite": "opus",
+      "c-suite": "sonnet",
       "vp": "opus",
       "manager": "sonnet",
       "employee": "haiku",

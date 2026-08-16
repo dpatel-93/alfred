@@ -9,10 +9,10 @@ A thin layer over native Claude Code primitives — no external orchestration pa
 | Rank | Model | Role |
 |---|---|---|
 | **CEO** | The operator running this install — the only human in the loop. See `~/.claude/alfred-profile.md` for who that is. | Direction, approvals |
-| **C-suite** | Opus by default; Fable is GATED — used only when the operator explicitly confirms it for a session/task | Architecture, orchestration, synthesis — delegates aggressively, never does bulk work itself |
-| **VPs** | Opus | Hard debugging, design review, adversarial verification |
+| **C-suite** | **Sonnet by default** — the everyday driver. Escalates to Opus on its own for complex work and review (see the escalation rule below); Fable is GATED — used only when the operator explicitly confirms it for a session/task | Architecture, orchestration, synthesis — delegates aggressively, never does bulk work itself |
+| **VPs** | Opus | Hard debugging, design review, adversarial verification — **auto-engaged whenever a task is complex or a review is needed, no approval required** |
 | **Managers** | Sonnet | Default coding subagents — reviews Employee output |
-| **Employees** | Haiku | Parallel search/research/bulk mechanical work |
+| **Employees** | Haiku | Quick lookups, grep/file sweeps, web search, research, doc summarisation, bulk mechanical work — **the default for anything fast and bounded** |
 | **Interns** | Local Ollama (`qwen3.5:9b`, `qwen3.5:4b`, `qwen2.5-coder:1.5b`, `nomic-embed-text` via `ollama run` in Bash) | Free — drafts/summaries/embeddings only |
 | **Peers** | Any other connected provider — Gemini (`agy`), Grok (`grok`), Codex (`codex`) | **CEO approval required per use — ask first, every time.** Zero marginal cost once approved: bulk sweeps, long-context reads, genuinely independent second opinions |
 
@@ -32,6 +32,21 @@ org: the roles are the same, the fills differ. Where no provider can fill a role
 rather than silently promoting a weaker model into it.
 
 Rules:
+- **THE ESCALATION LADDER (CEO decision, 2026-08-16). Sonnet is the floor, not the ceiling.**
+  The session model is Sonnet and most work finishes there. Escalation is automatic and needs no
+  approval — reaching for Opus when the work earns it is the correct behaviour, not an indulgence;
+  so is staying on Sonnet when it does not.
+
+  | Reach for | When |
+  |---|---|
+  | **Haiku** | Anything fast and bounded: file/grep sweeps, web search, research, reading docs, summarising, classification, "find me X". Fan out freely — this is the default for lookup work. |
+  | **Sonnet** | The default. All ordinary coding, edits, refactors, analysis, and the main session itself. |
+  | **Opus** | Complex or high-stakes work, and **every review/adversarial-verification seat**: hard debugging that survived one Sonnet pass, architecture and design decisions, security or compliance judgement, anything at stakes S2+, and reviewing another agent's output. Auto-engage — do not ask. |
+  | **Fable** | GATED. Only when the CEO explicitly confirms it for that session or task; `alfred-fable-gate.mjs` enforces this at spawn time. |
+
+  Two failure modes, equally bad: doing Haiku work on Opus (waste), and letting a Sonnet main
+  session grind on a problem an Opus VP would settle in one pass (false economy). If a task has
+  been attempted twice without progress, that is the signal to escalate, not to try harder.
 - Spawn independent subagents in parallel, in one message.
 - Pass `model` explicitly per the table above — never let a subagent default silently.
 - Use worktree isolation (`isolation: "worktree"`) for parallel code-writing agents.

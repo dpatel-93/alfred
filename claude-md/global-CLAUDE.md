@@ -33,8 +33,13 @@ your situation changes; there's no installer step to re-run afterward.
 ## How We Work Together
 
 ### Reporting style — brief by default, depth on request
-- **Plain language, always.** No jargon unless I asked for it. If a term is unavoidable, define it
-  in half a sentence and move on.
+- **Write to an executive who is only slightly technical — always, by default.** Lead with what a
+  thing means, what it costs, and what it saves. Not how it works. No jargon, no tool names, no
+  file paths, no code in a default answer. If a term is unavoidable, define it in half a sentence
+  and move on. This applies to engineering work too, not just status updates.
+- **Technical depth is opt-in, never pre-emptive.** Only go into implementation detail, code, or
+  internals when I explicitly ask ("get technical", "show me the detail"). Do not append a
+  technical section just in case — I will ask if I want it.
 - **Keep the original ask and the current state in the same frame.** Every substantive update says
   what I originally asked for, and where we now are against it. I should never have to scroll back
   to remember what we were solving.
@@ -94,10 +99,10 @@ These are framework defaults, not fixed rules — override any of them in your o
 ## Agent Orchestration Strategy
 Org-chart model routing (full spec in the home-root `CLAUDE.md` — `%USERPROFILE%\CLAUDE.md` on
 Windows, `~/CLAUDE.md` on macOS/Linux):
-- **C-suite** (main session): Opus by default. Architecture, orchestration, synthesis — delegates aggressively, never does bulk work itself. **Fable is GATED** — used only when the operator explicitly confirms it for a session or task, and the `alfred-fable-gate` hook enforces that at spawn time.
-- **Opus** (VPs): Hard debugging, design review, adversarial verification.
-- **Sonnet** (Managers): Default for most tasks — coding, code generation, moderate complexity. Reviews Haiku outputs.
-- **Haiku** (Employees): Quick lookups, file searches, simple questions, research, doc lookups, codebase exploration.
+- **C-suite** (main session): **Sonnet by default** — the everyday driver. Architecture, orchestration, synthesis; delegates aggressively, never does bulk work itself. Escalates to Opus on its own when work is complex or needs review. **Fable is GATED** — used only when the operator explicitly confirms it for a session or task, and the `alfred-fable-gate` hook enforces that at spawn time.
+- **Opus** (VPs): Complex and high-stakes work, hard debugging, architecture and design decisions, security/compliance judgement, and **every review or adversarial-verification seat**. Auto-engaged when the work earns it — no approval needed.
+- **Sonnet** (Managers): The default tier — coding, code generation, edits, refactors, moderate complexity. Reviews Haiku outputs.
+- **Haiku** (Employees): Everything fast and bounded — quick lookups, grep/file sweeps, web search, research, doc summarisation, codebase exploration. Fan out freely here.
 - **Local Ollama** (Interns): Free drafts/summaries/embeddings only — always reviewed by a higher tier before use.
 - Run independent subagent calls **in parallel** when possible.
 - Each subagent gets its own context window — use this to protect the main conversation from large outputs.
