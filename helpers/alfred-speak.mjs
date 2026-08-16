@@ -47,6 +47,11 @@ const DEFAULTS = {
   // appetites — and the greeting fires without you having asked for anything.
   // `enabled: false` still silences it: talk-back off means the machine is quiet.
   greetOnEnter: true,
+  // 'brief' speaks the lead paragraph only — the conclusion, not the whole
+  // answer. The screen already holds the detail, and asking for it is one
+  // sentence away. 'full' restores reading the entire response aloud.
+  brevity: 'brief',
+  briefSentences: 2,
 };
 
 // The config file is deliberately per-machine (alfred-sync never copies it), so
@@ -105,6 +110,63 @@ function cleanForSpeech(raw, maxChars) {
   t = t.replace(/(?:\s*\.\s*){2,}/g, '. ');           // collapse the code-block markers
 
   return truncateAtSentence(t.trim(), maxChars);
+}
+
+// --- Brevity ---------------------------------------------------------------
+// Reading a whole answer aloud is the wrong shape for speech. The screen holds
+// the tables, the file paths and the options; the ear wants the conclusion.
+//
+// This exploits a convention the answers already follow: lead with the answer,
+// then structure it. So the LEAD PARAGRAPH — everything before the first
+// heading, list, table or rule — is already the summary, and needs no model to
+// produce and no extra latency to fetch. Taking it is nearly free.
+
+/** Blocks that are structure rather than prose, and are never the summary. */
+function isStructuralBlock(block) {
+  return /^\s*(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|>\s|\||```|---|===|\*\*\*)/.test(block);
+}
+
+/**
+ * The first N sentences, without cutting one in half.
+ *
+ * A full stop is only a sentence end when what follows looks like a new
+ * sentence — whitespace then a capital, or the end of the text. Splitting on
+ * every dot cuts `server.mjs` into "server." and stops there, which is not a
+ * hypothetical: these answers name files constantly, and the first version of
+ * this function truncated one mid-filename on its first real input.
+ * The same rule handles "e.g." and "vs." for free, since a lowercase word
+ * follows them.
+ */
+function firstSentences(text, n) {
+  const s = String(text).trim();
+  const re = /[.!?]+["')\]]*(?=\s+[A-Z"'([]|\s*$)/g;
+  const out = [];
+  let start = 0;
+  let m;
+  while (out.length < n && (m = re.exec(s)) !== null) {
+    out.push(s.slice(start, m.index + m[0].length).trim());
+    start = m.index + m[0].length;
+  }
+  return out.length ? out.join(' ') : s;
+}
+
+/**
+ * The spoken-length version of an answer: its lead paragraph, capped to a
+ * couple of sentences.
+ *
+ * Falls through deliberately rather than going silent. An answer that opens
+ * with a heading or is nothing but a table has no lead paragraph, and saying
+ * nothing at all is indistinguishable from a broken speaker — so the first
+ * prose block anywhere is used, and failing that the first block of any kind.
+ */
+function briefForSpeech(raw, sentences = 2) {
+  let t = String(raw).replace(/```[\s\S]*?```/g, '\n\n');   // code is never spoken
+  const blocks = t.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
+  if (!blocks.length) return '';
+
+  const prose = blocks.find((b) => !isStructuralBlock(b));
+  const chosen = prose || blocks[0];
+  return firstSentences(chosen, sentences);
 }
 
 function truncateAtSentence(text, maxChars) {
@@ -307,7 +369,12 @@ async function runHook() {
   const raw = lastAssistantText(payload.transcript_path);
   if (!raw) return;
 
-  const spoken = cleanForSpeech(raw, cfg.maxChars);
+  // Brevity is applied to the RAW markdown, before cleaning: the headings,
+  // bullets and pipes are what mark where the summary ends, and cleanForSpeech
+  // strips exactly those. Reversing the order loses the structure that the
+  // decision depends on.
+  const source = cfg.brevity === 'full' ? raw : briefForSpeech(raw, cfg.briefSentences);
+  const spoken = cleanForSpeech(source, cfg.maxChars);
   if (spoken) speak(spoken, cfg);
 }
 
@@ -322,6 +389,8 @@ const HELP = `alfred-speak - Claude Code talk-back
   rate <-10..10>  set speaking speed (0 = normal, higher = faster)
   test            speak a sample line with the current settings
   say "<text>"    speak arbitrary text now
+  brief [n]       speak only the lead n sentences (default 2) — the conclusion
+  full            speak the entire response aloud
   greet "<text>"  speak a HUD welcome — obeys both switches, silent if either is off
   welcome on|off  enable or disable the HUD's spoken welcome
   dry             print what the last response would sound like, without speaking
@@ -436,6 +505,18 @@ function runCli(argv) {
       speak(cleanForSpeech(arg, cfg.maxChars), { ...cfg, minChars: 1 });
       return;
 
+    case 'brief':
+    case 'full': {
+      cfg.brevity = cmd;
+      const n = parseInt(arg, 10);
+      if (cmd === 'brief' && Number.isInteger(n) && n > 0) cfg.briefSentences = Math.min(6, n);
+      saveConfig(cfg);
+      console.log(cfg.brevity === 'full'
+        ? 'Speaking the FULL response.'
+        : `Speaking the lead ${cfg.briefSentences} sentence(s) only.`);
+      return;
+    }
+
     case 'welcome': {
       if (arg !== 'on' && arg !== 'off') return console.log('Usage: welcome on|off');
       cfg.greetOnEnter = arg === 'on';
@@ -461,8 +542,15 @@ function runCli(argv) {
     case 'dry': {
       const t = latestTranscript();
       if (!t) return console.log('No transcript found.');
-      const spoken = cleanForSpeech(lastAssistantText(t), cfg.maxChars);
-      console.log(`--- transcript: ${t}\n--- would speak (${spoken.length} chars):\n${spoken}`);
+      const raw = lastAssistantText(t);
+      // Mirrors runHook exactly, brevity included — a preview that previewed a
+      // different pipeline than the hook uses would be worse than no preview.
+      const source = cfg.brevity === 'full' ? raw : briefForSpeech(raw, cfg.briefSentences);
+      const spoken = cleanForSpeech(source, cfg.maxChars);
+      console.log(`--- transcript: ${t}`);
+      console.log(`--- mode: ${cfg.brevity}${cfg.brevity === 'brief' ? ` (${cfg.briefSentences} sentences)` : ''}`
+        + `  |  ${raw.length} chars in, ${spoken.length} out`);
+      console.log(`--- would speak:\n${spoken}`);
       return;
     }
 
@@ -480,6 +568,7 @@ function runCli(argv) {
 export {
   cleanForSpeech, truncateAtSentence, lastAssistantText, loadConfig, DEFAULTS,
   buildMacCommand, macWordsPerMinute, shQuote,
+  briefForSpeech, firstSentences, isStructuralBlock,
 };
 
 const isMain = process.argv[1] &&

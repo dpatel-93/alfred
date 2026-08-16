@@ -13,6 +13,7 @@ import path from 'node:path';
 import {
   cleanForSpeech, truncateAtSentence, lastAssistantText,
   buildMacCommand, macWordsPerMinute, shQuote,
+  briefForSpeech, firstSentences, isStructuralBlock,
 } from '../alfred-speak.mjs';
 
 // --- Harness ---------------------------------------------------------------
@@ -151,6 +152,74 @@ check('undefined path yields nothing, no throw', lastAssistantText(undefined) ==
 fs.rmSync(tmp, { force: true });
 
 // --- Result ----------------------------------------------------------------
+
+// --- Brevity: the ear gets the conclusion, the screen keeps the detail -----
+
+check('a structural block is recognised as structure',
+  ['# Heading', '- bullet', '1. first', '| a | b |', '> quote', '```js', '---']
+    .every(isStructuralBlock));
+check('prose is not mistaken for structure',
+  !isStructuralBlock('The benchmark finished and three arms held.'));
+check('a hyphen inside a sentence is not a bullet',
+  !isStructuralBlock('Sonnet-first routing is live.'));
+
+check('firstSentences stops at the sentence boundary',
+  firstSentences('One. Two. Three. Four.', 2) === 'One. Two.',
+  firstSentences('One. Two. Three. Four.', 2));
+check('firstSentences returns everything when asked for more than exists',
+  firstSentences('Only one here.', 5) === 'Only one here.');
+check('firstSentences tolerates text with no terminator',
+  firstSentences('no full stop anywhere', 2) === 'no full stop anywhere');
+// The dot in a filename is not a sentence end. This truncated a real answer.
+check('a filename is not treated as a sentence end',
+  firstSentences('The fix is in server.mjs now. Detail follows.', 1)
+    === 'The fix is in server.mjs now.',
+  firstSentences('The fix is in server.mjs now. Detail follows.', 1));
+check('an abbreviation is not treated as a sentence end',
+  firstSentences('Use a check, e.g. a test, before shipping. Then push.', 1)
+    === 'Use a check, e.g. a test, before shipping.',
+  firstSentences('Use a check, e.g. a test, before shipping. Then push.', 1));
+check('a version number is not treated as a sentence end',
+  firstSentences('Chatterbox 0.1.7 is the latest release. Nano is not in it.', 1)
+    === 'Chatterbox 0.1.7 is the latest release.',
+  firstSentences('Chatterbox 0.1.7 is the latest release. Nano is not in it.', 1));
+
+// The shape almost every answer takes: a lead, then the detail.
+const ANSWER = `All 11 tool servers are connected now. GitHub was the last one.
+
+## What changed
+
+| server | state |
+|---|---|
+| github | connected |
+
+- read the token live
+- no stored copy`;
+check('brevity keeps the lead and drops the table and headings',
+  briefForSpeech(ANSWER, 2) === 'All 11 tool servers are connected now. GitHub was the last one.',
+  briefForSpeech(ANSWER, 2));
+check('brevity respects the sentence count',
+  briefForSpeech(ANSWER, 1) === 'All 11 tool servers are connected now.',
+  briefForSpeech(ANSWER, 1));
+
+// An answer that opens with a heading has no lead paragraph. Going silent
+// there would be indistinguishable from a broken speaker.
+check('an answer opening with a heading still speaks its first prose',
+  briefForSpeech('## Results\n\nThree arms held and one was void.', 2)
+    === 'Three arms held and one was void.',
+  briefForSpeech('## Results\n\nThree arms held and one was void.', 2));
+check('an answer that is only a list still says something',
+  briefForSpeech('- first thing\n- second thing', 2).length > 0,
+  briefForSpeech('- first thing\n- second thing', 2));
+check('an empty answer yields nothing rather than throwing',
+  briefForSpeech('', 2) === '');
+check('code fences never reach the ear',
+  !briefForSpeech('```js\nconst secret = 1;\n```\n\nThe fix is one line.', 2).includes('secret'),
+  briefForSpeech('```js\nconst secret = 1;\n```\n\nThe fix is one line.', 2));
+check('brevity output still survives cleaning',
+  clean(briefForSpeech('The **fix** is in `server.mjs` now. Detail follows.\n\n## Detail', 1))
+    === 'The fix is in server.mjs now.',
+  clean(briefForSpeech('The **fix** is in `server.mjs` now. Detail follows.\n\n## Detail', 1)));
 
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) {
