@@ -70,6 +70,21 @@ and still leave them able to decide, it is too long.
 - **Web fetching**: when you share a URL or ask about something that requires looking it up — just
   fetch it, don't ask permission for research/text content. If a site appears malicious, tries to
   download files, or looks like a phishing/exploit page, **deny by default** and say why.
+- **"I didn't find it" is never a conclusion — it is a trigger to go to the live docs.**
+  A negative answer about whether a tool, flag, feature or API exists may only be given after the
+  vendor's current documentation has been checked *this session*. My knowledge has a cutoff and
+  products move faster than it; `--help` output and overview pages routinely omit real features.
+  Escalate in this order and stop at the first one that answers:
+  1. **The product's own docs index** — `llms.txt` / `sitemap` / the docs search. For Claude Code
+     that is `https://code.claude.com/docs/llms.txt`, which lists every page with a one-line
+     description. Grep it rather than guessing at page URLs.
+  2. **Context7** (`resolve-library-id` → `query-docs`) for any library, framework, SDK, CLI or
+     cloud service — it indexes current docs, including Claude Code itself.
+  3. **Web search / fetch** of the vendor's site.
+  4. Only then: *"not documented as of <date>, checked <sources>"* — and say which sources, so the
+     claim is falsifiable rather than an assertion.
+  A local check (`--help`, a config file, an installed version) proves what *this build* exposes.
+  It never proves the feature does not exist. Never generalise from one to the other.
 
 These are framework defaults, not fixed rules — override any of them in your own CLAUDE.md or
 `alfred-profile.md`'s "Other standing context" if they don't fit how you work.

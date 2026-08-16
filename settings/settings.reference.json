@@ -1,4 +1,8 @@
 {
+  "voice": {
+    "enabled": true,
+    "mode": "tap"
+  },
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
@@ -57,6 +61,11 @@
     "Stop": [
       {
         "hooks": [
+          {
+            "type": "command",
+            "command": "cmd /c node C:/Users/dishi/.claude/helpers/alfred-speak.mjs",
+            "timeout": 5000
+          },
           {
             "type": "command",
             "command": "cmd /c node C:/Users/dishi/.claude/helpers/auto-memory-hook.mjs sync",
