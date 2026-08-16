@@ -11,6 +11,7 @@ import crypto from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { buildIndex, linkKey, noteKey, resolveVaultDir, SKIP_DIRS } from './index-vault.mjs';
+import { composeGreeting, parseMcpList, recentNoteTitles } from './greeting.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -1520,13 +1521,18 @@ function resolveClaudeBin() {
   if (process.env.APPDATA) {
     candidates.push(path.join(process.env.APPDATA, 'npm', 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe'));
   }
+  // `claude.exe` does not exist on macOS or Linux, where the CLI is a plain
+  // `claude`. Probing for a name that cannot be there made every caller here
+  // fall through to the last resort and fail at spawn time — silently, since
+  // the callers treat a missing binary as "no data" rather than an error.
+  const EXE = process.platform === 'win32' ? 'claude.exe' : 'claude';
   for (const dir of (process.env.PATH || '').split(path.delimiter)) {
-    if (dir) candidates.push(path.join(dir, 'claude.exe'));
+    if (dir) candidates.push(path.join(dir, EXE));
   }
   for (const c of candidates) {
     try { if (fs.existsSync(c)) { claudeBinCache = c; return c; } } catch { /* unreadable dir */ }
   }
-  claudeBinCache = 'claude.exe'; // last resort: let spawn try PATH itself
+  claudeBinCache = EXE; // last resort: let spawn try PATH itself
   return claudeBinCache;
 }
 
@@ -4752,6 +4758,116 @@ async function handleInternRun(req, res) {
   sendJson(res, 200, await runIntern(model, prompt));
 }
 
+// --- The HUD's spoken welcome ----------------------------------------------
+// Dismissing the landing page fires one spoken briefing: who you are, what is
+// ready, what is broken, and what has changed in the brain since you last
+// looked. It is the observe-not-do philosophy applied to the first three
+// seconds — the HUD reports, it does not ask for anything.
+//
+// Speech goes through ~/.claude/helpers/alfred-speak.mjs rather than the
+// browser's speechSynthesis. Two reasons: the greeting then uses the SAME voice
+// and rate as Claude's talk-back instead of a second, unrelated one, and
+// `/speak off` silences the whole system rather than three quarters of it.
+
+const SPEAK_HELPER = path.join(HELPERS_DIR, 'alfred-speak.mjs');
+// Overridable for the same reason ALFRED_INDEX is: a test that greets must not
+// flip the real machine's "have we met?" flag. That exact class of bug — a test
+// writing over live state because only the input was redirected — already cost
+// this project its search index once.
+const GREETING_STATE_PATH = process.env.ALFRED_GREETING_STATE
+  || path.join(HELPERS_DIR, '.alfred-greeting.json');
+
+// `claude mcp list` genuinely dials every server, so it takes tens of seconds —
+// far too slow to run while someone waits to be greeted. It is probed in the
+// background and read from cache, which is warm in practice because the server
+// is started long before the page is opened.
+const MCP_PROBE_TTL_MS = 10 * 60 * 1000;
+const MCP_PROBE_TIMEOUT_MS = 90 * 1000;
+let mcpProbe = { at: 0, running: false, servers: null };
+
+function refreshMcpProbe() {
+  if (mcpProbe.running || Date.now() - mcpProbe.at < MCP_PROBE_TTL_MS) return;
+  mcpProbe.running = true;
+  let proc;
+  try {
+    proc = spawn(resolveClaudeBin(), ['mcp', 'list'], { windowsHide: true });
+  } catch {
+    mcpProbe.running = false;
+    return;
+  }
+  let out = '';
+  proc.stdout.on('data', (d) => { out += d; });
+  proc.stderr.on('data', () => { /* health detail already lands on stdout */ });
+  const kill = setTimeout(() => { try { proc.kill(); } catch { /* already gone */ } }, MCP_PROBE_TIMEOUT_MS);
+  proc.on('error', () => { clearTimeout(kill); mcpProbe.running = false; });
+  proc.on('close', () => {
+    clearTimeout(kill);
+    const servers = parseMcpList(out);
+    // An empty parse means the probe failed, not that zero servers exist.
+    // Keeping the previous good answer beats announcing a fictional collapse.
+    if (servers.length) mcpProbe = { at: Date.now(), running: false, servers };
+    else mcpProbe.running = false;
+  });
+}
+
+function readGreetingState() {
+  try { return JSON.parse(fs.readFileSync(GREETING_STATE_PATH, 'utf8')); } catch { return {}; }
+}
+
+function writeGreetingState(state) {
+  try { fs.writeFileSync(GREETING_STATE_PATH, JSON.stringify(state, null, 2) + '\n', 'utf8'); }
+  catch { /* a greeting that cannot remember is still a greeting */ }
+}
+
+async function buildGreeting() {
+  const index = loadIndex();
+  const counts = buildFileCounts(index);
+  const state = readGreetingState();
+  const now = new Date();
+
+  refreshMcpProbe(); // fire-and-forget: warms the cache for the NEXT greeting
+  const fresh = mcpProbe.servers && Date.now() - mcpProbe.at < MCP_PROBE_TTL_MS * 6;
+
+  const text = composeGreeting({
+    name: getCeoName('there'),
+    now,
+    counts,
+    notes: index.notes.length,
+    indexStale: isIndexStale(),
+    mcpServers: fresh ? mcpProbe.servers : null,
+    recent: recentNoteTitles(index.notes),
+    returning: Boolean(state.lastGreetedAt),
+  });
+
+  writeGreetingState({ ...state, lastGreetedAt: now.toISOString() });
+  return { text, mcpChecked: Boolean(fresh) };
+}
+
+/** Hand the line to the shared speaker, which owns both on/off switches. */
+function speakGreeting(text) {
+  if (!fs.existsSync(SPEAK_HELPER)) return false;
+  try {
+    const child = spawn(process.execPath, [SPEAK_HELPER, 'greet', text],
+      { detached: process.platform !== 'win32', stdio: 'ignore', windowsHide: true });
+    child.unref();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// POST /api/greeting [token]. Token-gated with the rest of the bridge because
+// it has a side effect — it makes the machine talk. `{ "speak": false }`
+// returns the composed line without speaking it, which is how the tests and the
+// /api/greeting?dry path assert content.
+async function handleGreeting(req, res) {
+  let body = {};
+  try { body = await readJsonBody(req); } catch { /* empty body is the normal case */ }
+  const greeting = await buildGreeting();
+  const spoke = body.speak === false ? false : speakGreeting(greeting.text);
+  sendJson(res, 200, { ...greeting, spoke });
+}
+
 // --- Server ---
 async function main() {
   if (isIndexStale()) {
@@ -4759,6 +4875,11 @@ async function main() {
     await buildIndex();
   }
   loadIndex();
+
+  // Warm the MCP health cache now, so the first greeting of the session has a
+  // real answer instead of "still checking". The probe is slow, which is
+  // exactly why it must not start when someone is already waiting on it.
+  refreshMcpProbe();
 
   const server = http.createServer(async (req, res) => {
     try {
@@ -4793,6 +4914,7 @@ async function main() {
           || url.pathname === '/api/interns/pull'
           || url.pathname === '/api/settings'
           || url.pathname === '/api/reindex'
+          || url.pathname === '/api/greeting'
           || url.pathname === '/api/source/save'
           || url.pathname === '/api/github/device/start'
           || url.pathname === '/api/github/disconnect'
@@ -4808,6 +4930,7 @@ async function main() {
         if (url.pathname === '/api/interns/pull') return await handleInternPull(req, res);
         if (url.pathname === '/api/settings') return await handleSettingsPost(req, res);
         if (url.pathname === '/api/reindex') return await handleReindex(req, res);
+        if (url.pathname === '/api/greeting') return await handleGreeting(req, res);
         if (url.pathname === '/api/source/save') return await handleSourceSave(req, res);
         if (url.pathname === '/api/github/device/start') return await handleGithubDeviceStart(req, res);
         if (url.pathname === '/api/github/disconnect') return handleGithubDisconnect(req, res);

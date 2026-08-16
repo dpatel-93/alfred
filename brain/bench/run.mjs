@@ -28,9 +28,20 @@ const HERE = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z
 const FIXTURE = path.join(HERE, '..', 'make-staffing-fixture.mjs');
 const SANDBOX = path.join(os.tmpdir(), 'alfred-bench');
 const OUT = path.join(HERE, 'results.jsonl');
-const CLAUDE_BIN = process.platform === 'win32'
-  ? `"${path.join(process.env.APPDATA || '', 'npm', 'claude.cmd')}"`
-  : 'claude';
+// The real executable, NOT the .cmd shim. A shim can only be launched through a
+// shell, and a Windows shell concatenates argv unescaped — which silently
+// shredded this harness's own results: the ICM arm passes a multi-word
+// --append-system-prompt, cmd.exe split it on spaces, and the model received the
+// single word "all" as its prompt in 7 of 8 scenarios. It answered that word
+// plausibly every time, so the run looked healthy and scored 4/8.
+//
+// This is the SECOND time this exact bug has been paid for here — peer-run.mjs
+// hit it in August and its fix note says, in as many words, do not simplify this
+// back to shell:true. Pointing at the .exe removes the shell, and with it the
+// entire class of failure.
+const WIN_CLAUDE_EXE = path.join(process.env.APPDATA || '', 'npm', 'node_modules',
+  '@anthropic-ai', 'claude-code', 'bin', 'claude.exe');
+const CLAUDE_BIN = process.platform === 'win32' ? WIN_CLAUDE_EXE : 'claude';
 
 const C = { r: '\x1b[31m', g: '\x1b[32m', y: '\x1b[33m', d: '\x1b[2m', x: '\x1b[0m' };
 const mode = process.argv[2] || '--check';
@@ -64,10 +75,13 @@ function runOne(arm, scen, rep) {
   const started = Date.now();
   let raw;
   try {
+    // No shell, and therefore no quoting: every argument arrives exactly as
+    // written, spaces and all. JSON.stringify around the task is gone with it —
+    // it existed only to survive the shell, and left the model reading a
+    // quoted string where a plain instruction was meant.
     raw = execFileSync(CLAUDE_BIN,
-      [...arm.flags(), '-p', JSON.stringify(scen.task), '--output-format', 'json'],
-      { cwd: box, encoding: 'utf8', timeout: 900_000, maxBuffer: 64 * 1024 * 1024,
-        shell: process.platform === 'win32' });
+      [...arm.flags(), '-p', scen.task, '--output-format', 'json'],
+      { cwd: box, encoding: 'utf8', timeout: 900_000, maxBuffer: 64 * 1024 * 1024 });
   } catch (e) {
     return { box, error: String(e.message).slice(0, 240), seconds: Math.round((Date.now() - started) / 1000) };
   }

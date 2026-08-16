@@ -27,11 +27,24 @@ const os = require('os');
 // state: the hook degrades to a no-op rather than inventing a directory.
 const PROFILE_PATH = path.join(os.homedir(), '.claude', 'alfred-profile.md');
 
+// A test fixture is a vault in shape but not in purpose, and writing real
+// memories into one is invisible until something else fails. It happened:
+// 55 mirrored memory files landed in brain/test/fixtures/vault while
+// ALFRED_VAULT pointed there for a test run, which silently turned a 3-note
+// fixture into a 58-note one and broke three assertions in a suite that had
+// nothing to do with memories. The fixture is version-controlled, so the
+// damage was recoverable — the hour spent finding it was not.
+function isFixturePath(dir) {
+  return /[\\/]test[\\/]fixtures[\\/]/.test(String(dir) + path.sep);
+}
+
 function getVaultRoot() {
   // ALFRED_VAULT wins, matching how the brain server resolves the same folder.
   // One machine, one answer — a hook and a server disagreeing about where the
   // vault is would sync memories somewhere the brain never reads.
-  if (process.env.ALFRED_VAULT) return process.env.ALFRED_VAULT;
+  if (process.env.ALFRED_VAULT) {
+    return isFixturePath(process.env.ALFRED_VAULT) ? null : process.env.ALFRED_VAULT;
+  }
   try {
     const text = fs.readFileSync(PROFILE_PATH, 'utf8');
     const m = text.match(/^\s*-\s*\*\*Knowledge vault path[^*]*\*\*:\s*(.+)$/m);

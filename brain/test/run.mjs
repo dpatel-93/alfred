@@ -41,6 +41,7 @@ const SUITES = [
   { name: 'fable-gate', file: 'fable-gate.mjs', browser: false },
   { name: 'gate-enforce', file: 'gate-enforce.mjs', browser: false },
   { name: 'source', file: 'source.mjs', browser: false },
+  { name: 'greeting', file: 'greeting.mjs', browser: false },
   { name: 'github', file: 'github.mjs', browser: false },
   { name: 'spend', file: 'spend.mjs', browser: false },
   { name: 'retrieval', file: 'retrieval.mjs', browser: false },

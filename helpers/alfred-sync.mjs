@@ -43,6 +43,10 @@ const NEVER_SYNC = new Set([
   '.alfred-speak.pid',
   '.alfred-speak-queue.txt',
   'alfred-speak.config.json', // per-machine voice choice
+  // Rewritten on EVERY HUD greeting. Syncing it produced a commit and a push
+  // per greeting — five in one afternoon before it was caught. Per-machine
+  // runtime state has no business travelling between machines.
+  '.alfred-greeting.json',
 ]);
 const SKIP_DIR_NAMES = new Set(['node_modules', '.git', '__pycache__']);
 

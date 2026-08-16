@@ -1707,7 +1707,11 @@
     }
     closeBtn.addEventListener('click', dismiss);
 
-    var duration = TOAST_DURATIONS[kind] != null ? TOAST_DURATIONS[kind] : 4000;
+    // opts.ms overrides the per-kind default, for the rare toast whose length
+    // is set by its content rather than its severity — the spoken briefing runs
+    // several sentences and outlives the 4s an 'info' normally gets.
+    var duration = opts.ms != null ? opts.ms
+      : (TOAST_DURATIONS[kind] != null ? TOAST_DURATIONS[kind] : 4000);
     if (duration > 0) {
       // pause-on-hover: poll rather than a single setTimeout, so hovering the
       // stack genuinely pauses every visible toast's countdown, not just this one
@@ -1848,6 +1852,23 @@
     });
 
     setTimeout(function () { landing.style.display = 'none'; }, 1000);
+
+    // The spoken briefing. Deliberately fired here rather than on page load:
+    // dismissing the landing page is a real user gesture, so this can never
+    // greet an unattended screen, and it lands as the HUD becomes visible.
+    // Speech is the SERVER's job (the OS voice, via the same speaker Claude's
+    // talk-back uses), so no browser audio permission is involved and nothing
+    // here needs to survive an autoplay policy.
+    setTimeout(function () {
+      if (typeof bridgePost !== 'function') return;
+      bridgePost('/api/greeting', {}).then(function (r) {
+        if (!r || !r.ok || !r.data || !r.data.text) return;
+        // Shown as well as spoken, deliberately: with talk-back off, or the
+        // volume down, or a voice that never got installed, the briefing still
+        // has to arrive. Speech is the nicer channel, not the only one.
+        toast(r.data.text, 'info', { title: 'Alfred', ms: 12000 });
+      }).catch(function () { /* a silent HUD is not a broken HUD */ });
+    }, 600);
   }
 
   landing.addEventListener('click', dismissLanding);
