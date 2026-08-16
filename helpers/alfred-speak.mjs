@@ -27,14 +27,25 @@ const PS_SCRIPT = path.join(HERE, 'alfred-speak.ps1');
 const TASK_NAME = 'AlfredSpeak';
 const TAIL_BYTES = 2 * 1024 * 1024; // transcripts grow unbounded; only the end matters
 
+const IS_WINDOWS = process.platform === 'win32';
+const IS_MAC = process.platform === 'darwin';
+
 const DEFAULTS = {
   enabled: true,
-  voice: 'Microsoft Zira Desktop',
+  // On macOS an empty voice means "the system voice", which is guaranteed to
+  // exist. Naming a voice that was never downloaded silences the hook, and a
+  // silent speaker is indistinguishable from a broken one.
+  voice: IS_WINDOWS ? 'Microsoft Zira Desktop' : '',
+  // Normalised -10..10 on BOTH platforms so "/speak rate 3" means the same
+  // thing everywhere. macOS is told words-per-minute; the mapping is below.
   rate: 1,
   volume: 95,
   maxChars: 700,
   minChars: 2,
 };
+
+// The config file is deliberately per-machine (alfred-sync never copies it), so
+// a Mac and a PC keep their own voice without any platform-scoped keys.
 
 function loadConfig() {
   try {
@@ -155,15 +166,19 @@ const PS_ARGS = ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden',
 function speak(text, cfg) {
   const clean = String(text).trim();
   if (clean.length < cfg.minChars) return false;
-  fs.writeFileSync(QUEUE_PATH, clean, 'utf8');
-  return launchSpeaker();
+  if (IS_MAC) return speakMac(clean, cfg);
+  if (IS_WINDOWS) return speakWindows(clean, cfg);
+  return false; // no speech engine assumed on other platforms
 }
 
-// Launching is the whole difficulty on Windows. A process spawned as a child of
-// this one dies when this one exits, ~80ms in - measured across detached,
+// --- Windows ---------------------------------------------------------------
+// Launching is the whole difficulty here. A process spawned as a child of this
+// one dies when this one exits, ~80ms in - measured across detached,
 // stdio:'ignore' and `cmd /c start`, all of which lose the child before a word
 // is spoken. Task Scheduler runs it with no parent to inherit that death.
-function launchSpeaker() {
+
+function speakWindows(clean) {
+  fs.writeFileSync(QUEUE_PATH, clean, 'utf8');
   const viaTask = spawnSync('schtasks.exe', ['/run', '/tn', TASK_NAME],
     { stdio: 'ignore', windowsHide: true });
   if (viaTask.status === 0) return true;
@@ -176,6 +191,67 @@ function launchSpeaker() {
     return true;
   } catch {
     return false;
+  }
+}
+
+// --- macOS -----------------------------------------------------------------
+// None of the Windows difficulty applies. On POSIX an orphaned process is
+// re-parented to init and keeps running, so detached + unref is genuinely
+// enough and no scheduled task is needed. macOS also ships its own speech
+// engine at /usr/bin/say, so there is nothing to install at all.
+
+/** -10..10 -> words per minute. macOS speaks ~175 wpm by default. */
+function macWordsPerMinute(rate) {
+  const n = Number.isFinite(rate) ? rate : 0;
+  return Math.max(80, Math.min(400, Math.round(175 + n * 12)));
+}
+
+/** Single-quote for /bin/sh, the only quoting that is safe for arbitrary paths. */
+function shQuote(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * The shell line macOS runs. Exported so it can be asserted on a machine that
+ * is not a Mac - the command is the part worth checking, and building it wrong
+ * is silent (`say` just prints to stderr nobody reads).
+ */
+function buildMacCommand(textFile, cfg) {
+  const wpm = macWordsPerMinute(cfg.rate);
+  const file = shQuote(textFile);
+  const withVoice = cfg.voice
+    ? `say -v ${shQuote(cfg.voice)} -r ${wpm} -f ${file} || ` : '';
+  // If the configured voice is not installed, fall back to the system voice
+  // rather than saying nothing. The rm always runs, so nothing is left behind.
+  return `${withVoice}say -r ${wpm} -f ${file}; rm -f ${file}`;
+}
+
+function speakMac(clean, cfg) {
+  stopCurrentSpeech();
+  // A unique file per utterance: a fixed path would let the previous speaker's
+  // cleanup delete the next one's text.
+  const textFile = path.join(os.tmpdir(), `alfred-speak-${process.pid}-${Date.now()}.txt`);
+  fs.writeFileSync(textFile, clean, 'utf8');
+  try {
+    const child = spawn('/bin/sh', ['-c', buildMacCommand(textFile, cfg)],
+      { detached: true, stdio: 'ignore' });
+    child.unref();
+    // detached:true puts the child in its own process group, so the negative
+    // PID below can stop `say` and its wrapper together.
+    try { fs.writeFileSync(PID_PATH, String(child.pid), 'utf8'); } catch { /* best effort */ }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Interrupt whatever is still speaking - a new answer supersedes the old one. */
+function stopCurrentSpeech() {
+  try {
+    const pid = parseInt(fs.readFileSync(PID_PATH, 'utf8').trim(), 10);
+    if (Number.isInteger(pid) && pid > 0) process.kill(-pid, 'SIGTERM');
+  } catch {
+    // nothing in flight, or it already finished - both fine
   }
 }
 
@@ -246,13 +322,27 @@ const HELP = `alfred-speak - Claude Code talk-back
   uninstall       remove the scheduled task
 `;
 
+// Only Windows needs a launcher installed. On macOS the speech engine ships
+// with the OS and detached processes survive on their own, so there is nothing
+// to register - reporting "not installed" there would be a false alarm.
 function taskInstalled() {
+  if (!IS_WINDOWS) return true;
   const r = spawnSync('schtasks.exe', ['/query', '/tn', TASK_NAME],
     { stdio: 'ignore', windowsHide: true });
   return r.status === 0;
 }
 
 function listVoices() {
+  if (IS_MAC) {
+    // `say -v ?` prints "Name  lang  # example". Trim to just the usable name,
+    // since that is the only part `voice` accepts.
+    const r = spawnSync('/usr/bin/say', ['-v', '?'], { encoding: 'utf8' });
+    const names = (r.stdout || '').split('\n')
+      .map((l) => l.match(/^(.+?)\s{2,}[a-z]{2}[-_][A-Z]{2}/)?.[1]?.trim())
+      .filter(Boolean);
+    console.log(names.length ? names.join('\n') : (r.stdout || r.stderr || 'no voices found'));
+    return;
+  }
   const ps = 'Add-Type -AssemblyName System.Speech; ' +
     '(New-Object System.Speech.Synthesis.SpeechSynthesizer).GetInstalledVoices() ' +
     '| ForEach-Object { $_.VoiceInfo.Name }';
@@ -295,12 +385,14 @@ function runCli(argv) {
       return;
 
     case 'install': {
+      if (!IS_WINDOWS) { console.log('Nothing to install on this platform — macOS speaks via built-in `say`.'); return; }
       const r = installTask();
       console.log(r.ok ? 'Launcher installed.' : `Install failed:\n${r.out}`);
       return;
     }
 
     case 'uninstall': {
+      if (!IS_WINDOWS) { console.log('Nothing to uninstall on this platform.'); return; }
       const r = uninstallTask();
       console.log(r.ok ? 'Launcher removed.' : `Removal failed:\n${r.out}`);
       return;
@@ -356,7 +448,10 @@ function runCli(argv) {
 // silent one. Guarded so the test file can import the pure functions without
 // the hook firing and blocking on stdin.
 
-export { cleanForSpeech, truncateAtSentence, lastAssistantText, loadConfig, DEFAULTS };
+export {
+  cleanForSpeech, truncateAtSentence, lastAssistantText, loadConfig, DEFAULTS,
+  buildMacCommand, macWordsPerMinute, shQuote,
+};
 
 const isMain = process.argv[1] &&
   path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));

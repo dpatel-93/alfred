@@ -10,7 +10,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { cleanForSpeech, truncateAtSentence, lastAssistantText } from '../alfred-speak.mjs';
+import {
+  cleanForSpeech, truncateAtSentence, lastAssistantText,
+  buildMacCommand, macWordsPerMinute, shQuote,
+} from '../alfred-speak.mjs';
 
 // --- Harness ---------------------------------------------------------------
 
@@ -82,6 +85,37 @@ check('long text is truncated', cut.length < long.length);
 check('truncation is announced', cut.endsWith('Response truncated.'), cut.slice(-40));
 check('truncation lands on a sentence boundary', /\.\s*Response truncated\.$/.test(cut), cut.slice(-60));
 check('short text passes through untouched', truncateAtSentence('Short one.', 200) === 'Short one.');
+
+// --- macOS command construction --------------------------------------------
+// Asserted rather than executed, because this suite runs on Windows too and a
+// malformed `say` line fails silently: it prints to a stderr nobody reads.
+
+console.log('\nmacOS speech command');
+
+check('rate 0 maps to the macOS default speaking speed', macWordsPerMinute(0) === 175);
+check('positive rate speaks faster', macWordsPerMinute(3) > macWordsPerMinute(0));
+check('negative rate speaks slower', macWordsPerMinute(-3) < macWordsPerMinute(0));
+check('extreme rates are clamped to intelligible speeds',
+  macWordsPerMinute(-100) >= 80 && macWordsPerMinute(100) <= 400,
+  `${macWordsPerMinute(-100)} / ${macWordsPerMinute(100)}`);
+
+check('a path with spaces is quoted', shQuote('/tmp/my file.txt') === `'/tmp/my file.txt'`, shQuote('/tmp/my file.txt'));
+check("an apostrophe in a path cannot break out of the quoting",
+  shQuote("/tmp/dishi's file.txt") === `'/tmp/dishi'\\''s file.txt'`, shQuote("/tmp/dishi's file.txt"));
+
+const macCmd = buildMacCommand('/tmp/speak me.txt', { voice: 'Samantha', rate: 1 });
+check('names the configured voice', macCmd.includes(`say -v 'Samantha'`), macCmd);
+check('falls back to the system voice if that one is missing', macCmd.includes('|| say -r'), macCmd);
+check('reads the text from a file, never an argument', macCmd.includes(`-f '/tmp/speak me.txt'`), macCmd);
+check('always cleans up its temp file', /;\s*rm -f '\/tmp\/speak me\.txt'$/.test(macCmd), macCmd);
+check('the file path is quoted everywhere it appears',
+  !/-f \/tmp\/speak/.test(macCmd) && !/rm -f \/tmp\/speak/.test(macCmd), macCmd);
+
+const noVoiceCmd = buildMacCommand('/tmp/x.txt', { voice: '', rate: 0 });
+check('no voice configured means one plain say, not an empty -v',
+  !noVoiceCmd.includes('-v') && !noVoiceCmd.includes('||'), noVoiceCmd);
+check('the system-voice command still speaks and still cleans up',
+  noVoiceCmd.startsWith('say -r 175 -f ') && noVoiceCmd.includes('rm -f'), noVoiceCmd);
 
 // --- Message selection -----------------------------------------------------
 
