@@ -4805,8 +4805,15 @@ function refreshMcpProbe() {
     const servers = parseMcpList(out);
     // An empty parse means the probe failed, not that zero servers exist.
     // Keeping the previous good answer beats announcing a fictional collapse.
-    if (servers.length) mcpProbe = { at: Date.now(), running: false, servers };
-    else mcpProbe.running = false;
+    if (servers.length) {
+      mcpProbe = { at: Date.now(), running: false, servers };
+      // The greeting SAYS how many servers are connected, so this result
+      // changes its wording — and pre-rendered audio for the old wording will
+      // no longer match. Re-render, or the first greeting after startup always
+      // falls back to the slow path, which is exactly when it was measured
+      // doing so.
+      prepareGreetingAudio();
+    } else mcpProbe.running = false;
   });
 }
 
@@ -4819,7 +4826,12 @@ function writeGreetingState(state) {
   catch { /* a greeting that cannot remember is still a greeting */ }
 }
 
-async function buildGreeting() {
+/**
+ * @param {boolean} commit  false when merely PRE-RENDERING. Composing the line
+ *   in advance must not consume the "have we met" flag, or the pre-render would
+ *   turn every real greeting into "Welcome back" — including the first.
+ */
+async function buildGreeting(commit = true) {
   const index = loadIndex();
   const counts = buildFileCounts(index);
   const state = readGreetingState();
@@ -4839,18 +4851,84 @@ async function buildGreeting() {
     returning: Boolean(state.lastGreetedAt),
   });
 
-  writeGreetingState({ ...state, lastGreetedAt: now.toISOString() });
+  if (commit) writeGreetingState({ ...state, lastGreetedAt: now.toISOString() });
   return { text, mcpChecked: Boolean(fresh) };
 }
 
-/** Hand the line to the shared speaker, which owns both on/off switches. */
+// --- Pre-rendering the greeting ---------------------------------------------
+// Measured before this existed: 0.4s to show the text, then ~5s of silence. The
+// wait was two avoidable things — a Task Scheduler launch (2-3s) and fetching
+// the audio after the click (1.4s). The scheduler is only needed because a
+// child of the Stop hook dies in 80ms; this server is long-lived and has no
+// such problem. And the landing page sits on screen for seconds before anyone
+// clicks, which is free time to render in.
+
+const TTS_HELPER = path.join(HELPERS_DIR, 'alfred-tts-edge.mjs');
+const GREETING_AUDIO_TTL_MS = 10 * 60 * 1000;
+let greetingAudio = { at: 0, text: '', file: '', running: false };
+
+function speakConfig() {
+  return readJsonSafe(path.join(HELPERS_DIR, 'alfred-speak.config.json')) || {};
+}
+
+/** Render the greeting audio now, so a later click pays for playback only. */
+async function prepareGreetingAudio() {
+  if (greetingAudio.running) return;
+  const cfg = speakConfig();
+  // Do not render what will never be played. Also keeps a disabled talk-back
+  // from quietly making network calls on every page load.
+  if (cfg.enabled === false || cfg.greetOnEnter === false) return;
+  if (!fs.existsSync(TTS_HELPER)) return;
+
+  greetingAudio.running = true;
+  try {
+    const { text } = await buildGreeting(false);          // compose only, do not commit
+    if (greetingAudio.text === text && Date.now() - greetingAudio.at < GREETING_AUDIO_TTL_MS) return;
+
+    const file = path.join(os.tmpdir(), `alfred-greeting-${process.pid}.mp3`);
+    const args = [TTS_HELPER, '--text-file', '', '--out', file,
+      '--voice', cfg.edgeVoice || 'en-GB-RyanNeural', '--rate', String(cfg.rate ?? 0)];
+    const textFile = path.join(os.tmpdir(), `alfred-greeting-${process.pid}.txt`);
+    fs.writeFileSync(textFile, text, 'utf8');
+    args[2] = textFile;
+
+    await new Promise((resolve) => {
+      const child = spawn(process.execPath, args, { stdio: 'ignore', windowsHide: true });
+      child.on('error', resolve);
+      child.on('close', (code) => {
+        if (code === 0 && fs.existsSync(file)) greetingAudio = { at: Date.now(), text, file, running: false };
+        try { fs.unlinkSync(textFile); } catch { /* best effort */ }
+        resolve();
+      });
+    });
+  } catch {
+    // A greeting that cannot be pre-rendered still gets spoken the slow way.
+  } finally {
+    greetingAudio.running = false;
+  }
+}
+
+/**
+ * Hand the line to the shared speaker, which owns both on/off switches.
+ *
+ * Two routes. If the audio was pre-rendered for exactly this text, `play` just
+ * presses play — no scheduled task, no synthesis, under a second. Otherwise
+ * `greet` does it the slow way, which is still correct, just audible later.
+ */
 function speakGreeting(text) {
   if (!fs.existsSync(SPEAK_HELPER)) return false;
+  const prepared = greetingAudio.text === text
+    && greetingAudio.file
+    && Date.now() - greetingAudio.at < GREETING_AUDIO_TTL_MS
+    && fs.existsSync(greetingAudio.file);
   try {
-    const child = spawn(process.execPath, [SPEAK_HELPER, 'greet', text],
+    const args = prepared
+      ? [SPEAK_HELPER, 'play', greetingAudio.file]
+      : [SPEAK_HELPER, 'greet', text];
+    const child = spawn(process.execPath, args,
       { detached: process.platform !== 'win32', stdio: 'ignore', windowsHide: true });
     child.unref();
-    return true;
+    return prepared ? 'prepared' : 'synthesised';
   } catch {
     return false;
   }
@@ -4864,8 +4942,8 @@ async function handleGreeting(req, res) {
   let body = {};
   try { body = await readJsonBody(req); } catch { /* empty body is the normal case */ }
   const greeting = await buildGreeting();
-  const spoke = body.speak === false ? false : speakGreeting(greeting.text);
-  sendJson(res, 200, { ...greeting, spoke });
+  const route = body.speak === false ? false : speakGreeting(greeting.text);
+  sendJson(res, 200, { ...greeting, spoke: Boolean(route), route: route || 'silent' });
 }
 
 // --- Server ---
@@ -4960,7 +5038,14 @@ async function main() {
         return handleAgentOutput(req, res, agentOutput[1], url);
       }
 
-      if (url.pathname === '/' || url.pathname === '/index.html') return handleUi(req, res);
+      if (url.pathname === '/' || url.pathname === '/index.html') {
+        // Render the greeting audio while the landing page is on screen. The
+        // operator spends seconds there before clicking, and that is the whole
+        // budget this needs — deliberately not awaited, so serving the page is
+        // never delayed by it.
+        prepareGreetingAudio();
+        return handleUi(req, res);
+      }
       if (url.pathname === '/api/graph') return await handleGraph(req, res);
       if (url.pathname === '/api/org') return await handleOrg(req, res, url);
       if (url.pathname === '/api/usage') return await handleUsage(req, res);
