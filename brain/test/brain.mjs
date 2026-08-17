@@ -41,6 +41,33 @@ const g = (await j('/api/graph')).d;
 T('the graph has nodes again', Array.isArray(g.nodes) && g.nodes.length === 3, `${g.nodes?.length} nodes`);
 T('wiki-links survived lexical-only indexing', Array.isArray(g.links) && g.links.length > 0, `${g.links?.length} links`);
 
+// --- the force layout must be able to stop -------------------------------
+// Measured before this was believed: with no cooling, 9.5% of the screen was
+// still repainting 20s after load, against 1.2% for the same page with the
+// physics disabled outright. Cooling took it to 0.8% — i.e. to the decorative
+// floor. These are structural guards against that being quietly undone; they
+// prove the mechanism is present, not that the page is smooth. The real check
+// is the pixel-diff probe, which needs a browser and does not belong in here.
+{
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const url = await import('node:url');
+  const here = path.dirname(url.fileURLToPath(import.meta.url));
+  const ui = fs.readFileSync(path.join(here, '..', 'ui.html'), 'utf8');
+  const start = ui.indexOf('function physicsTick()');
+  const body = ui.slice(start, ui.indexOf('\n  }', ui.indexOf('SETTLE_FRAMES) physicsSettled', start)));
+
+  T('physicsTick can be skipped once the layout has settled',
+    /if\s*\(physicsSettled\s*&&\s*!draggedNode\)\s*return/.test(body), '');
+  T('every force is scaled by alpha, so the simulation provably cools',
+    /REPULSE\s*=\s*\([^)]*\)\s*\*\s*alpha/.test(body)
+    && /SPRING_K\s*=\s*[\d.]+\s*\*\s*alpha/.test(body)
+    && /GRAVITY\s*=\s*[\d.]+\s*\*\s*alpha/.test(body), '');
+  T('and alpha actually decays each tick', /alpha\s*-=\s*alpha\s*\*\s*ALPHA_DECAY/.test(body), '');
+  T('a drag holds it warm instead of letting it go inert mid-gesture',
+    /draggedNode\)\s*\{\s*alpha\s*=\s*Math\.max\(alpha,\s*0\.3\)/.test(body), '');
+}
+
 const p = [...R].filter(r => r.ok);
 console.log(`pass ${p.length} / fail ${R.length - p.length}\n`);
 for (const r of R) console.log((r.ok ? '  OK   ' : '  FAIL ') + r.n + (r.ok ? '' : '\n            -> ' + r.d.slice(0, 180)));
