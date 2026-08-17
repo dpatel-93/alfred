@@ -3,13 +3,14 @@ description: Control Claude Code talk-back (spoken answers). Usage: /speak on|of
 ---
 
 Control the talk-back speaker, which reads my final answer of each turn aloud
-through the Windows speech engine.
+through a neural voice (Edge TTS), falling back to the platform's built-in
+speech engine if that is unavailable.
 
 Run exactly one command via Bash or PowerShell, matching the user's argument
 `$ARGUMENTS` (default to `status` if empty), then report the result in one line:
 
 ```
-node "$USERPROFILE/.claude/helpers/alfred-speak.mjs" $ARGUMENTS
+node "$HOME/.claude/helpers/alfred-speak.mjs" $ARGUMENTS
 ```
 
 Valid arguments: `on`, `off`, `status`, `list`, `test`, `dry`,
