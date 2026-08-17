@@ -2409,10 +2409,26 @@
     library: [{ fn: pollLibrary, ms: 60000 }],
   };
 
+  // Skipping ticks while hidden is right — a background tab should not poll —
+  // but a skipped tick was simply LOST, and the immediate on-entry tick with it.
+  // Load the HUD into a background tab and every row on the left rail stays on
+  // "--" until the next interval happens to land: ten seconds for status, a full
+  // TWO MINUTES for the workshop. Found by opening it in an automated Chrome
+  // tab, where document.hidden is true for the whole session and the rail
+  // therefore never filled in at all. So: catch up the moment the tab is looked
+  // at, rather than waiting out an interval that was scheduled for nobody.
+  var activePollTicks = [];
+
   function stopViewPolls() {
     activePollTimers.forEach(function (t) { clearInterval(t); });
     activePollTimers = [];
+    activePollTicks = [];
   }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) return;
+    activePollTicks.forEach(function (t) { t(); });
+  });
 
   function startViewPolls(view) {
     stopViewPolls();
@@ -2428,6 +2444,7 @@
           .catch(function () {})
           .then(function () { entry.busy = false; });
       }
+      activePollTicks.push(tick);
       tick(); // fire immediately on view entry rather than waiting a full interval
       activePollTimers.push(setInterval(tick, entry.ms));
     });

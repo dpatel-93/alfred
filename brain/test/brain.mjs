@@ -66,6 +66,17 @@ T('wiki-links survived lexical-only indexing', Array.isArray(g.links) && g.links
   T('and alpha actually decays each tick', /alpha\s*-=\s*alpha\s*\*\s*ALPHA_DECAY/.test(body), '');
   T('a drag holds it warm instead of letting it go inert mid-gesture',
     /draggedNode\)\s*\{\s*alpha\s*=\s*Math\.max\(alpha,\s*0\.3\)/.test(body), '');
+
+  // Polls are skipped while the tab is hidden, which is correct — but a skipped
+  // tick used to be lost outright, including the immediate one fired on view
+  // entry, so a HUD loaded in a background tab showed "--" on every rail row
+  // until the next interval landed (up to two minutes for the workshop poll).
+  // Caught by loading it in an automated Chrome tab, where document.hidden
+  // stays true for the whole session and the rail never filled in at all.
+  T('the pollers catch up when the tab becomes visible again',
+    /addEventListener\('visibilitychange'/.test(ui) && /activePollTicks\.forEach/.test(ui), '');
+  T('and the tick list is cleared with the timers, so a stale view cannot be re-ticked',
+    /activePollTimers = \[\];\s*\n\s*activePollTicks = \[\];/.test(ui), '');
 }
 
 const p = [...R].filter(r => r.ok);
