@@ -27,3 +27,10 @@ helpers/.alfred-greeting.json
 helpers/node_modules/
 helpers/.alfred-speak-last.json
 helpers/package-lock.json
+
+# Benchmark scratch. The RESULTS worth keeping are committed explicitly
+# (results-run1-VOID..., results-run3-3reps...); these are the console noise
+# and the regenerable grade pass, and they accumulate one per run.
+brain/bench-run*.log
+brain/staffing-ab-run*.log
+brain/bench/results-graded.jsonl
