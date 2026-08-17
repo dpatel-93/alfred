@@ -1436,6 +1436,11 @@
     <div id="usage-rows"></div>
     <div id="legend"></div>
     <button id="mute-toggle">&#128266; FX Sound: On</button>
+    <!-- On demand instead of only at startup: Alfred's own status plus the dp
+         brief (a separate project's GitHub Action output), read aloud through
+         the same speaker the landing greeting uses. -->
+    <button id="morning-brief-btn" title="Alfred's status plus today's daily brief, read aloud">&#127908; Morning Brief</button>
+    <div id="morning-brief-status" class="panel-help" hidden></div>
     <!-- Alfred is an observe surface, not a do surface: this opens a REAL
          console on the session rather than piping commands through the HUD.
          It was the Claude Terminal panel's "Open in Terminal" button; the
@@ -3774,6 +3779,33 @@
         say(st.error ? ('last run: ' + st.error) : ('last run: ' + st.status));
       }
     };
+  })();
+
+  // --- Morning brief ---------------------------------------------------------
+  // Same content the startup greeting speaks once, on demand: Alfred's status
+  // plus the dp brief, fetched fresh from GitHub every click rather than cached,
+  // since the whole point is "what changed since I last looked".
+  (function wireMorningBrief() {
+    var btn = document.getElementById('morning-brief-btn');
+    var out = document.getElementById('morning-brief-status');
+    if (!btn) return;
+    function say(msg) { out.hidden = !msg; out.textContent = msg || ''; }
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      say('fetching…');
+      bridgePost('/api/morning-brief', {}).then(function (r) {
+        btn.disabled = false;
+        if (!r.ok || !r.data || !r.data.text) {
+          var msg = (r.data && r.data.error) || 'could not build the morning brief';
+          say(msg);
+          return toast(msg, 'critical', { title: 'Morning Brief' });
+        }
+        say(r.data.spoke ? 'speaking…' : '');
+        // ms: 0 — a full daily digest read aloud runs well past any fixed
+        // toast window; manual close only, same as a critical alert.
+        toast(r.data.text, 'info', { title: 'Morning Brief', ms: 0 });
+      }).catch(function () { btn.disabled = false; say('could not reach the server'); });
+    });
   })();
 
   document.getElementById('gauge-left').addEventListener('click', function () {

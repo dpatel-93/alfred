@@ -12,6 +12,7 @@ import { execFile, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { buildIndex, linkKey, noteKey, resolveVaultDir, SKIP_DIRS } from './index-vault.mjs';
 import { composeGreeting, parseMcpList, recentNoteTitles } from './greeting.mjs';
+import { composeMorningBrief } from './morning-brief.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -2028,6 +2029,10 @@ function handleSettingsGet(req, res) {
       value: storedGithubClientId() || '',
       source: process.env.ALFRED_GITHUB_CLIENT_ID ? 'env' : (loadLocalConfig().githubClientId ? 'config' : null),
     },
+    dailyBriefRepo: {
+      value: storedDailyBriefRepo() || '',
+      source: process.env.ALFRED_DAILY_BRIEF_REPO ? 'env' : (loadLocalConfig().dailyBriefRepo ? 'config' : null),
+    },
     // Where the brain actually is, plus how it got that value and whether the
     // folder exists — an install pointed at a folder that is not there reads
     // as "no notes" and is otherwise indistinguishable from an empty vault.
@@ -2044,7 +2049,8 @@ async function handleSettingsPost(req, res) {
   const hasOllama = Object.prototype.hasOwnProperty.call(body, 'ollamaApiKey');
   const hasClientId = Object.prototype.hasOwnProperty.call(body, 'githubClientId');
   const hasVault = Object.prototype.hasOwnProperty.call(body, 'vaultPath');
-  if (!hasOllama && !hasClientId && !hasVault) {
+  const hasDailyBriefRepo = Object.prototype.hasOwnProperty.call(body, 'dailyBriefRepo');
+  if (!hasOllama && !hasClientId && !hasVault && !hasDailyBriefRepo) {
     return sendJson(res, 400, { error: 'nothing to update' });
   }
   if (hasVault) {
@@ -2067,7 +2073,7 @@ async function handleSettingsPost(req, res) {
     indexCache = null;
     invalidateIndexDerived();
     activityCache = null;
-    if (!hasOllama && !hasClientId) {
+    if (!hasOllama && !hasClientId && !hasDailyBriefRepo) {
       return sendJson(res, 200, { ok: true, vault: vaultState(), reindexRequired: true });
     }
   }
@@ -2080,8 +2086,18 @@ async function handleSettingsPost(req, res) {
       return sendJson(res, 400, { error: 'that does not look like a GitHub Client ID — check for stray spaces or line breaks' });
     }
     saveLocalConfig({ githubClientId: cid });
-    if (!hasOllama) {
+    if (!hasOllama && !hasDailyBriefRepo) {
       return sendJson(res, 200, { ok: true, githubClientId: { value: storedGithubClientId() || '', source: cid ? 'config' : null } });
+    }
+  }
+  if (hasDailyBriefRepo) {
+    const repo = String(body.dailyBriefRepo || '').trim();
+    if (repo && !/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(repo)) {
+      return sendJson(res, 400, { error: 'expected an owner/repo, e.g. dpatel-93/DP_dailybrief' });
+    }
+    saveLocalConfig({ dailyBriefRepo: repo });
+    if (!hasOllama) {
+      return sendJson(res, 200, { ok: true, dailyBriefRepo: { value: storedDailyBriefRepo() || '', source: repo ? 'config' : null } });
     }
   }
   const raw = String(body.ollamaApiKey || '').trim();
@@ -3754,6 +3770,16 @@ function storedGithubClientId() {
   return String(process.env.ALFRED_GITHUB_CLIENT_ID || loadLocalConfig().githubClientId || '').trim() || null;
 }
 
+// `owner/repo` of a project whose GitHub Action commits a daily brief back to
+// itself — e.g. dpatel-93/DP_dailybrief. Not hardcoded: this repo is the
+// portable, installable snapshot of one operator's setup, and baking a
+// personal repo name into shared framework source is exactly the kind of
+// stranger's-identity leak ONBOARDING.md exists to avoid. Unset by default;
+// the morning-brief button says so plainly rather than guessing a repo.
+function storedDailyBriefRepo() {
+  return String(process.env.ALFRED_DAILY_BRIEF_REPO || loadLocalConfig().dailyBriefRepo || '').trim() || null;
+}
+
 // One reader for both paths, so every caller downstream is identical.
 async function githubApi(pathAndQuery) {
   const token = storedGithubToken();
@@ -4946,6 +4972,46 @@ async function handleGreeting(req, res) {
   sendJson(res, 200, { ...greeting, spoke: Boolean(route), route: route || 'silent' });
 }
 
+// --- The on-demand morning brief --------------------------------------------
+// Same idea as the startup greeting, but triggered by a click rather than
+// spoken once automatically — a status update plus the dp brief, a separate
+// project's GitHub Action output, read via the GitHub contents API rather than
+// re-run here (the Action holds its own API keys and schedule; this just reads
+// what it already produced).
+
+const DAILY_BRIEF_PATH = 'output/latest-brief.json';
+
+async function fetchDpBrief() {
+  const repo = storedDailyBriefRepo();
+  if (!repo) return null;
+  try {
+    const file = await githubApi(`/repos/${repo}/contents/${DAILY_BRIEF_PATH}`);
+    if (!file || typeof file.content !== 'string') return { error: 'unexpected response shape from GitHub' };
+    return JSON.parse(Buffer.from(file.content, 'base64').toString('utf8'));
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+async function buildMorningBrief() {
+  // false: this is a status readout, not a first-contact greeting — it must
+  // not consume the "have we met" flag the real greeting relies on.
+  const { text: statusText } = await buildGreeting(false);
+  const dpBrief = await fetchDpBrief();
+  const text = composeMorningBrief({ statusText, dpBrief, now: new Date() });
+  return { text, dpBrief };
+}
+
+// POST /api/morning-brief [token]. Same shape and same gate as /api/greeting —
+// a side effect (speech) plus an outbound GitHub read, both bridge-only.
+async function handleMorningBrief(req, res) {
+  let body = {};
+  try { body = await readJsonBody(req); } catch { /* empty body is the normal case */ }
+  const brief = await buildMorningBrief();
+  const route = body.speak === false ? false : speakGreeting(brief.text);
+  sendJson(res, 200, { ...brief, spoke: Boolean(route), route: route || 'silent' });
+}
+
 // --- Server ---
 async function main() {
   if (isIndexStale()) {
@@ -4993,6 +5059,7 @@ async function main() {
           || url.pathname === '/api/settings'
           || url.pathname === '/api/reindex'
           || url.pathname === '/api/greeting'
+          || url.pathname === '/api/morning-brief'
           || url.pathname === '/api/source/save'
           || url.pathname === '/api/github/device/start'
           || url.pathname === '/api/github/disconnect'
@@ -5009,6 +5076,7 @@ async function main() {
         if (url.pathname === '/api/settings') return await handleSettingsPost(req, res);
         if (url.pathname === '/api/reindex') return await handleReindex(req, res);
         if (url.pathname === '/api/greeting') return await handleGreeting(req, res);
+        if (url.pathname === '/api/morning-brief') return await handleMorningBrief(req, res);
         if (url.pathname === '/api/source/save') return await handleSourceSave(req, res);
         if (url.pathname === '/api/github/device/start') return await handleGithubDeviceStart(req, res);
         if (url.pathname === '/api/github/disconnect') return handleGithubDisconnect(req, res);
