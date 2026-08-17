@@ -172,8 +172,40 @@ if (mode === '--check') {
     }
   }
   console.log(`\nwrote ${OUT} — grade it with: node bench/run.mjs --grade\n`);
+} else if (mode === '--resume') {
+  // A full sweep is over an hour of wall clock, and it has now been interrupted
+  // twice. Re-running 96 cells to recover 9 is not diligence, it is a bill —
+  // and the missing cells are never the boring ones, because the run dies
+  // wherever it happened to be. The last interruption took out the sycophancy
+  // trap, the single scenario that actually separates the arms.
+  //
+  // Resume appends only the (arm, scenario, rep) triples that are absent, so
+  // the surviving rows keep their original identity rather than being reissued
+  // under a fresh run. It never deletes OUT — that is what --run is for.
+  const problems = assertRunnable();
+  if (problems.length) { console.log(`\n${C.r}refusing to run:${C.x}\n- ${problems.join('\n- ')}\n`); process.exit(1); }
+  if (!fs.existsSync(OUT)) { console.log(`\n${C.r}nothing to resume: ${OUT} does not exist. Use --run.${C.x}\n`); process.exit(1); }
+  const have = new Set(fs.readFileSync(OUT, 'utf8').trim().split('\n')
+    .filter(Boolean).map((l) => { const r = JSON.parse(l); return `${r.arm} ${r.id} ${r.rep}`; }));
+  const todo = [];
+  for (const arm of Object.values(ARMS)) {
+    for (const s of SCENARIOS) {
+      for (let rep = 1; rep <= reps; rep++) {
+        if (!have.has(`${arm.label} ${s.id} ${rep}`)) todo.push([arm, s, rep]);
+      }
+    }
+  }
+  if (!todo.length) { console.log(`\n${C.g}complete — all ${have.size} cells present at ${reps} rep(s).${C.x}\n`); process.exit(0); }
+  console.log(`\n  ${have.size} rows present · ${C.y}${todo.length} missing${C.x}, running those\n`);
+  fetchVendored();
+  for (const [arm, s, rep] of todo) {
+    const r = runOne(arm, s, rep);
+    fs.appendFileSync(OUT, JSON.stringify({ arm: arm.label, id: s.id, rep, task: s.task, ...r }) + '\n');
+    console.log(`  ${arm.label.padEnd(12)}${s.id.padEnd(28)}${String(r.total || 0).padStart(9)} tok ${String(r.turns ?? '-').padStart(3)}t${r.error ? '  ' + C.r + 'ERR' + C.x : ''}`);
+  }
+  console.log(`\nappended to ${OUT} — grade it with: node bench/run.mjs --grade\n`);
 } else if (mode === '--grade') {
   grade(process.argv[3] && process.argv[3].endsWith('.jsonl') ? process.argv[3] : OUT);
 } else {
-  console.log('usage: --check | --plan [reps] | --run [reps] | --grade [file]');
+  console.log('usage: --check | --plan [reps] | --run [reps] | --resume [reps] | --grade [file]');
 }
