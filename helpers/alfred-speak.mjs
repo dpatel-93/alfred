@@ -24,6 +24,7 @@ const CONFIG_PATH = path.join(HERE, 'alfred-speak.config.json');
 const QUEUE_PATH = path.join(HERE, '.alfred-speak-queue.txt');
 const PID_PATH = path.join(HERE, '.alfred-speak.pid');
 const PS_SCRIPT = path.join(HERE, 'alfred-speak.ps1');
+const PLAY_SCRIPT = path.join(HERE, 'alfred-play.ps1');
 const TASK_NAME = 'AlfredSpeak';
 const TAIL_BYTES = 2 * 1024 * 1024; // transcripts grow unbounded; only the end matters
 
@@ -341,6 +342,36 @@ function speakMac(clean, cfg) {
   }
 }
 
+/**
+ * Play an already-rendered audio file, blocking until it finishes.
+ *
+ * Deliberately NOT routed through the scheduled task: that indirection exists
+ * because a child of the Stop hook dies before it can speak, and it costs 2-3
+ * seconds. Callers of this one (the brain server) are long-lived, so their
+ * children survive on their own.
+ */
+function playFile(file, cfg) {
+  if (!fs.existsSync(file)) return false;
+  try {
+    if (IS_MAC) {
+      stopCurrentSpeech();
+      const child = spawn('/usr/bin/afplay', [file], { detached: true, stdio: 'ignore' });
+      child.unref();
+      try { fs.writeFileSync(PID_PATH, String(child.pid), 'utf8'); } catch { /* best effort */ }
+      return true;
+    }
+    if (IS_WINDOWS) {
+      const child = spawn('powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass',
+          '-File', PLAY_SCRIPT, '-Path', file, '-Volume', String(cfg.volume ?? 95)],
+        { stdio: 'ignore', windowsHide: true });
+      child.unref();
+      return true;
+    }
+  } catch { /* fall through */ }
+  return false;
+}
+
 /** Interrupt whatever is still speaking - a new answer supersedes the old one. */
 function stopCurrentSpeech() {
   try {
@@ -585,6 +616,19 @@ function runCli(argv) {
       saveConfig(cfg);
       console.log(`Neural voice set to "${cfg.edgeVoice}".`);
       speak(`This is ${arg}. Talk-back will sound like this from now on.`, { ...cfg, minChars: 1 });
+      return;
+    }
+
+    // Play an already-rendered file. The HUD uses this for its greeting, which
+    // it renders while the landing page is still up — so the click pays for
+    // playback only, not for a scheduled task and a network round trip.
+    // Obeys both switches, exactly as `greet` does: pre-rendering must not
+    // become a way to speak while talk-back is off.
+    case 'play': {
+      if (!arg) return console.log('Usage: play <file>');
+      if (!cfg.enabled) return console.log('skipped: talk-back is off (speak on)');
+      if (cfg.greetOnEnter === false) return console.log('skipped: welcome is off (welcome on)');
+      console.log(playFile(arg, cfg) ? 'playing' : 'skipped: could not play');
       return;
     }
 
