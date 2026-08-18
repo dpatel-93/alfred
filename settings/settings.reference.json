@@ -1,13 +1,9 @@
 {
-  "voice": {
-    "enabled": true,
-    "mode": "tap"
-  },
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
   "attribution": {
-    "commit": "Co-Authored-By: Alfred <noreply@alfred.local>",
+    "commit": "Co-Authored-By: alfred-flow <alfred@dpatel.dev>",
     "pr": "🤖 Generated with [Alfred](https://github.com/dpatel-93/alfred)"
   },
   "permissions": {
@@ -15,6 +11,9 @@
       "WebSearch",
       "WebFetch",
       "Bash(python:*)",
+      "WebFetch(domain:tradesage.co)",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet test:*)",
       "Bash(node .claude/*)",
       "Read(//c/Users/dishi/.claude/**)",
       "Read(//c/Users/dishi/AppData/Local/Temp/**)",
@@ -25,25 +24,33 @@
       "Read(./.env)",
       "Read(./.env.*)"
     ],
+    "defaultMode": "auto",
     "additionalDirectories": [
-      "C:/Users/dishi/.claude"
+      "c:\\Users\\dishi\\OneDrive\\Desktop\\_Projects\\CloudOpsMCP",
+      "C:\\Users\\dishi\\.claude",
+      "C:\\tmp"
     ]
   },
-  "model": "sonnet",
+  "model": "opus",
+  "fallbackModel": [
+    "sonnet"
+  ],
   "hooks": {
-    "SessionStart": [
+    "PreToolUse": [
       {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "cmd /c node C:/Users/dishi/.claude/helpers/alfred-sync.mjs pull",
-            "timeout": 25000
-          },
-          {
-            "type": "command",
-            "command": "cmd /c node C:/Users/dishi/.claude/helpers/vault-memory-sync.cjs pull",
-            "timeout": 15000
-          },
+            "command": "cmd /c node C:/Users/dishi/.claude/helpers/alfred-approval-hook.mjs",
+            "timeout": 95000
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
           {
             "type": "command",
             "command": "cmd /c node C:/Users/dishi/.claude/helpers/auto-memory-hook.mjs import",
@@ -53,11 +60,6 @@
             "type": "command",
             "command": "cmd /c node C:/Users/dishi/.claude/helpers/config-doctor.mjs",
             "timeout": 10000
-          },
-          {
-            "type": "command",
-            "command": "cmd /c node C:/Users/dishi/.claude/helpers/project-note-check.mjs",
-            "timeout": 15000
           }
         ]
       }
@@ -67,13 +69,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cmd /c node C:/Users/dishi/.claude/helpers/vault-memory-sync.cjs sync",
+            "command": "cmd /c node C:/Users/dishi/.claude/helpers/obsidian-memory-sync.cjs sync",
             "timeout": 15000
-          },
-          {
-            "type": "command",
-            "command": "cmd /c node C:/Users/dishi/.claude/helpers/alfred-sync.mjs push",
-            "timeout": 30000
           }
         ]
       }
@@ -83,30 +80,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cmd /c node C:/Users/dishi/.claude/helpers/alfred-speak.mjs",
-            "timeout": 5000
-          },
-          {
-            "type": "command",
             "command": "cmd /c node C:/Users/dishi/.claude/helpers/auto-memory-hook.mjs sync",
             "timeout": 10000
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Agent",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "cmd /c node C:/Users/dishi/.claude/helpers/alfred-fable-gate.mjs",
-            "timeout": 30000
-          },
-          {
-            "type": "command",
-            "command": "cmd /c node C:/Users/dishi/.claude/helpers/alfred-gate-enforce.mjs",
-            "timeout": 30000
           }
         ]
       }
@@ -116,12 +91,56 @@
     "type": "command",
     "command": "cmd /c node C:/Users/dishi/.claude/helpers/statusline.cjs"
   },
-  "cleanupPeriodDays": 3650,
-  "autoCompactWindow": 600000,
+  "enabledPlugins": {
+    "claude-code-setup@claude-plugins-official": true,
+    "claude-md-management@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true,
+    "figma@claude-plugins-official": true,
+    "firecrawl@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true,
+    "github@claude-plugins-official": true,
+    "asana@claude-plugins-official": true,
+    "context7@claude-plugins-official": true,
+    "firebase@claude-plugins-official": true,
+    "gitlab@claude-plugins-official": true,
+    "greptile@claude-plugins-official": true,
+    "laravel-boost@claude-plugins-official": true,
+    "linear@claude-plugins-official": true,
+    "playwright@claude-plugins-official": true,
+    "serena@claude-plugins-official": false,
+    "slack@claude-plugins-official": true,
+    "stripe@claude-plugins-official": true,
+    "supabase@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": true,
+    "explanatory-output-style@claude-plugins-official": true,
+    "commit-commands@claude-plugins-official": true,
+    "agent-sdk-dev@claude-plugins-official": true,
+    "ralph-loop@claude-plugins-official": true,
+    "skill-creator@claude-plugins-official": true,
+    "security-guidance@claude-plugins-official": true,
+    "pr-review-toolkit@claude-plugins-official": true,
+    "plugin-dev@claude-plugins-official": true,
+    "mcp-server-dev@claude-plugins-official": true,
+    "playground@claude-plugins-official": true,
+    "hookify@claude-plugins-official": true,
+    "learning-output-style@claude-plugins-official": true,
+    "feature-dev@claude-plugins-official": true,
+    "impeccable@impeccable": true
+  },
+  "extraKnownMarketplaces": {
+    "impeccable": {
+      "source": {
+        "source": "github",
+        "repo": "pbakaus/impeccable"
+      }
+    }
+  },
+  "effortLevel": "max",
   "autoUpdatesChannel": "latest",
   "tui": "fullscreen",
-  "switchModelsOnFlag": true,
+  "theme": "light",
   "remoteControlAtStartup": true,
   "agentPushNotifEnabled": true,
-  "skipWorkflowUsageWarning": true
+  "skipAutoPermissionPrompt": true,
+  "switchModelsOnFlag": true
 }

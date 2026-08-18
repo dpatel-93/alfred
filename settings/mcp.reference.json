@@ -24,6 +24,14 @@
       "env": {
         "npm_config_update_notifier": "false"
       }
+    },
+    "azure-infra": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://ca-mcp-server.wittyflower-77f89b26.eastus2.azurecontainerapps.io/sse"
+      ]
     }
   }
 }
