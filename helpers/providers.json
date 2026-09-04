@@ -215,8 +215,8 @@
       "c-suite": null,
       "vp": null,
       "manager": null,
-      "employee": "qwen3.5:9b",
-      "intern": "qwen3.5:4b"
+      "employee": "qwen3:8b",
+      "intern": "qwen3:4b"
     }
   }
 }

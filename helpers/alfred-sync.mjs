@@ -182,26 +182,37 @@ function doPush() {
   if (!repo || !fs.existsSync(path.join(repo, '.git'))) return;
 
   const { changed } = mirrorAll(CLAUDE_HOME, repo);
-  if (!changed.length) return;
 
-  log(`Publishing ${changed.length} local change${changed.length === 1 ? '' : 's'} to the repo…`);
-  for (const f of changed.slice(0, 8)) dim(`> ${f}`);
+  // Stage the WHOLE repo, not just the mirrored dirs. Staging only SHARED_DIRS
+  // silently orphaned brain/, docs/, _archive/ and the onboarding files for
+  // months - they were committed nowhere and survived on exactly one machine,
+  // while every commit message cheerfully reported a successful sync.
+  // SHARED_DIRS stays the MIRROR list only: brain/ must NOT be copied into
+  // ~/.claude (install.ps1 leaves it in the checkout on purpose - it is a full
+  // Node app with its own node_modules). .gitignore already excludes
+  // node_modules, brain/index.json, logs and every credentials file.
+  // The old early-return on an empty `changed` also meant a repo-only edit
+  // (anything authored under brain/ or docs/) could never trigger a push.
 
-  const add = git(repo, ['add', ...SHARED_DIRS.filter((d) => fs.existsSync(path.join(repo, d)))]);
+  const add = git(repo, ['add', '-A']);
   if (!add.ok) { warn(`git add failed: ${add.out.slice(0, 200)}`); return; }
 
   const staged = git(repo, ['diff', '--cached', '--name-only']);
   if (!staged.out) return;
+  const stagedFiles = staged.out.split('\n').filter(Boolean);
+
+  log(`Publishing ${stagedFiles.length} change${stagedFiles.length === 1 ? '' : 's'} to the repo…`);
+  for (const f of (changed.length ? changed : stagedFiles).slice(0, 8)) dim(`> ${f}`);
 
   const host = os.hostname();
-  const msg = `Sync ${changed.length} framework artifact(s) from ${host}\n\n` +
-    changed.slice(0, 20).map((f) => `- ${f}`).join('\n') +
-    (changed.length > 20 ? `\n- …and ${changed.length - 20} more` : '');
+  const msg = `Sync ${stagedFiles.length} framework artifact(s) from ${host}\n\n` +
+    stagedFiles.slice(0, 20).map((f) => `- ${f}`).join('\n') +
+    (stagedFiles.length > 20 ? `\n- …and ${stagedFiles.length - 20} more` : '');
   const commit = git(repo, ['commit', '-m', msg]);
   if (!commit.ok) { warn(`commit failed: ${commit.out.slice(0, 200)}`); return; }
 
   const push = git(repo, ['push', 'origin', 'HEAD']);
-  if (push.ok) ok(`Pushed ${changed.length} artifact change(s) to GitHub.`);
+  if (push.ok) ok(`Pushed ${stagedFiles.length} artifact change(s) to GitHub.`);
   else warn(`Committed locally but push failed — run "git push" in the repo. ${push.out.slice(0, 160)}`);
 }
 

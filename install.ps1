@@ -12,7 +12,11 @@ param(
 # --- Configuration ---
 $repoRoot   = $PSScriptRoot
 $sourceUser = "C:/Users/dishi"   # path baked into hooks/settings at export time
-$targetUser = $env:USERPROFILE -replace '\\', '/'
+# Derived from $HomeDir, NOT $env:USERPROFILE. They are the same thing by default, but when
+# -HomeDir is passed explicitly (a sandboxed install test, a profile somewhere else) reading
+# the env var instead rewrote every hook path to the WRONG home while cheerfully reporting
+# success — the parameter was honoured for destinations and silently ignored for rewriting.
+$targetUser = $HomeDir -replace '\\', '/'
 $stamp      = Get-Date -Format "yyyyMMdd-HHmmss"
 $backupDir  = Join-Path $ClaudeHome "backups\alfred-v4-install-$stamp"
 
@@ -36,7 +40,20 @@ try {
     Write-Step "Alfred v4 install (target: $ClaudeHome)"
     if ($DryRun) { Write-Warn2 "DRY RUN - no changes will be made" }
 
-    Copy-Merged (Join-Path $repoRoot "agents")   (Join-Path $ClaudeHome "agents")
+    # No agents/ any more. The 69 role definitions ship inside skills/orgagent/references/charters/
+    # and are loaded only when work is actually delegated (2026-08-14). A stale ~/.claude/agents
+    # from an older install would put every one of them back into every session, so clear it.
+    $legacyAgents = Join-Path $ClaudeHome "agents"
+    if (Test-Path $legacyAgents) {
+        $stamp  = Get-Date -Format "yyyyMMdd-HHmmss"
+        $parked = Join-Path $ClaudeHome "backups/legacy-agents-$stamp"
+        Write-Warn2 "Found a pre-2026-08-14 agents/ directory - moving it to $parked"
+        if (-not $DryRun) {
+            New-Item -ItemType Directory -Force (Split-Path $parked) | Out-Null
+            Move-Item $legacyAgents $parked
+        }
+    }
+
     Copy-Merged (Join-Path $repoRoot "skills")   (Join-Path $ClaudeHome "skills")
     Copy-Merged (Join-Path $repoRoot "commands") (Join-Path $ClaudeHome "commands")
     Copy-Merged (Join-Path $repoRoot "helpers")  (Join-Path $ClaudeHome "helpers")
@@ -63,6 +80,15 @@ try {
     $settingsDst = Join-Path $ClaudeHome "settings.json"
     $rewritten = (Get-Content $settingsSrc -Raw) -replace [regex]::Escape($sourceUser), $targetUser
     $rewritten = $rewritten -replace [regex]::Escape(($sourceUser -replace '/', '\\\\')), ($targetUser -replace '/', '\\\\')
+    # Git-Bash/WSL-style form ("//c/Users/dishi" — lowercase drive letter, double leading
+    # slash) some permission patterns use, since Claude Code's own path matching sees that
+    # form on Windows when a hook or pattern runs through bash. Neither of the two rewrites
+    # above touches it, so without this it silently survives an install untouched.
+    $sourceDrive = $sourceUser.Substring(0, 1).ToLower()
+    $sourceUserPosix = "//$sourceDrive" + $sourceUser.Substring(2)
+    $targetDrive = $targetUser.Substring(0, 1).ToLower()
+    $targetUserPosix = "//$targetDrive" + $targetUser.Substring(2)
+    $rewritten = $rewritten -replace [regex]::Escape($sourceUserPosix), $targetUserPosix
     if ($DryRun) { Write-Warn2 "[dry-run] would handle settings.json" }
     elseif (-not (Test-Path $settingsDst)) {
         Set-Content -Path $settingsDst -Value $rewritten -Encoding utf8
@@ -75,6 +101,20 @@ try {
     if (-not $DryRun) {
         Copy-Item -Force (Join-Path $repoRoot "settings\config-policy.json") (Join-Path $ClaudeHome "config-policy.json")
         Write-Ok "installed config-policy.json"
+    }
+
+    # Operator profile: NEVER overwrite an existing one — a re-run must not clobber someone's
+    # answers. Only scaffolds a blank template so the "Check ~/.claude/alfred-profile.md"
+    # instruction in agent charters resolves to something even if this script is run
+    # directly instead of through ONBOARDING.md.
+    $profileDst = Join-Path $ClaudeHome "alfred-profile.md"
+    if ($DryRun) {
+        Write-Warn2 "[dry-run] would scaffold alfred-profile.md if absent"
+    } elseif (-not (Test-Path $profileDst)) {
+        Copy-Item -Force (Join-Path $repoRoot "claude-md\alfred-profile.template.md") $profileDst
+        Write-Ok "scaffolded alfred-profile.md (blank — fill it in, or ask Claude to run ONBOARDING.md)"
+    } else {
+        Write-Ok "alfred-profile.md already exists, left untouched"
     }
 
     Write-Step "Done. Backup (if any): $backupDir"

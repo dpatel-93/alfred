@@ -2,7 +2,7 @@
 // Alfred v4 intern wrapper — runs a prompt on a local Ollama model AND logs token
 // counts so usage-report.mjs can show local-vs-cloud load.
 // Usage: node intern-run.mjs <model> "<prompt>"     (or pipe stdin as the prompt body:
-//        cat file.md | node intern-run.mjs qwen3.5:4b "Summarize in 5 bullets:")
+//        cat file.md | node intern-run.mjs qwen3:4b "Summarize in 5 bullets:")
 
 import fs from 'node:fs';
 import path from 'node:path';
