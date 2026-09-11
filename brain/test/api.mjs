@@ -229,7 +229,7 @@ chk('GET /api/library/item traversal-shaped id -> 404 with no file content leake
 const fcScrape = Array.isArray(items) ? items.find((it) => it.type==='skill' && it.origin==='plugin' && it.id.includes('firecrawl-scrape')) : null;
 chk('firecrawl-scrape plugin skill (block-scalar description) resolves to real prose, not "(no description)"',
   !!fcScrape && typeof fcScrape.description === 'string' && fcScrape.description.length > 0 && fcScrape.description !== '(no description)',
-  JSON.stringify(fcScrape?.description).slice(0,200));
+  fcScrape ? JSON.stringify(fcScrape.description).slice(0,200) : 'firecrawl-scrape plugin skill not installed on this machine');
 
 // Scoped to USER skills only — plugin skills may legitimately lack a
 // description (an honest gap), so only user-authored skills are held to the
