@@ -151,7 +151,7 @@ if (!(await up())) {
 
   // --- drop ---
   const dropped = await j(`/api/terminals/${t.id}/drop`, { method: 'POST', headers: H, body: JSON.stringify({ name: 'shot (1).png', data: Buffer.from('png-bytes').toString('base64') }) });
-  chk('a dropped file is saved and its path typed into the console', dropped.s === 200 && fs.existsSync(dropped.d.path) && /shot_.1.\.png$/.test(dropped.d.path) && await a.until(dropped.d.path), JSON.stringify(dropped.d));
+  chk('a dropped file is saved and its path typed into the console', dropped.s === 200 && fs.existsSync(dropped.d.path) && /shot_1_\.png$/.test(dropped.d.path) && await a.until(dropped.d.path), JSON.stringify(dropped.d));
   const dropEmpty = await j(`/api/terminals/${t.id}/drop`, { method: 'POST', headers: H, body: JSON.stringify({ name: 'x.bin', data: '' }) });
   chk('an empty drop is refused', dropEmpty.s === 400, `got ${dropEmpty.s}`);
 
