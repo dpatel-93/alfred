@@ -14,5 +14,15 @@
   "type": "commonjs",
   "devDependencies": {
     "playwright": "^1.62.1"
+  },
+  "allowScripts": {
+    "node-pty": true
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-web-links": "^0.11.0",
+    "@xterm/xterm": "^5.5.0",
+    "node-pty": "^1.1.0",
+    "ws": "^8.21.3"
   }
 }

@@ -50,6 +50,7 @@ const SUITES = [
   { name: 'orchestration', file: 'orchestration.mjs', browser: false },
   { name: 'ask-stream', file: 'ask-stream.mjs', browser: false },
   { name: 'council', file: 'council.mjs', browser: false },
+  { name: 'terminals', file: 'terminals.mjs', browser: false },
   { name: 'search-nav', file: 'search-nav.mjs', browser: true },
   { name: 'org', file: 'org.mjs', browser: true },
   { name: 'charter', file: 'charter.mjs', browser: true },

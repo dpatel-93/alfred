@@ -1061,6 +1061,28 @@
   .cc-lane-foot .btn.big { flex: 1 1 100%; min-height: 40px; font-size: 12px; letter-spacing: .12em; border-color: color-mix(in srgb, var(--mint) 55%, var(--border-focusable)); color: var(--mint); }
   .cc-lane-foot .btn.big:hover { background: color-mix(in srgb, var(--mint) 12%, transparent); border-color: var(--mint); color: var(--mint); }
   #cc-council { padding-top: 6px; border-top: 1px solid var(--hairline); }
+  /* Live consoles: side by side, each a real PTY drawn by xterm.js. */
+  .cc-terms { display: flex; gap: 12px; align-items: stretch; overflow-x: auto; flex: 0 0 auto; }
+  .cc-terms:empty { display: none; }
+  .cc-term {
+    --accent: var(--mint);
+    flex: 1 1 0; min-width: 420px; height: 58vh; min-height: 320px;
+    display: flex; flex-direction: column; position: relative;
+    background: var(--surface-1); border: 1px solid var(--border-strong, var(--border)); border-radius: 6px; overflow: hidden;
+    border-top-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  .cc-term.exited { --accent: var(--gray, #93a1b2); opacity: .8; }
+  .cc-term.drop { outline: 2px dashed var(--mint); outline-offset: -4px; }
+  .cc-term-head {
+    display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+    border-bottom: 1px solid var(--hairline); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-dim);
+  }
+  .cc-term-head strong { color: var(--text); font-weight: 500; letter-spacing: .04em; text-transform: none; font-size: 12px; }
+  .cc-term-head .spacer { flex: 1; }
+  .cc-term-head .meta { font-variant-numeric: tabular-nums; }
+  .cc-term-body { flex: 1; min-height: 0; padding: 6px 2px 6px 8px; background: var(--surface-1); }
+  .cc-term-body .xterm { height: 100%; }
+  .cc-term-body .xterm-viewport { background: transparent !important; }
   .cc-question {
     width: 100%; box-sizing: border-box; resize: vertical; min-height: 84px;
     background: var(--surface-2); border: 1px solid var(--border-focusable); border-radius: 4px;
@@ -1613,6 +1635,9 @@
     <div id="cc-seats" class="cc-lanes"></div>
     <div class="panel-help">Tick a lane to include it in the council and in "Open all lanes". Open drops that seat's console pane into the Command Center window. Sign in opens the provider's own login in a real console. The model box sets what that seat runs — blank is the registry's cheap default; the expensive tiers are a choice, never a default.</div>
   </div>
+  <!-- Live consoles, one per opened lane. Real Windows consoles on the server
+       (node-pty); xterm.js here is their screen and keyboard. -->
+  <div id="cc-terms" class="cc-terms"></div>
   <div class="stage-section" id="cc-council">
     <div class="section-title">Council</div>
     <div class="panel-help" id="cc-asking"></div>
@@ -1741,6 +1766,13 @@
     <div id="connected-list"></div>
   </div>
 </div>
+
+<!-- xterm.js for the Command Center lanes — served by the brain from
+     node_modules (see VENDOR_FILES in server.mjs), so the HUD works offline. -->
+<link rel="stylesheet" href="/vendor/xterm/xterm.css">
+<script src="/vendor/xterm/xterm.js"></script>
+<script src="/vendor/xterm/addon-fit.js"></script>
+<script src="/vendor/xterm/addon-web-links.js"></script>
 
 <script>
 (function () {
@@ -5879,8 +5911,14 @@
         openBtn.type = 'button';
         openBtn.textContent = '〉 Open terminal';
         openBtn.title = 'Open this seat in its own pane of the Command Center window';
-        openBtn.addEventListener('click', function () { ccOpenLane(s, openBtn); });
+        openBtn.title = 'Open this seat as a live console in the lane below';
+        openBtn.addEventListener('click', function () { ccOpenBrowserTerminal(s, openBtn); });
         foot.appendChild(openBtn);
+        var nativeBtn = el('button', 'btn small', ['↗ native window']);
+        nativeBtn.type = 'button';
+        nativeBtn.title = 'Open this seat in the Windows Terminal window instead';
+        nativeBtn.addEventListener('click', function () { ccOpenLane(s, nativeBtn); });
+        foot.appendChild(nativeBtn);
       } else {
         if (s.installed && s.canSignIn) {
           var signBtn = el('button', 'btn small', ['Sign in']);
@@ -5903,6 +5941,158 @@
       if (!r.ok) return toast(r.data.error || 'Could not open the lane.', 'critical');
       toast(seat.label + ' opened in the Command Center window.', 'success', { title: 'Lane' });
     });
+  }
+
+  // --- live consoles in the lanes ------------------------------------
+  // Each opened lane is a real Windows console on the server (node-pty)
+  // running the seat's CLI; xterm.js here is only its screen and keyboard.
+  // The session outlives this page: a reload reattaches instead of restarting.
+  var ccTerms = {}; // id -> { term, fit, ws, root }
+  var CC_XTERM_THEME = {
+    background: '#0b0f16', foreground: '#d9e2ec', cursor: '#63e6b5', cursorAccent: '#06111a',
+    selectionBackground: 'rgba(92, 168, 255, 0.28)',
+    black: '#141c27', red: '#ff6b72', green: '#63e6b5', yellow: '#f0b35a', blue: '#5ca8ff', magenta: '#ad8cff', cyan: '#7fd8e6', white: '#d9e2ec',
+    brightBlack: '#556d8f', brightRed: '#ff8a90', brightGreen: '#8df0cb', brightYellow: '#f7c98a', brightBlue: '#8cc2ff', brightMagenta: '#c6b0ff', brightCyan: '#a5e6f0', brightWhite: '#ffffff',
+  };
+  function ccXtermReady() { return typeof window.Terminal === 'function' && window.FitAddon && window.WebLinksAddon; }
+
+  function ccSendTerm(entry, msg) {
+    if (entry.ws && entry.ws.readyState === 1) entry.ws.send(JSON.stringify(msg));
+  }
+
+  function ccFitTerm(entry) {
+    try { entry.fit.fit(); } catch (e) { return; }
+    ccSendTerm(entry, { type: 'resize', cols: entry.term.cols, rows: entry.term.rows });
+  }
+
+  function ccConnectTerm(entry, info) {
+    var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    var ws = new WebSocket(proto + '//' + location.host + '/ws/terminal/' + info.id + '?token=' + encodeURIComponent(ALFRED_TOKEN));
+    entry.ws = ws;
+    ws.onopen = function () { ccFitTerm(entry); };
+    ws.onmessage = function (ev) {
+      var msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
+      if (msg.type === 'hello') { if (msg.scrollback) entry.term.write(msg.scrollback); ccSetTermMeta(entry, msg.terminal); }
+      else if (msg.type === 'data') entry.term.write(msg.data);
+      else if (msg.type === 'exit') ccTermExited(entry, msg.code);
+    };
+    ws.onclose = function () { if (!entry.exited) entry.term.write('\r\n\x1b[2m[alfred] connection closed — reload to reattach]\x1b[0m\r\n'); };
+  }
+
+  function ccSetTermMeta(entry, t) {
+    entry.metaEl.textContent = (t.pid ? 'pid ' + t.pid + ' · ' : '') + t.cols + '×' + t.rows;
+  }
+
+  function ccTermExited(entry, code) {
+    if (entry.exited) return;
+    entry.exited = true;
+    entry.root.classList.add('exited');
+    entry.badge.className = 'badge pill idle'; entry.badge.textContent = 'exited ' + (code == null ? '' : code);
+    entry.term.write('\r\n\x1b[2m[alfred] process exited' + (code == null ? '' : ' (' + code + ')') + ']\x1b[0m\r\n');
+  }
+
+  function ccMountTerminal(info) {
+    if (ccTerms[info.id]) return ccTerms[info.id];
+    if (!ccXtermReady()) { toast('The terminal library did not load — is the server serving /vendor/xterm?', 'critical'); return null; }
+    var root = el('div', 'cc-term', []);
+    var head = el('div', 'cc-term-head', [el('strong', null, [info.label])]);
+    var badge = el('span', 'badge pill live', ['live']);
+    head.appendChild(badge);
+    var metaEl = el('span', 'meta', []);
+    head.appendChild(metaEl);
+    head.appendChild(el('span', 'spacer', []));
+    var killBtn = el('button', 'btn small danger', ['✕ kill']);
+    killBtn.type = 'button'; killBtn.title = 'Stop this console and everything it started';
+    head.appendChild(killBtn);
+    var closeBtn = el('button', 'btn small ghost', ['hide']);
+    closeBtn.type = 'button'; closeBtn.title = 'Hide this lane here; the console keeps running and reattaches on reload';
+    head.appendChild(closeBtn);
+    root.appendChild(head);
+    var body = el('div', 'cc-term-body', []);
+    root.appendChild(body);
+    document.getElementById('cc-terms').appendChild(root);
+
+    var term = new window.Terminal({
+      theme: CC_XTERM_THEME, fontFamily: "'JetBrains Mono', 'Cascadia Mono', Consolas, monospace", fontSize: 13,
+      cursorBlink: true, scrollback: 5000, allowTransparency: true, windowsPty: { backend: 'conpty' },
+    });
+    var fit = new window.FitAddon.FitAddon();
+    term.loadAddon(fit);
+    term.loadAddon(new window.WebLinksAddon.WebLinksAddon());
+    term.open(body);
+    var entry = { id: info.id, term: term, fit: fit, ws: null, root: root, badge: badge, metaEl: metaEl, exited: false };
+    ccTerms[info.id] = entry;
+
+    // Copy/paste stay with the browser on Ctrl+Shift+C / Ctrl+Shift+V; every
+    // other key — including Alt+V, which Claude Code uses to paste a
+    // screenshot from the Windows clipboard — goes to the console.
+    term.attachCustomKeyEventHandler(function (e) {
+      if (e.ctrlKey && e.shiftKey && (e.key === 'C' || e.key === 'V')) return false;
+      return true;
+    });
+    term.onData(function (d) { ccSendTerm(entry, { type: 'input', data: d }); });
+    term.onResize(function (size) { ccSendTerm(entry, { type: 'resize', cols: size.cols, rows: size.rows }); ccSetTermMeta(entry, { pid: null, cols: size.cols, rows: size.rows }); });
+
+    // A dropped file lands in a temp folder on the server and its path is
+    // typed into the console — the browser never reveals the original path.
+    root.addEventListener('dragover', function (e) { e.preventDefault(); root.classList.add('drop'); });
+    root.addEventListener('dragleave', function () { root.classList.remove('drop'); });
+    root.addEventListener('drop', function (e) {
+      e.preventDefault(); root.classList.remove('drop');
+      var files = e.dataTransfer && e.dataTransfer.files;
+      if (!files || !files.length) return;
+      Array.prototype.forEach.call(files, function (f) {
+        var reader = new FileReader();
+        reader.onload = function () {
+          var b64 = String(reader.result).split(',')[1] || '';
+          bridgePost('/api/terminals/' + info.id + '/drop', { name: f.name, data: b64 }).then(function (r) {
+            if (!r.ok) return toast(r.data.error || 'Could not hand the file to the console.', 'critical');
+            toast(f.name + ' → ' + r.data.path, 'success', { title: 'Dropped into ' + info.label });
+          });
+        };
+        reader.readAsDataURL(f);
+      });
+    });
+
+    killBtn.addEventListener('click', function () {
+      bridgePost('/api/terminals/' + info.id + '/kill', {}).then(function (r) {
+        if (!r.ok) return toast(r.data.error || 'Could not kill the console.', 'critical');
+      });
+    });
+    closeBtn.addEventListener('click', function () {
+      try { if (entry.ws) entry.ws.close(); } catch (e) {}
+      term.dispose();
+      root.remove();
+      delete ccTerms[info.id];
+    });
+
+    ccConnectTerm(entry, info);
+    setTimeout(function () { ccFitTerm(entry); term.focus(); }, 50);
+    return entry;
+  }
+
+  window.addEventListener('resize', function () {
+    Object.keys(ccTerms).forEach(function (id) { ccFitTerm(ccTerms[id]); });
+  });
+
+  function ccOpenBrowserTerminal(seat, btn) {
+    btn.disabled = true;
+    bridgePost('/api/terminals', { provider: seat.id, cols: 100, rows: 30 }).then(function (r) {
+      btn.disabled = false;
+      if (!r.ok) return toast(r.data.error || 'Could not start a console.', 'critical');
+      ccMountTerminal(r.data.terminal);
+      toast(seat.label + ' is live in its lane.', 'success', { title: 'Console' });
+    });
+  }
+
+  // Consoles started earlier (or before a reload) come back on their own.
+  var ccReattached = false;
+  function ccReattachTerminals() {
+    if (ccReattached) return;
+    ccReattached = true;
+    bridgeFetch('/api/terminals').then(function (r) { return r.json(); }).then(function (d) {
+      (d.terminals || []).forEach(function (t) { if (t.status === 'running') ccMountTerminal(t); });
+    }).catch(function () { ccReattached = false; });
   }
 
   // The council section says who is in the room, live with the ticks above it.
@@ -5957,6 +6147,7 @@
         renderCcSeats();
         ccRenderSummary(d);
         ccRenderAsking();
+        ccReattachTerminals();
       });
   }
 

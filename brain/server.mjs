@@ -10,6 +10,8 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { WebSocketServer } from 'ws';
+import pty from 'node-pty';
 import { buildIndex, linkKey, noteKey, resolveVaultDir, SKIP_DIRS } from './index-vault.mjs';
 import { composeGreeting, parseMcpList, recentNoteTitles } from './greeting.mjs';
 import { composeMorningBrief } from './morning-brief.mjs';
@@ -4970,6 +4972,196 @@ function handleCouncilGet(req, res, id) {
   sendJson(res, 200, councilSummary(run));
 }
 
+// --- Browser terminals: real consoles shown in the HUD's lanes ----------------
+// This is NOT the line-based terminal panel that was removed. Each lane is a
+// genuine Windows console (node-pty / ConPTY) running the seat's CLI exactly
+// as Windows Terminal would; xterm.js in the page is only its screen and
+// keyboard, and a token-gated, loopback-only WebSocket carries keystrokes down
+// and screen bytes up. Sessions belong to the server, not the page: a reload
+// reattaches to the same console instead of starting a new one.
+const TERM_SCROLLBACK_CHARS = 256 * 1024;
+const TERM_RETAIN_MS = 5 * 60 * 1000;
+const TERM_DROP_MAX_BYTES = 40 * 1e6;
+const termSessions = new Map(); // id -> session
+let termCounter = 0;
+
+function termSummary(t) {
+  return {
+    id: t.id, provider: t.provider, label: t.label, status: t.status, pid: t.pid,
+    cols: t.cols, rows: t.rows, startedAt: t.startedAt, endedAt: t.endedAt, exitCode: t.exitCode,
+    clients: t.clients.size,
+  };
+}
+
+function termBroadcast(t, msg) {
+  const raw = JSON.stringify(msg);
+  for (const ws of t.clients) if (ws.readyState === 1) ws.send(raw);
+}
+
+function clampDim(v, fallback) {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? Math.min(500, Math.max(10, n)) : fallback;
+}
+
+function spawnTerminal(seat, cfg, cols, rows) {
+  // ALFRED_TERM_STUB_CMD is test-only: a JSON argv to run instead of the seat's
+  // CLI, so the PTY path is exercised for real without a signed-in provider.
+  const argv = process.env.ALFRED_TERM_STUB_CMD ? JSON.parse(process.env.ALFRED_TERM_STUB_CMD) : paneArgv(seat, cfg);
+  const [file, ...args] = argv;
+  termCounter += 1;
+  const id = 'term' + termCounter;
+  const t = {
+    id, provider: seat.id, label: seat.label, status: 'running', pid: null, cols, rows,
+    startedAt: new Date().toISOString(), endedAt: null, exitCode: null,
+    clients: new Set(), scrollback: '', pty: null,
+  };
+  const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor', ALFRED_LANE: seat.id };
+  t.pty = pty.spawn(file, args, { name: 'xterm-256color', cols, rows, cwd: os.homedir(), env, useConpty: true });
+  t.pid = t.pty.pid;
+  t.pty.onData((data) => {
+    t.scrollback = (t.scrollback + data).slice(-TERM_SCROLLBACK_CHARS);
+    termBroadcast(t, { type: 'data', data });
+  });
+  t.pty.onExit(({ exitCode }) => {
+    t.status = 'exited';
+    t.exitCode = exitCode;
+    t.endedAt = new Date().toISOString();
+    termBroadcast(t, { type: 'exit', code: exitCode });
+    // Keep the record briefly so a page that reloads sees "exited", not "gone".
+    setTimeout(() => termSessions.delete(id), TERM_RETAIN_MS).unref?.();
+  });
+  termSessions.set(id, t);
+  return t;
+}
+
+function killTerminal(t) {
+  if (t.status !== 'running') return false;
+  try { t.pty.kill(); } catch { /* already gone */ }
+  // Like agents: the CLI spawns children, and killing only the parent orphans them.
+  if (process.platform === 'win32' && t.pid) execFile('taskkill', ['/PID', String(t.pid), '/T', '/F'], () => {});
+  return true;
+}
+
+function resizeTerminal(t, cols, rows) {
+  if (t.status !== 'running') return;
+  t.cols = clampDim(cols, t.cols);
+  t.rows = clampDim(rows, t.rows);
+  try { t.pty.resize(t.cols, t.rows); } catch { /* racing an exit */ }
+}
+
+async function handleTerminalCreate(req, res) {
+  let body;
+  try { body = await readJsonBody(req); } catch { return sendJson(res, 400, { error: 'invalid JSON body' }); }
+  const id = String(body.provider || '').trim();
+  if (!SEAT_ID_RE.test(id)) return sendJson(res, 400, { error: 'invalid provider id' });
+  const seat = (await councilSeats(false)).find((s) => s.id === id);
+  if (!seat) return sendJson(res, 404, { error: 'no such seat' });
+  if (!seat.ready || !seat.bin) return sendJson(res, 409, { error: `${seat.label} is not ready — ${seat.installed ? 'sign in first' : 'not installed'}` });
+  let t;
+  try {
+    t = spawnTerminal(seat, commandCenterConfig(), clampDim(body.cols, 100), clampDim(body.rows, 30));
+  } catch (err) {
+    return sendJson(res, 500, { error: `could not start a console for ${seat.label}: ${err.message}` });
+  }
+  sendJson(res, 200, { terminal: termSummary(t) });
+}
+
+function handleTerminalList(req, res) {
+  sendJson(res, 200, { terminals: [...termSessions.values()].map(termSummary) });
+}
+
+function handleTerminalKill(req, res, id) {
+  const t = termSessions.get(id);
+  if (!t) return sendJson(res, 404, { error: 'no such terminal' });
+  const killed = killTerminal(t);
+  sendJson(res, 200, { ok: killed, terminal: termSummary(t) });
+}
+
+async function handleTerminalResize(req, res, id) {
+  const t = termSessions.get(id);
+  if (!t) return sendJson(res, 404, { error: 'no such terminal' });
+  let body;
+  try { body = await readJsonBody(req); } catch { return sendJson(res, 400, { error: 'invalid JSON body' }); }
+  resizeTerminal(t, body.cols, body.rows);
+  sendJson(res, 200, { terminal: termSummary(t) });
+}
+
+// A file dropped on a lane: browsers never reveal the original path, so the
+// bytes come up, land in a temp folder, and the path is typed into the console
+// — which is what dropping a file on Windows Terminal does.
+async function handleTerminalDrop(req, res, id) {
+  const t = termSessions.get(id);
+  if (!t) return sendJson(res, 404, { error: 'no such terminal' });
+  if (t.status !== 'running') return sendJson(res, 409, { error: 'terminal has exited' });
+  let body;
+  try { body = await readJsonBody(req, TERM_DROP_MAX_BYTES); } catch { return sendJson(res, 413, { error: 'file too large or invalid body' }); }
+  const safe = path.basename(String(body.name || 'drop')).replace(/[^\w.-]+/g, '_').slice(0, 120) || 'drop';
+  let buf;
+  try { buf = Buffer.from(String(body.data || ''), 'base64'); } catch { return sendJson(res, 400, { error: 'invalid file data' }); }
+  if (!buf.length) return sendJson(res, 400, { error: 'empty file' });
+  const dir = path.join(os.tmpdir(), 'alfred-drops');
+  fs.mkdirSync(dir, { recursive: true });
+  const dest = path.join(dir, `${Date.now()}-${safe}`);
+  fs.writeFileSync(dest, buf);
+  t.pty.write(/\s/.test(dest) ? `"${dest}" ` : `${dest} `);
+  sendJson(res, 200, { ok: true, path: dest, bytes: buf.length });
+}
+
+// Browsers cannot set headers on a WebSocket handshake, so the token rides in
+// the query string — over loopback only, and rotated every boot. The origin is
+// checked as well: a WebSocket is not covered by CORS, and a random page must
+// not be able to open a console just because it guessed the port.
+function attachTerminalWs(server) {
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 1e6 });
+  server.on('upgrade', (req, socket, head) => {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const m = url.pathname.match(/^\/ws\/terminal\/([\w-]+)$/);
+    const origin = req.headers.origin || '';
+    const originOk = !origin || /^http:\/\/(localhost|127\.0\.0\.1|alfred)(:\d+)?$/i.test(origin);
+    const refuse = (code, text) => { socket.write(`HTTP/1.1 ${code} ${text}\r\nConnection: close\r\n\r\n`); socket.destroy(); };
+    if (!m || !originOk) return refuse(403, 'Forbidden');
+    if (url.searchParams.get('token') !== SESSION_TOKEN) return refuse(403, 'Forbidden');
+    const t = termSessions.get(m[1]);
+    if (!t) return refuse(404, 'Not Found');
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      t.clients.add(ws);
+      ws.send(JSON.stringify({ type: 'hello', terminal: termSummary(t), scrollback: t.scrollback }));
+      if (t.status !== 'running') ws.send(JSON.stringify({ type: 'exit', code: t.exitCode }));
+      ws.on('message', (raw) => {
+        let msg;
+        try { msg = JSON.parse(raw); } catch { return; }
+        if (t.status !== 'running') return;
+        if (msg.type === 'input' && typeof msg.data === 'string') t.pty.write(msg.data);
+        else if (msg.type === 'resize') resizeTerminal(t, msg.cols, msg.rows);
+      });
+      ws.on('close', () => t.clients.delete(ws));
+      ws.on('error', () => t.clients.delete(ws));
+    });
+  });
+}
+
+// xterm.js is served from node_modules by name — an allowlist, not a directory
+// — so the HUD works offline and nothing outside these four files is reachable.
+const VENDOR_FILES = {
+  'xterm.js': path.join(__dirname, 'node_modules', '@xterm', 'xterm', 'lib', 'xterm.js'),
+  'xterm.css': path.join(__dirname, 'node_modules', '@xterm', 'xterm', 'css', 'xterm.css'),
+  'addon-fit.js': path.join(__dirname, 'node_modules', '@xterm', 'addon-fit', 'lib', 'addon-fit.js'),
+  'addon-web-links.js': path.join(__dirname, 'node_modules', '@xterm', 'addon-web-links', 'lib', 'addon-web-links.js'),
+};
+
+function handleVendor(req, res, name) {
+  const file = VENDOR_FILES[name];
+  if (!file) return sendText(res, 404, 'not found');
+  fs.readFile(file, (err, buf) => {
+    if (err) return sendText(res, 404, 'not found');
+    res.writeHead(200, {
+      'Content-Type': name.endsWith('.css') ? 'text/css; charset=utf-8' : 'application/javascript; charset=utf-8',
+      'Content-Length': buf.length, 'Cache-Control': 'no-cache',
+    });
+    res.end(buf);
+  });
+}
+
 // POST /api/org/selftest [token] — prove the chain of command actually wires up.
 //
 // Spawns ONE real Claude Code turn whose prompt instructs a three-deep delegation:
@@ -5345,6 +5537,7 @@ async function main() {
       // --- Mutating bridge endpoints: token-gated, loopback-only ---
       if (req.method === 'POST') {
         const agentAction = url.pathname.match(/^\/api\/agents\/([\w-]+)\/kill$/);
+        const termAction = url.pathname.match(/^\/api\/terminals\/([\w-]+)\/(kill|resize|drop)$/);
         // NOTE: this allowlist is the execution bridge, NOT the terminal's.
         // Removing the terminal removed /api/terminal/input from it; every
         // other entry — agents, interns, reindex, approvals — is shared
@@ -5365,9 +5558,16 @@ async function main() {
           || url.pathname === '/api/command-center/config'
           || url.pathname === '/api/command-center/signin'
           || url.pathname === '/api/council'
+          || url.pathname === '/api/terminals'
+          || termAction
           || agentAction;
         if (!isBridgePost) return sendJson(res, 404, { error: 'not found' });
         if (!authorize(req, res)) return;
+
+        if (url.pathname === '/api/terminals') return await handleTerminalCreate(req, res);
+        if (termAction && termAction[2] === 'kill') return handleTerminalKill(req, res, termAction[1]);
+        if (termAction && termAction[2] === 'resize') return await handleTerminalResize(req, res, termAction[1]);
+        if (termAction && termAction[2] === 'drop') return await handleTerminalDrop(req, res, termAction[1]);
 
         if (url.pathname === '/api/claude/open-terminal') return handleChatOpenTerminal(req, res);
         if (url.pathname === '/api/command-center/open') return await handleCommandCenterOpen(req, res);
@@ -5401,8 +5601,10 @@ async function main() {
           || url.pathname === '/api/agents' || url.pathname === '/api/interns/models'
           || url.pathname === '/api/github/status' || url.pathname === '/api/workshop'
           || url.pathname === '/api/command-center/seats' || url.pathname === '/api/council'
+          || url.pathname === '/api/terminals'
           || councilGet || agentOutput) {
         if (!authorize(req, res)) return;
+        if (url.pathname === '/api/terminals') return handleTerminalList(req, res);
         if (url.pathname === '/api/command-center/seats') return await handleCommandCenterSeats(req, res, url);
         if (url.pathname === '/api/council') return handleCouncilList(req, res);
         if (councilGet) return handleCouncilGet(req, res, councilGet[1]);
@@ -5415,6 +5617,9 @@ async function main() {
         if (url.pathname === '/api/settings') return handleSettingsGet(req, res);
         return handleAgentOutput(req, res, agentOutput[1], url);
       }
+
+      const vendor = url.pathname.match(/^\/vendor\/xterm\/([\w.-]+)$/);
+      if (vendor) return handleVendor(req, res, vendor[1]);
 
       if (url.pathname === '/' || url.pathname === '/index.html') {
         // Render the greeting audio while the landing page is on screen. The
@@ -5444,6 +5649,8 @@ async function main() {
       sendJson(res, 500, { error: err.message });
     }
   });
+
+  attachTerminalWs(server);
 
   server.listen(PORT, BIND_HOST, () => {
     console.log(`ALFRED online — http://localhost:${PORT}`);
