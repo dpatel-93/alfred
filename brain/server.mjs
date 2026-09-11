@@ -4718,10 +4718,11 @@ async function handleCommandCenterSeats(req, res, url) {
 function commandCenterArgv(seats) {
   const home = os.homedir();
   const n = seats.length;
-  const argv = ['-w', 'new', 'new-tab', '-d', home, '--title', seats[0].label, seats[0].bin];
+  const launch = (s) => s.launch || [s.bin];
+  const argv = ['-w', 'new', 'new-tab', '-d', home, '--title', seats[0].label, ...launch(seats[0])];
   for (let k = 1; k < n; k++) {
     const size = ((n - k) / (n - k + 1)).toFixed(3);
-    argv.push(';', 'split-pane', '-V', '-s', size, '-d', home, '--title', seats[k].label, seats[k].bin);
+    argv.push(';', 'split-pane', '-V', '-s', size, '-d', home, '--title', seats[k].label, ...launch(seats[k]));
   }
   return argv;
 }
@@ -4742,7 +4743,7 @@ async function handleCommandCenterOpen(req, res) {
     if (!err) return;
     // No Windows Terminal: one plain console per seat is the honest fallback.
     for (const s of seats) {
-      execFile('cmd.exe', ['/c', 'start', s.label, 'cmd.exe', '/k', s.bin], { cwd: os.homedir() }, () => {});
+      execFile('cmd.exe', ['/c', 'start', s.label, 'cmd.exe', '/k', ...(s.launch || [s.bin])], { cwd: os.homedir() }, () => {});
     }
   });
   sendJson(res, 200, { ok: true, seats: seats.map((s) => s.id) });

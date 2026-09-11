@@ -114,8 +114,11 @@ function councilStatus(registry) {
     const bin = STUB_DIR ? `stub:${id}` : (spec.transport === 'host' ? resolveClaudeBin() : resolveBin(spec));
     const installed = Boolean(bin);
     const signedIn = STUB_DIR ? true : (installed && isSignedIn(spec));
+    // How to open this seat interactively in a console pane: an executable runs as-is; an
+    // npm-published CLI is a JS entry and runs under this node.
+    const launch = !bin ? null : (!STUB_DIR && /\.[cm]?js$/i.test(bin)) ? [process.execPath, bin] : [bin];
     seats.push({
-      id, label: spec.label, transport: spec.transport, bin,
+      id, label: spec.label, transport: spec.transport, bin, launch,
       installed, signedIn, ready: installed && signedIn,
       cost: spec.cost, approval: spec.approval, specialism: spec.specialism ?? null,
       loginCmd: spec.loginCmd ?? null, outputContract: spec.outputContract ?? null,

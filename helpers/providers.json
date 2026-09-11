@@ -81,6 +81,45 @@
     }
   },
 
+  "aistudio": {
+    "label": "Gemini (Google AI Studio key)",
+    "transport": "cli",
+    "bin": "gemini",
+    "binFallbacks": [
+      "%APPDATA%/npm/node_modules/@google/gemini-cli/bundle/gemini.js",
+      "/usr/local/lib/node_modules/@google/gemini-cli/bundle/gemini.js"
+    ],
+    "versionArgs": ["--version"],
+    "headless": {
+      "argv": ["-p", "{prompt}"],
+      "jsonArgv": ["--output-format", "json"],
+      "modelFlag": "--model",
+      "effortFlag": null
+    },
+    "loginCmd": "create a key at aistudio.google.com, then put GEMINI_API_KEY=<key> in ~/.gemini/.env (the CLI loads it itself)",
+    "authPaths": ["~/.gemini/.env"],
+    "apiKeyEnv": "GEMINI_API_KEY",
+    "cost": "free tier, then metered",
+    "approval": "ask-per-use",
+    "specialism": "THE SECOND READER — the same Gemini models on an AI Studio key",
+    "routeFor": [
+      "The Gemini seat when the Antigravity subscription is out of quota or not signed in — same models, a different meter.",
+      "A second Gemini opinion in council when the question is Gemini's kind (volume, images, video) and one vote is not enough."
+    ],
+    "neverRouteFor": [
+      "Anything the Antigravity seat can take right now — this key is metered past the free tier; the subscription is already paid for.",
+      "Establishing facts on its own — same rule as every seat: a lead until Claude verifies it."
+    ],
+    "notes": "Gemini CLI (`npm i -g @google/gemini-cli`) with a Google AI Studio API key. Consumer Google-account login was retired 2026-06-18, so the key is the only free path. ~/.gemini/settings.json must select security.auth.selectedType = \"gemini-api-key\" (set 2026-09-11). The bin is a JS entry, not an executable — the helpers run it under node. Free tier is generous for a council seat; past it the key bills per token, so watch the AI Studio dashboard.",
+    "roles": {
+      "c-suite": null,
+      "vp": null,
+      "manager": null,
+      "employee": null,
+      "intern": null
+    }
+  },
+
   "grok": {
     "label": "Grok (xAI, via Grok Build CLI)",
     "transport": "cli",
@@ -128,22 +167,24 @@
     "transport": "cli",
     "bin": "codex",
     "binFallbacks": [
+      "%APPDATA%/npm/node_modules/@openai/codex/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe",
       "~/.codex/bin/codex.exe",
       "~/.codex/bin/codex"
     ],
     "versionArgs": ["--version"],
     "headless": {
-      "argv": ["exec", "{prompt}"],
+      "argv": ["exec", "--skip-git-repo-check", "--sandbox", "read-only", "--color", "never", "{prompt}"],
       "jsonArgv": [],
       "modelFlag": "--model",
       "effortFlag": null
     },
-    "loginCmd": "codex login  (add --device-code if no browser is available)",
+    "loginCmd": "codex login  (browser sign-in with the ChatGPT account)",
     "authPaths": ["~/.codex/auth.json"],
     "apiKeyEnv": "OPENAI_API_KEY",
     "cost": "subscription",
     "approval": "ask-per-use",
-    "notes": "Included at no extra cost with ChatGPT Plus/Pro/Business/Edu/Enterprise. Headless is 'codex exec', which never prompts — so --sandbox is the safety control there.",
+    "specialism": "THE ENGINEER — a second implementation-minded read",
+    "notes": "Included at no extra cost with ChatGPT Plus/Pro/Business/Edu/Enterprise (npm: @openai/codex; the native codex.exe lives under the platform package). Headless is 'codex exec', which never prompts — so --sandbox is the safety control there: read-only, so a council answer can never touch files. exec refuses to run outside a git repo without --skip-git-repo-check, and the helpers run from $HOME.",
     "roles": {
       "c-suite": null,
       "vp": null,

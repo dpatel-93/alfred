@@ -39,7 +39,10 @@ function findBin(spec) {
 }
 
 function getVersion(bin, args) {
-  const run = spawnSync(bin, args ?? ['--version'], { encoding: 'utf8', shell: false, timeout: 30_000 });
+  const argv = args ?? ['--version'];
+  // npm-published CLIs resolve to a JS entry, not an executable — run it under this node.
+  const [exe, exeArgs] = /\.[cm]?js$/i.test(bin) ? [process.execPath, [bin, ...argv]] : [bin, argv];
+  const run = spawnSync(exe, exeArgs, { encoding: 'utf8', shell: false, timeout: 30_000 });
   if (run.status !== 0) return null;
   return (run.stdout ?? '').split('\n')[0].trim().slice(0, 40) || null;
 }

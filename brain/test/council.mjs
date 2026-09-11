@@ -36,7 +36,7 @@ function helper(args, input) {
   try { seats = JSON.parse(r.stdout).seats; } catch { /* asserted below */ }
   const ids = seats.map((s) => s.id);
   chk('--status --json exits 0 and lists seats', r.status === 0 && ids.length > 0, `exit ${r.status} ids=${ids}`);
-  chk('seats are the host + CLI providers only', ['claude', 'gemini', 'grok', 'codex'].every((id) => ids.includes(id)) && !ids.includes('ollama') && !ids.includes('omniroute'), ids.join(','));
+  chk('seats are the host + CLI providers only', ['claude', 'gemini', 'aistudio', 'grok', 'codex'].every((id) => ids.includes(id)) && !ids.includes('ollama') && !ids.includes('omniroute'), ids.join(','));
   chk('stub mode marks every seat ready', seats.every((s) => s.ready), JSON.stringify(seats.map((s) => [s.id, s.ready])));
 }
 
@@ -138,7 +138,11 @@ if (!(await up())) {
   const all = await j('/api/command-center/open', { method: 'POST', headers: H, body: JSON.stringify({}) });
   const argvAll = all.d?.argv || [];
   const sizes = argvAll.filter((a) => /^0\.\d{3}$/.test(a));
-  chk('POST open with no list uses every ready seat, equal columns', all.s === 200 && argvAll.filter((a) => a === 'split-pane').length === 3 && sizes.join(',') === '0.750,0.667,0.500', JSON.stringify(sizes));
+  // k-th split takes (n-k)/(n-k+1) of what is left — derived from the seat count so a new
+  // registry entry does not silently invalidate this assertion.
+  const nReady = seats.d.seats.filter((s) => s.ready).length;
+  const expected = Array.from({ length: nReady - 1 }, (_, i) => ((nReady - 1 - i) / (nReady - i)).toFixed(3)).join(',');
+  chk('POST open with no list uses every ready seat, equal columns', all.s === 200 && argvAll.filter((a) => a === 'split-pane').length === nReady - 1 && sizes.join(',') === expected, `${sizes.join(',')} vs ${expected} (n=${nReady})`);
 
   const askNoTok = await fetch(B + '/api/council', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
   chk('POST /api/council without token blocked', askNoTok.status === 401 || askNoTok.status === 403, `got ${askNoTok.status}`);

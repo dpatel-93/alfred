@@ -125,7 +125,9 @@ function runCli(spec, prompt, model, effort) {
     ...(model && h.modelFlag ? [h.modelFlag, model] : []),
     ...(effort && h.effortFlag ? [h.effortFlag, effort] : []),
   ];
-  const run = spawnSync(bin, argv, { encoding: 'utf8', shell: false, timeout: TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024 });
+  // npm-published CLIs resolve to a JS entry, not an executable — run it under this node.
+  const [exe, args] = /\.[cm]?js$/i.test(bin) ? [process.execPath, [bin, ...argv]] : [bin, argv];
+  const run = spawnSync(exe, args, { encoding: 'utf8', shell: false, timeout: TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024 });
   if (run.error || run.status !== 0) {
     console.error(`error: ${spec.label} exited ${run.status ?? 'signal'} — ${run.error?.message ?? ''}`);
     if (run.stderr) console.error(run.stderr.slice(0, 2000));
