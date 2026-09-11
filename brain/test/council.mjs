@@ -85,7 +85,7 @@ function helper(args, input) {
   chk('stdin is appended to the argv question', st && st.question === 'Head\n\nbody on stdin', JSON.stringify(st && st.question));
   const h = helper(['Which IaC tool?', '--providers', 'claude,grok']);
   chk('human mode prints a COUNCIL VERDICT section', h.status === 0 && h.stdout.includes('COUNCIL VERDICT') && h.stdout.includes('Claude (Anthropic)'), h.stdout.slice(0, 200));
-  const bad = helper(['--json', 'Q', '--providers', 'ollama']);
+  const bad = helper(['--json', 'Q', '--providers', 'omniroute']);
   chk('a non-seat provider is refused', bad.status === 1 && /not a council seat/.test(bad.stderr), `exit ${bad.status} ${bad.stderr.slice(0, 120)}`);
   const empty = helper(['--json', '--providers', 'claude']);
   chk('an empty question is refused', empty.status === 1 && /empty question/.test(empty.stderr), `exit ${empty.status}`);
