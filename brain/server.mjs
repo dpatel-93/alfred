@@ -5664,6 +5664,9 @@ async function main() {
   // it's free, but IIS/Skype/another Alfred may hold it — a failure here is
   // cosmetic, so it degrades silently to the :7777 URL.
   const friendly = http.createServer(server.listeners('request')[0]);
+  // Sharing the request listener does not share 'upgrade': without this the
+  // lanes' WebSockets die silently for anyone using http://alfred/.
+  attachTerminalWs(friendly);
   friendly.on('error', (err) => {
     if (err.code === 'EACCES' || err.code === 'EADDRINUSE') {
       console.log(`[alfred] port 80 unavailable (${err.code}) — use http://localhost:${PORT}`);

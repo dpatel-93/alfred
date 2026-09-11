@@ -5976,7 +5976,10 @@
       else if (msg.type === 'data') entry.term.write(msg.data);
       else if (msg.type === 'exit') ccTermExited(entry, msg.code);
     };
-    ws.onclose = function () { if (!entry.exited) entry.term.write('\r\n\x1b[2m[alfred] connection closed — reload to reattach]\x1b[0m\r\n'); };
+    ws.onclose = function (ev) {
+      if (entry.exited) return;
+      entry.term.write('\r\n\x1b[2m[alfred] connection closed (code ' + ev.code + (ev.reason ? ', ' + ev.reason : '') + ') — reload to reattach]\x1b[0m\r\n');
+    };
   }
 
   function ccSetTermMeta(entry, t) {
