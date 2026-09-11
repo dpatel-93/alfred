@@ -1382,7 +1382,11 @@ const UI_BUILD_PLACEHOLDER = '__ALFRED_UI_BUILD__';
 // rotating token from somewhere. Owner-only file in ~/.claude, rewritten each
 // boot and removed on shutdown — the same trust boundary as the loopback bind,
 // not a second one.
-const TOKEN_FILE = path.join(os.homedir(), '.claude', 'alfred-session.token');
+// Overridable so a test server never clobbers the live server's token: the
+// suites used to write theirs here on listen and leave it behind on a hard
+// kill, which silently broke every hook that reads this file until the next
+// real boot.
+const TOKEN_FILE = process.env.ALFRED_TOKEN_FILE || path.join(os.homedir(), '.claude', 'alfred-session.token');
 function writeTokenFile() {
   try {
     fs.mkdirSync(path.dirname(TOKEN_FILE), { recursive: true });

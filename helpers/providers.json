@@ -254,5 +254,46 @@
       "employee": "qwen3:8b",
       "intern": "qwen3:4b"
     }
+  },
+
+  "dsh": {
+    "label": "DeepSeek Harness (local agent on Ollama)",
+    "transport": "cli",
+    "bin": "dsh",
+    "binFallbacks": [
+      "%APPDATA%/npm/node_modules/@deepseek-ai/dsh/lib/bin.js",
+      "/usr/local/lib/node_modules/@deepseek-ai/dsh/lib/bin.js"
+    ],
+    "versionArgs": ["--version"],
+    "headless": {
+      "argv": ["--profile", "headless", "{prompt}"],
+      "jsonArgv": [],
+      "modelFlag": null,
+      "effortFlag": null
+    },
+    "launchArgv": ["web"],
+    "loginCmd": "none needed — models come from ~/.dsh/settings.yaml (local Ollama route)",
+    "authPaths": [],
+    "cost": "local",
+    "approval": "none",
+    "specialism": "THE LOCAL AGENT — a coding agent on this GPU: plans, reads the workspace, runs tools",
+    "models": [],
+    "councilModel": null,
+    "routeFor": [
+      "Agentic work that must stay on the machine: it can read the workspace and run tools, which the plain ollama seat cannot.",
+      "A second local opinion in council with a different harness around the same Qwen/gpt-oss weights."
+    ],
+    "neverRouteFor": [
+      "Anything needing a guaranteed sandbox — the Windows read-only sandbox is partial enforcement (its own SAFETY.md); run it in a disposable checkout for write work.",
+      "Anything that needs a stable API — developer preview, breaking changes promised."
+    ],
+    "notes": "DeepSeek Harness 0.1.5-rc (`npm i -g @deepseek-ai/dsh`, MIT, developer preview, Aug 2026) pointed at local Ollama through its OpenAI-compatible route — nothing leaves the machine, so no approval gate. The model is NOT chosen per call: headless has no --model flag, it uses agent-default-model in ~/.dsh/settings.yaml (qwen3.8:27b as set 2026-09-11; the Web UI picker saves back there). apiKeyEnv is required by its schema even for a local route — DSH_OLLAMA_KEY holds a dummy value. Interactive = `dsh web` (UI on http://127.0.0.1:3080). Reasoning goes to stderr, the answer to stdout. The bin is a JS entry, run under node.",
+    "roles": {
+      "c-suite": null,
+      "vp": null,
+      "manager": null,
+      "employee": null,
+      "intern": null
+    }
   }
 }

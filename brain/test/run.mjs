@@ -261,6 +261,8 @@ const server = spawn(process.execPath, [path.join(HERE, '..', 'server.mjs')], {
     ...process.env,
     PORT: String(PORT),
     ALFRED_VAULT: path.join(HERE, 'fixtures', 'vault'),
+    // Never the live token file — see TOKEN_FILE in server.mjs.
+    ALFRED_TOKEN_FILE: path.join(os.tmpdir(), `alfred-test-${PORT}.token`),
     // The brain suite exists to cover the DEGRADED path — keyword fallback with
     // no embeddings and no generation. It used to get that for free by assuming
     // Ollama was unreachable, which made it fail on any machine where Ollama was

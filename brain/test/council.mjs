@@ -36,7 +36,7 @@ function helper(args, input) {
   try { seats = JSON.parse(r.stdout).seats; } catch { /* asserted below */ }
   const ids = seats.map((s) => s.id);
   chk('--status --json exits 0 and lists seats', r.status === 0 && ids.length > 0, `exit ${r.status} ids=${ids}`);
-  chk('seats are the host, the CLIs and ollama — never the gateway', ['claude', 'gemini', 'grok', 'codex', 'ollama'].every((id) => ids.includes(id)) && !ids.includes('omniroute'), ids.join(','));
+  chk('seats are the host, the CLIs, ollama and the local harness — never the gateway', ['claude', 'gemini', 'grok', 'codex', 'ollama', 'dsh'].every((id) => ids.includes(id)) && !ids.includes('omniroute'), ids.join(','));
   chk('stub mode marks every seat ready', seats.every((s) => s.ready), JSON.stringify(seats.map((s) => [s.id, s.ready])));
   const claude = seats.find((s) => s.id === 'claude');
   const ollama = seats.find((s) => s.id === 'ollama');
@@ -103,6 +103,7 @@ const server = spawn(process.execPath, [path.join(HERE, '..', 'server.mjs')], {
     ALFRED_INDEX: indexTmp,
     ALFRED_GREETING_STATE: path.join(stub, 'greeting.json'),
     ALFRED_LOCAL_CONFIG_DIR: path.join(stub, 'cfg'),
+    ALFRED_TOKEN_FILE: path.join(stub, 'session.token'),
     OLLAMA_URL: 'http://127.0.0.1:1',
     ALFRED_COUNCIL_HELPER: HELPER,
     ALFRED_CC_DRY_RUN: '1',
