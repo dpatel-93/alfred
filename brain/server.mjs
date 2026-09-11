@@ -1937,7 +1937,9 @@ const OLLAMA_CLOUD_URL = process.env.OLLAMA_CLOUD_URL || 'https://ollama.com';
 // proportionate; the OS-keychain version (DPAPI / Keychain / libsecret) is a
 // cross-platform job and cross-platform is deferred to release 2. Said plainly
 // here rather than implied, so nobody assumes this is encrypted.
-const LOCAL_CONFIG_DIR = path.join(os.homedir(), '.alfred');
+// Overridable so a test server never writes into the operator's real config —
+// the same reason ALFRED_INDEX and ALFRED_GREETING_STATE exist.
+const LOCAL_CONFIG_DIR = process.env.ALFRED_LOCAL_CONFIG_DIR || path.join(os.homedir(), '.alfred');
 const LOCAL_CONFIG_PATH = path.join(LOCAL_CONFIG_DIR, 'config.json');
 
 function loadLocalConfig() {
@@ -4701,30 +4703,108 @@ function councilSeats(force) {
   });
 }
 
+// Per-seat model choices live in the local config, not the registry: the
+// registry's councilModel is the cheap default every machine starts from, and
+// what the operator raises it to is this machine's business. Fable, Opus and
+// the pro tiers are therefore never the default — they are a choice, per seat.
+const MODEL_ID_RE = /^[\w.:-]+$/;
+const DEFAULT_SYNTH_MODEL = 'sonnet';
+
+function commandCenterConfig() {
+  const c = loadLocalConfig().commandCenter;
+  if (!c || typeof c !== 'object') return { models: {}, synthModel: null };
+  return { models: { ...(c.models || {}) }, synthModel: c.synthModel || null };
+}
+
+function seatModel(seat, cfg) {
+  return cfg.models[seat.id] || seat.councilModel || null;
+}
+
+async function installedOllamaModels() {
+  try {
+    const list = await listInternModels();
+    return (Array.isArray(list) ? list : [])
+      .map((m) => (typeof m === 'string' ? m : (m && (m.name || m.model))))
+      .filter(Boolean);
+  } catch { return []; }
+}
+
 async function handleCommandCenterSeats(req, res, url) {
   const seats = await councilSeats(url.searchParams.get('refresh') === '1');
+  const cfg = commandCenterConfig();
+  const ollama = seats.some((s) => s.id === 'ollama') ? await installedOllamaModels() : [];
   // The resolved binary path stays server-side; the page only needs state.
   sendJson(res, 200, {
+    synthModel: cfg.synthModel || DEFAULT_SYNTH_MODEL,
     seats: seats.map((s) => ({
       id: s.id, label: s.label, installed: s.installed, signedIn: s.signedIn, ready: s.ready,
       cost: s.cost, approval: s.approval, specialism: s.specialism, loginCmd: s.loginCmd,
+      canSignIn: Array.isArray(s.signin),
+      model: seatModel(s, cfg), defaultModel: s.councilModel || null,
+      // Ollama's list is whatever is actually pulled; a static list would drift.
+      models: s.id === 'ollama' ? ollama : (s.models || []),
     })),
   });
+}
+
+async function handleCommandCenterConfig(req, res) {
+  let body;
+  try { body = await readJsonBody(req); } catch { return sendJson(res, 400, { error: 'invalid JSON body' }); }
+  const cfg = commandCenterConfig();
+  const models = body.models && typeof body.models === 'object' ? body.models : null;
+  const hasSynth = Object.prototype.hasOwnProperty.call(body, 'synthModel');
+  if (!models && !hasSynth) return sendJson(res, 400, { error: 'nothing to update' });
+  if (models) {
+    for (const [id, m] of Object.entries(models)) {
+      if (!SEAT_ID_RE.test(id)) return sendJson(res, 400, { error: `invalid provider id: ${id}` });
+      const model = String(m || '').trim();
+      if (model && !MODEL_ID_RE.test(model)) return sendJson(res, 400, { error: `invalid model id for ${id}` });
+      if (model) cfg.models[id] = model; else delete cfg.models[id]; // blank = back to the registry default
+    }
+  }
+  if (hasSynth) {
+    const model = String(body.synthModel || '').trim();
+    if (model && !MODEL_ID_RE.test(model)) return sendJson(res, 400, { error: 'invalid synthesis model id' });
+    cfg.synthModel = model || null;
+  }
+  saveLocalConfig({ commandCenter: { models: cfg.models, synthModel: cfg.synthModel } });
+  sendJson(res, 200, { ok: true, models: cfg.models, synthModel: cfg.synthModel || DEFAULT_SYNTH_MODEL });
+}
+
+// The command a console pane runs for a seat: its launcher plus the chosen
+// model, passed the way that CLI takes it (a flag for the coding CLIs, a
+// positional for `ollama run`).
+function paneArgv(seat, cfg) {
+  const base = seat.launch || [seat.bin];
+  const model = seatModel(seat, cfg);
+  if (!model) return base;
+  if (seat.modelFlag) return [...base, seat.modelFlag, model];
+  if (seat.modelPositional) return [...base, model];
+  return base;
 }
 
 // One window, equal columns. Each split takes the pane created before it, so
 // the k-th split claims (n-k)/(n-k+1) of what is left: 2/3 then 1/2 gives three
 // equal columns; 3/4, 2/3, 1/2 gives four.
-function commandCenterArgv(seats) {
+function commandCenterArgv(seats, cfg) {
   const home = os.homedir();
   const n = seats.length;
-  const launch = (s) => s.launch || [s.bin];
-  const argv = ['-w', 'new', 'new-tab', '-d', home, '--title', seats[0].label, ...launch(seats[0])];
+  const argv = ['-w', 'new', 'new-tab', '-d', home, '--title', seats[0].label, ...paneArgv(seats[0], cfg)];
   for (let k = 1; k < n; k++) {
     const size = ((n - k) / (n - k + 1)).toFixed(3);
-    argv.push(';', 'split-pane', '-V', '-s', size, '-d', home, '--title', seats[k].label, ...launch(seats[k]));
+    argv.push(';', 'split-pane', '-V', '-s', size, '-d', home, '--title', seats[k].label, ...paneArgv(seats[k], cfg));
   }
   return argv;
+}
+
+// A real console for a real sign-in flow: the HUD never proxies credentials,
+// it opens the provider's own login command in a window and steps aside.
+function openConsole(title, argv) {
+  const home = os.homedir();
+  execFile('wt.exe', ['-w', 'new', 'new-tab', '-d', home, '--title', title, ...argv], (err) => {
+    if (!err) return;
+    execFile('cmd.exe', ['/c', 'start', title, 'cmd.exe', '/k', ...argv], { cwd: home }, () => {});
+  });
 }
 
 async function handleCommandCenterOpen(req, res) {
@@ -4735,7 +4815,8 @@ async function handleCommandCenterOpen(req, res) {
   const all = await councilSeats(false);
   const seats = (wanted ? all.filter((s) => wanted.includes(s.id)) : all).filter((s) => s.ready && s.bin);
   if (!seats.length) return sendJson(res, 409, { error: 'no seat is ready — install and sign in to at least one CLI' });
-  const argv = commandCenterArgv(seats);
+  const cfg = commandCenterConfig();
+  const argv = commandCenterArgv(seats, cfg);
   if (process.env.ALFRED_CC_DRY_RUN === '1') {
     return sendJson(res, 200, { ok: true, dryRun: true, seats: seats.map((s) => s.id), argv });
   }
@@ -4743,10 +4824,29 @@ async function handleCommandCenterOpen(req, res) {
     if (!err) return;
     // No Windows Terminal: one plain console per seat is the honest fallback.
     for (const s of seats) {
-      execFile('cmd.exe', ['/c', 'start', s.label, 'cmd.exe', '/k', ...(s.launch || [s.bin])], { cwd: os.homedir() }, () => {});
+      execFile('cmd.exe', ['/c', 'start', s.label, 'cmd.exe', '/k', ...paneArgv(s, cfg)], { cwd: os.homedir() }, () => {});
     }
   });
   sendJson(res, 200, { ok: true, seats: seats.map((s) => s.id) });
+}
+
+async function handleCommandCenterSignin(req, res) {
+  let body;
+  try { body = await readJsonBody(req); } catch { return sendJson(res, 400, { error: 'invalid JSON body' }); }
+  const id = String(body.provider || '').trim();
+  if (!SEAT_ID_RE.test(id)) return sendJson(res, 400, { error: 'invalid provider id' });
+  const seat = (await councilSeats(false)).find((s) => s.id === id);
+  if (!seat) return sendJson(res, 404, { error: 'no such seat' });
+  if (!seat.installed) return sendJson(res, 409, { error: `${seat.label} is not installed on this machine` });
+  if (!Array.isArray(seat.signin)) {
+    return sendJson(res, 409, { error: `${seat.label} has no console sign-in — ${seat.loginCmd || 'see providers.json'}` });
+  }
+  const title = `Sign in — ${seat.label}`;
+  if (process.env.ALFRED_CC_DRY_RUN === '1') return sendJson(res, 200, { ok: true, dryRun: true, provider: id, argv: seat.signin });
+  openConsole(title, seat.signin);
+  // The seat list is cached for 30s; the next refresh must see the new credential.
+  seatsCache.at = 0;
+  sendJson(res, 200, { ok: true, provider: id, opened: title });
 }
 
 const councilRuns = new Map(); // id -> run record
@@ -4763,7 +4863,7 @@ function councilSummary(run) {
 function applyCouncilEvent(run, ev) {
   switch (ev.type) {
     case 'seat':
-      run.seats[ev.provider] = { label: ev.label, status: 'running', text: '', model: null, ms: null, error: null };
+      run.seats[ev.provider] = { label: ev.label, status: 'running', text: '', model: ev.model || null, ms: null, error: null };
       break;
     case 'answer':
       run.seats[ev.provider] = { label: ev.label, status: 'done', text: ev.text, model: ev.model, ms: ev.ms, inTokens: ev.inTokens, outTokens: ev.outTokens, error: null };
@@ -4781,7 +4881,7 @@ function applyCouncilEvent(run, ev) {
   }
 }
 
-function launchCouncil(question, providers, synthesize) {
+function launchCouncil(question, providers, synthesize, cfg) {
   councilCounter += 1;
   const id = 'council' + councilCounter;
   const run = {
@@ -4795,6 +4895,10 @@ function launchCouncil(question, providers, synthesize) {
 
   const args = [COUNCIL_HELPER, '--json', question, '--providers', providers.join(',')];
   if (!synthesize) args.push('--no-synth');
+  // Only the operator's overrides travel; the registry default is the helper's own fallback.
+  const overrides = providers.filter((p) => cfg.models[p]).map((p) => `${p}=${cfg.models[p]}`);
+  if (overrides.length) args.push('--models', overrides.join(','));
+  if (synthesize && cfg.synthModel) args.push('--synth-model', cfg.synthModel);
   let proc;
   try {
     // shell:false + an args array: the question is one argv entry, so nothing in it is parsed.
@@ -4833,7 +4937,7 @@ async function handleCouncilAsk(req, res) {
   if (!providers.length) return sendJson(res, 400, { error: 'pick at least one seat' });
   if (providers.some((id) => !SEAT_ID_RE.test(id))) return sendJson(res, 400, { error: 'invalid provider id' });
   if (!fs.existsSync(COUNCIL_HELPER)) return sendJson(res, 503, { error: 'council-run.mjs helper not found' });
-  const run = launchCouncil(question, providers, body.synthesize !== false);
+  const run = launchCouncil(question, providers, body.synthesize !== false, commandCenterConfig());
   sendJson(res, 202, councilSummary(run));
 }
 
@@ -5239,6 +5343,8 @@ async function main() {
           || url.pathname === '/api/github/device/start'
           || url.pathname === '/api/github/disconnect'
           || url.pathname === '/api/command-center/open'
+          || url.pathname === '/api/command-center/config'
+          || url.pathname === '/api/command-center/signin'
           || url.pathname === '/api/council'
           || agentAction;
         if (!isBridgePost) return sendJson(res, 404, { error: 'not found' });
@@ -5246,6 +5352,8 @@ async function main() {
 
         if (url.pathname === '/api/claude/open-terminal') return handleChatOpenTerminal(req, res);
         if (url.pathname === '/api/command-center/open') return await handleCommandCenterOpen(req, res);
+        if (url.pathname === '/api/command-center/config') return await handleCommandCenterConfig(req, res);
+        if (url.pathname === '/api/command-center/signin') return await handleCommandCenterSignin(req, res);
         if (url.pathname === '/api/council') return await handleCouncilAsk(req, res);
         if (url.pathname === '/api/agents/launch') return await handleAgentLaunch(req, res);
         if (url.pathname === '/api/org/selftest') return await handleOrgSelfTest(req, res);

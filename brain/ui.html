@@ -1041,6 +1041,17 @@
   .cc-seat-head strong { font-size: 12px; font-weight: 500; color: var(--text); }
   .cc-seat-copy small { font-size: 10px; color: var(--text-dim); letter-spacing: .04em; }
   .cc-seat-copy small.cc-login { color: var(--amber); }
+  .cc-seat-title { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .cc-seat-title input { margin: 0; accent-color: var(--mint); }
+  .cc-seat-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+  .cc-seat-row .k { font-size: 10px; color: var(--text-dim); letter-spacing: .08em; text-transform: uppercase; }
+  .cc-model-input {
+    flex: 1 1 120px; min-width: 120px; max-width: 260px;
+    background: var(--surface-2); border: 1px solid var(--border-focusable); border-radius: 3px;
+    color: var(--text); font-family: inherit; font-size: 11px; padding: 3px 7px;
+  }
+  .cc-model-input::placeholder { color: var(--text-dim); }
+  .cc-model-input:focus { outline: none; border-color: var(--accent-primary); }
   .cc-question {
     width: 100%; box-sizing: border-box; resize: vertical; min-height: 84px;
     background: var(--surface-2); border: 1px solid var(--border-focusable); border-radius: 4px;
@@ -1580,6 +1591,7 @@
   <div class="stage-head">
     <h1>Command Center</h1>
     <div class="stage-head-controls">
+      <span id="cc-summary" class="panel-help"></span>
       <button class="btn primary" id="cc-open-btn" title="One Windows Terminal window, one pane per ticked seat">&#9002; Open Terminals</button>
       <button class="filter-chip" id="cc-refresh" title="Re-check which seats are installed and signed in">&#8635; Refresh</button>
     </div>
@@ -1587,14 +1599,16 @@
   <div class="stage-section">
     <div class="section-title">Seats</div>
     <div id="cc-seats" class="cc-seats"></div>
-    <div class="panel-help">A seat is a signed-in AI CLI on this machine. Ticked seats get a terminal pane and a council vote. Seats marked ASK FIRST only ever receive the question you send from here — the tick is that approval.</div>
+    <div class="panel-help">A seat is an AI CLI on this machine. Ticked seats get a terminal pane and a council vote. Sign in opens the provider's own login in a real console. The model box sets what that seat runs, in council and in its pane — blank means the registry's cheap default; the expensive tiers are a choice, never a default.</div>
   </div>
   <div class="stage-section">
     <div class="section-title">Council</div>
     <textarea id="cc-question" class="cc-question" rows="4" placeholder="One question for every ticked seat. Each answers on its own; then Claude chairs." spellcheck="true"></textarea>
     <div class="cc-actions">
       <button class="btn primary" id="cc-ask-btn">&#9673; Ask the Council</button>
-      <label class="cc-check"><input type="checkbox" id="cc-synth" checked> Claude chairs a verdict</label>
+      <label class="cc-check"><input type="checkbox" id="cc-synth" checked> Claude chairs a verdict as</label>
+      <input id="cc-synth-model" class="cc-model-input" list="cc-synth-models" placeholder="sonnet" title="Which Claude model chairs the council (blank = sonnet)" autocomplete="off">
+      <datalist id="cc-synth-models"><option value="sonnet"><option value="opus"><option value="haiku"><option value="fable"></datalist>
       <span id="cc-run-status" class="panel-help"></span>
     </div>
     <div id="cc-answers" class="cc-answers"></div>

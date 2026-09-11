@@ -5,6 +5,8 @@
 //
 // Usage: node council-run.mjs "<question>"                        # every ready seat + verdict
 //        node council-run.mjs "<question>" --providers claude,grok
+//        node council-run.mjs "<question>" --models claude=opus,gemini=gemini-3.1-pro-high
+//        node council-run.mjs "<question>" --synth-model haiku     # who chairs (default sonnet)
 //        node council-run.mjs "<question>" --no-synth              # raw answers only
 //        cat brief.md | node council-run.mjs "Review this:"        # stdin is appended
 //        node council-run.mjs --json "<question>"                  # NDJSON events (the HUD)
@@ -46,10 +48,11 @@ const TIMEOUT_MS = Number(process.env.ALFRED_COUNCIL_TIMEOUT_MS ?? 600_000);
 const ARGV_MAX_CHARS = 20_000;
 const MAX_QUESTION_CHARS = 200_000;
 
-// Council seats are the frontier CLIs: the host plus anything the operator signs into.
-// Interns (ollama) and the gateway (openai-http) do not get a vote — they are cheap labour,
-// not a second opinion, and the registry's own routing rules say as much.
-const SEAT_TRANSPORTS = new Set(['host', 'cli']);
+// Council seats: the host, every CLI the operator signs into, and the local Ollama models —
+// a seat on the operator's own GPU costs nothing and leaves nothing behind. The gateway
+// (openai-http) does not get a vote: its answering model is unknowable, which breaks the
+// provenance every seat here carries.
+const SEAT_TRANSPORTS = new Set(['host', 'cli', 'ollama-http']);
 
 const C = { r: '\x1b[0m', b: '\x1b[1m', dim: '\x1b[2m', grn: '\x1b[32m', red: '\x1b[31m', yel: '\x1b[33m', cyan: '\x1b[36m' };
 
@@ -116,12 +119,19 @@ function councilStatus(registry) {
     const signedIn = STUB_DIR ? true : (installed && isSignedIn(spec));
     // How to open this seat interactively in a console pane: an executable runs as-is; an
     // npm-published CLI is a JS entry and runs under this node.
-    const launch = !bin ? null : (!STUB_DIR && /\.[cm]?js$/i.test(bin)) ? [process.execPath, bin] : [bin];
+    const exe = !bin ? null : (!STUB_DIR && /\.[cm]?js$/i.test(bin)) ? [process.execPath, bin] : [bin];
+    const launch = exe ? [...exe, ...(Array.isArray(spec.launchArgv) ? spec.launchArgv : [])] : null;
+    // Interactive sign-in argv, when the provider has a console flow (key-based seats do not).
+    const signin = exe && Array.isArray(spec.loginArgv) ? [...exe, ...spec.loginArgv] : null;
     seats.push({
-      id, label: spec.label, transport: spec.transport, bin, launch,
+      id, label: spec.label, transport: spec.transport, bin, launch, signin,
       installed, signedIn, ready: installed && signedIn,
       cost: spec.cost, approval: spec.approval, specialism: spec.specialism ?? null,
       loginCmd: spec.loginCmd ?? null, outputContract: spec.outputContract ?? null,
+      models: Array.isArray(spec.models) ? spec.models : [],
+      councilModel: spec.councilModel ?? null,
+      modelFlag: spec.headless?.modelFlag ?? null,
+      modelPositional: Boolean(spec.modelPositional),
     });
   }
   return seats;
@@ -130,7 +140,7 @@ function councilStatus(registry) {
 // --- Argument parsing ---
 
 function parseArgs(argv) {
-  const opts = { providers: null, synth: true, json: false, status: false };
+  const opts = { providers: null, synth: true, json: false, status: false, models: {}, synthModel: null };
   const words = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -138,10 +148,22 @@ function parseArgs(argv) {
     if (a === '--status') { opts.status = true; continue; }
     if (a === '--no-synth') { opts.synth = false; continue; }
     if (a === '--providers' && argv[i + 1]) { opts.providers = argv[++i].split(',').map((s) => s.trim()).filter(Boolean); continue; }
+    // --models claude=opus,gemini=gemini-3.1-pro-high — per-seat model; unnamed seats use the
+    // registry's councilModel, and a seat with neither lets the provider pick.
+    if (a === '--models' && argv[i + 1]) {
+      for (const pair of argv[++i].split(',')) {
+        const [id, model] = pair.split('=').map((s) => s.trim());
+        if (id && model) opts.models[id] = model;
+      }
+      continue;
+    }
+    if (a === '--synth-model' && argv[i + 1]) { opts.synthModel = argv[++i]; continue; }
     words.push(a);
   }
   return { opts, prompt: words.join(' ') };
 }
+
+const MODEL_ID_RE = /^[\w.:-]+$/;
 
 function readStdin() {
   if (process.stdin.isTTY) return '';
@@ -201,17 +223,21 @@ async function runClaude(prompt, model) {
   };
 }
 
-async function runProvider(id, prompt) {
+async function runProvider(id, prompt, model) {
   if (!fs.existsSync(PROVIDER_RUN)) throw new Error(`provider-run.mjs not found at ${PROVIDER_RUN}`);
   const { arg, stdin } = splitForTransport(prompt);
-  const run = await spawnCollect(process.execPath, [PROVIDER_RUN, id, arg], { input: stdin });
+  const args = [PROVIDER_RUN, id, arg, ...(model ? ['--model', model] : [])];
+  const run = await spawnCollect(process.execPath, args, { input: stdin });
   if (run.error || run.code !== 0) throw new Error((run.error ?? run.stderr ?? `exit ${run.code}`).trim().slice(0, 500));
-  return { text: run.stdout.trim(), model: null, inTokens: 0, outTokens: 0 };
+  return { text: run.stdout.trim(), model: model ?? null, inTokens: 0, outTokens: 0 };
 }
 
-async function runSeat(seat, prompt) {
-  if (STUB_DIR) return { text: readStub(seat.id).trim(), model: 'stub', inTokens: 0, outTokens: 0 };
-  return seat.transport === 'host' ? runClaude(prompt, CLAUDE_SEAT_MODEL) : runProvider(seat.id, prompt);
+async function runSeat(seat, prompt, model) {
+  // The stub echoes the model it was asked for, so a test can prove the choice reached the seat.
+  if (STUB_DIR) return { text: readStub(seat.id).trim(), model: `stub:${model ?? 'default'}`, inTokens: 0, outTokens: 0 };
+  return seat.transport === 'host'
+    ? runClaude(prompt, model ?? CLAUDE_SEAT_MODEL)
+    : runProvider(seat.id, prompt, model);
 }
 
 // --- Synthesis ---
@@ -243,9 +269,9 @@ function buildSynthesisPrompt(question, results, seats) {
   return parts.join('\n');
 }
 
-async function runSynthesis(question, results, seats) {
-  if (STUB_DIR) return { text: readStub('synthesis').trim(), model: 'stub', inTokens: 0, outTokens: 0 };
-  return runClaude(buildSynthesisPrompt(question, results, seats), SYNTH_MODEL);
+async function runSynthesis(question, results, seats, model) {
+  if (STUB_DIR) return { text: readStub('synthesis').trim(), model: `stub:${model}`, inTokens: 0, outTokens: 0 };
+  return runClaude(buildSynthesisPrompt(question, results, seats), model);
 }
 
 // --- Usage logging (provider-run logs its own seats; the Claude turns are logged here) ---
@@ -336,15 +362,25 @@ if (opts.providers) {
 }
 if (!chosen.length) die('no seat is ready — run with --status to see why', 2);
 
+for (const [id, m] of Object.entries(opts.models)) {
+  if (!MODEL_ID_RE.test(m)) die(`invalid model id for ${id}: '${m}'`, 1);
+}
+const synthModel = opts.synthModel ?? SYNTH_MODEL;
+if (!MODEL_ID_RE.test(synthModel)) die(`invalid synthesis model id: '${synthModel}'`, 1);
+const modelFor = (seat) => opts.models[seat.id] ?? seat.councilModel ?? null;
+
 const emit = makeEmitter(opts.json);
 const started = Date.now();
-emit({ type: 'start', question, providers: chosen.map((s) => s.id), synthesize: opts.synth });
+emit({
+  type: 'start', question, providers: chosen.map((s) => s.id), synthesize: opts.synth,
+  models: Object.fromEntries(chosen.map((s) => [s.id, modelFor(s)])), synthModel: opts.synth ? synthModel : null,
+});
 
 const results = await Promise.all(chosen.map(async (seat) => {
-  emit({ type: 'seat', provider: seat.id, label: seat.label, status: 'running' });
+  emit({ type: 'seat', provider: seat.id, label: seat.label, status: 'running', model: modelFor(seat) });
   const t0 = Date.now();
   try {
-    const out = await runSeat(seat, question);
+    const out = await runSeat(seat, question, modelFor(seat));
     const ms = Date.now() - t0;
     if (seat.transport === 'host') logClaudeUsage('council', out, question.length, ms);
     emit({ type: 'answer', provider: seat.id, label: seat.label, text: out.text, model: out.model, ms, inTokens: out.inTokens, outTokens: out.outTokens });
@@ -361,7 +397,7 @@ let synthesis = null;
 if (opts.synth && answered.length) {
   const t0 = Date.now();
   try {
-    const out = await runSynthesis(question, results, chosen);
+    const out = await runSynthesis(question, results, chosen, synthModel);
     const ms = Date.now() - t0;
     logClaudeUsage('council-synth', out, question.length, ms);
     synthesis = { ok: true, ms };

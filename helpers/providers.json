@@ -12,7 +12,13 @@
     "      'local'        = runs on the user's own hardware, free",
     "",
     "roles: model id per org role. null means 'let the provider pick its default'.",
-    "approval: 'ask-per-use' means Alfred MUST get the operator's yes before each call."
+    "approval: 'ask-per-use' means Alfred MUST get the operator's yes before each call.",
+    "",
+    "Command Center fields (all optional): loginArgv = args after the binary that start the",
+    "provider's interactive sign-in in a real console (absent = key-based, no console flow);",
+    "models = suggested model ids for the seat picker (free text is always allowed);",
+    "councilModel = the seat's default model in council and in its terminal pane — the cheap",
+    "tier on purpose; the operator raises it per seat from the HUD, never here."
   ],
 
   "claude": {
@@ -21,7 +27,16 @@
     "bin": "claude",
     "binFallbacks": [],
     "versionArgs": ["--version"],
-    "loginCmd": "claude  (sign in on first run, or /login)",
+    "loginCmd": "claude auth login  (browser sign-in with the Claude subscription)",
+    "loginArgv": ["auth", "login"],
+    "headless": {
+      "argv": ["-p", "{prompt}"],
+      "jsonArgv": ["--output-format", "json"],
+      "modelFlag": "--model",
+      "effortFlag": null
+    },
+    "models": ["sonnet", "opus", "haiku", "fable"],
+    "councilModel": "sonnet",
     "authPaths": ["~/.claude/.credentials.json"],
     "cost": "subscription",
     "approval": "none",
@@ -51,6 +66,14 @@
       "effortFlag": "--effort"
     },
     "loginCmd": "agy  (first run opens a browser; use a Google AI Pro/Ultra account)",
+    "loginArgv": [],
+    "models": [
+      "gemini-3.8-flash-low", "gemini-3.8-flash-medium", "gemini-3.8-flash-high",
+      "gemini-3.7-flash-low", "gemini-3.7-flash-medium", "gemini-3.7-flash-high",
+      "gemini-3.1-pro-low", "gemini-3.1-pro-high",
+      "claude-sonnet-4-6", "claude-opus-4-6-thinking", "gpt-oss-120b-medium"
+    ],
+    "councilModel": "gemini-3.7-flash-high",
     "authPaths": ["~/.gemini/antigravity-cli"],
     "apiKeyEnv": "GEMINI_API_KEY",
     "overflowModels": {
@@ -81,45 +104,6 @@
     }
   },
 
-  "aistudio": {
-    "label": "Gemini (Google AI Studio key)",
-    "transport": "cli",
-    "bin": "gemini",
-    "binFallbacks": [
-      "%APPDATA%/npm/node_modules/@google/gemini-cli/bundle/gemini.js",
-      "/usr/local/lib/node_modules/@google/gemini-cli/bundle/gemini.js"
-    ],
-    "versionArgs": ["--version"],
-    "headless": {
-      "argv": ["-p", "{prompt}"],
-      "jsonArgv": ["--output-format", "json"],
-      "modelFlag": "--model",
-      "effortFlag": null
-    },
-    "loginCmd": "create a key at aistudio.google.com, then put GEMINI_API_KEY=<key> in ~/.gemini/.env (the CLI loads it itself)",
-    "authPaths": ["~/.gemini/.env"],
-    "apiKeyEnv": "GEMINI_API_KEY",
-    "cost": "free tier, then metered",
-    "approval": "ask-per-use",
-    "specialism": "THE SECOND READER — the same Gemini models on an AI Studio key",
-    "routeFor": [
-      "The Gemini seat when the Antigravity subscription is out of quota or not signed in — same models, a different meter.",
-      "A second Gemini opinion in council when the question is Gemini's kind (volume, images, video) and one vote is not enough."
-    ],
-    "neverRouteFor": [
-      "Anything the Antigravity seat can take right now — this key is metered past the free tier; the subscription is already paid for.",
-      "Establishing facts on its own — same rule as every seat: a lead until Claude verifies it."
-    ],
-    "notes": "Gemini CLI (`npm i -g @google/gemini-cli`) with a Google AI Studio API key. Consumer Google-account login was retired 2026-06-18, so the key is the only free path. ~/.gemini/settings.json must select security.auth.selectedType = \"gemini-api-key\" (set 2026-09-11). The bin is a JS entry, not an executable — the helpers run it under node. Free tier is generous for a council seat; past it the key bills per token, so watch the AI Studio dashboard.",
-    "roles": {
-      "c-suite": null,
-      "vp": null,
-      "manager": null,
-      "employee": null,
-      "intern": null
-    }
-  },
-
   "grok": {
     "label": "Grok (xAI, via Grok Build CLI)",
     "transport": "cli",
@@ -136,6 +120,9 @@
       "effortFlag": null
     },
     "loginCmd": "grok login  (SuperGrok or X Premium+ account)",
+    "loginArgv": ["login"],
+    "models": [],
+    "councilModel": null,
     "authPaths": ["~/.grok/auth.json"],
     "apiKeyEnv": "XAI_API_KEY",
     "cost": "subscription",
@@ -179,6 +166,9 @@
       "effortFlag": null
     },
     "loginCmd": "codex login  (browser sign-in with the ChatGPT account)",
+    "loginArgv": ["login"],
+    "models": [],
+    "councilModel": null,
     "authPaths": ["~/.codex/auth.json"],
     "apiKeyEnv": "OPENAI_API_KEY",
     "cost": "subscription",
@@ -251,6 +241,11 @@
     "authPaths": [],
     "cost": "local",
     "approval": "none",
+    "specialism": "THE LOCAL — free, private, on this GPU",
+    "launchArgv": ["run"],
+    "modelPositional": true,
+    "models": [],
+    "councilModel": "qwen3:8b",
     "notes": "Free and private — nothing leaves the machine, so no approval gate. Batch workers: a cold model load costs 1-2 min, so batch calls rather than making one-off latency-sensitive ones.",
     "roles": {
       "c-suite": null,
