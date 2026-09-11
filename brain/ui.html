@@ -1052,6 +1052,13 @@
   }
   .cc-model-input::placeholder { color: var(--text-dim); }
   .cc-model-input:focus { outline: none; border-color: var(--accent-primary); }
+  /* Lanes: one column per seat, side by side, the width of the stage. */
+  .cc-lanes { display: flex; gap: 12px; align-items: stretch; flex: 1 1 auto; min-height: 0; overflow-x: auto; padding-bottom: 4px; }
+  .cc-lanes .cc-seat { flex: 1 1 0; min-width: 210px; max-width: 360px; align-items: stretch; }
+  .cc-lanes .cc-seat-copy { flex: 1; }
+  .cc-lane-foot { margin-top: auto; padding-top: 10px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .cc-modal-body { display: flex; flex-direction: column; gap: 12px; }
+  .cc-modal-body .cc-answer-body { max-height: 320px; }
   .cc-question {
     width: 100%; box-sizing: border-box; resize: vertical; min-height: 84px;
     background: var(--surface-2); border: 1px solid var(--border-focusable); border-radius: 4px;
@@ -1592,20 +1599,34 @@
     <h1>Command Center</h1>
     <div class="stage-head-controls">
       <span id="cc-summary" class="panel-help"></span>
-      <button class="btn primary" id="cc-open-btn" title="One Windows Terminal window, one pane per ticked seat">&#9002; Open Terminals</button>
+      <button class="btn primary" id="cc-council-btn" title="One question to every ticked seat, in a dialog">&#9673; Ask the Council</button>
+      <button class="btn" id="cc-open-btn" title="Open every ticked seat at once in a fresh Windows Terminal window, equal columns">&#9002; Open all lanes</button>
       <button class="filter-chip" id="cc-refresh" title="Re-check which seats are installed and signed in">&#8635; Refresh</button>
     </div>
   </div>
-  <div class="stage-section">
-    <div class="section-title">Seats</div>
-    <div id="cc-seats" class="cc-seats"></div>
-    <div class="panel-help">A seat is an AI CLI on this machine. Ticked seats get a terminal pane and a council vote. Sign in opens the provider's own login in a real console. The model box sets what that seat runs, in council and in its pane — blank means the registry's cheap default; the expensive tiers are a choice, never a default.</div>
+  <!-- One lane per seat. Each lane's Open drops that seat's console pane into
+       the shared Command Center window, so the lanes here and the panes there
+       line up one to one. The council lives in the dialog, not on the stage. -->
+  <div id="cc-seats" class="cc-lanes"></div>
+  <div class="panel-help">Tick a lane to include it in the council and in "Open all lanes". Open drops that seat's console pane into the Command Center window. Sign in opens the provider's own login in a real console. The model box sets what that seat runs — blank is the registry's cheap default; the expensive tiers are a choice, never a default.</div>
+</div>
+
+<!-- Council dialog. Same scrim/modal chrome as the Field Manual, widened for
+     the answer columns. Opened from the Command Center; a run keeps going and
+     toasts if the dialog is closed mid-council. -->
+<div id="cc-scrim" class="scrim"></div>
+<div id="cc-modal" class="modal wide" role="dialog" aria-modal="true" aria-labelledby="cc-modal-title">
+  <div class="modal-head">
+    <div>
+      <h2 id="cc-modal-title">Council</h2>
+      <div class="editor-meta" id="cc-modal-seats"></div>
+    </div>
+    <button class="icon-btn" id="cc-close" aria-label="Close">&#10005;</button>
   </div>
-  <div class="stage-section">
-    <div class="section-title">Council</div>
+  <div class="modal-body cc-modal-body">
     <textarea id="cc-question" class="cc-question" rows="4" placeholder="One question for every ticked seat. Each answers on its own; then Claude chairs." spellcheck="true"></textarea>
     <div class="cc-actions">
-      <button class="btn primary" id="cc-ask-btn">&#9673; Ask the Council</button>
+      <button class="btn primary" id="cc-ask-btn">&#9673; Ask</button>
       <label class="cc-check"><input type="checkbox" id="cc-synth" checked> Claude chairs a verdict as</label>
       <input id="cc-synth-model" class="cc-model-input" list="cc-synth-models" placeholder="sonnet" title="Which Claude model chairs the council (blank = sonnet)" autocomplete="off">
       <datalist id="cc-synth-models"><option value="sonnet"><option value="opus"><option value="haiku"><option value="fable"></datalist>
@@ -5860,21 +5881,52 @@
       modelRow.appendChild(modelInput);
       copy.appendChild(modelRow);
 
-      if (!s.ready) {
-        var row = el('div', 'cc-seat-row', []);
+      var foot = el('div', 'cc-lane-foot', []);
+      if (s.ready) {
+        var openBtn = el('button', 'btn small', ['〉 Open']);
+        openBtn.type = 'button';
+        openBtn.title = 'Open this seat in its own pane of the Command Center window';
+        openBtn.addEventListener('click', function () { ccOpenLane(s, openBtn); });
+        foot.appendChild(openBtn);
+      } else {
         if (s.installed && s.canSignIn) {
           var signBtn = el('button', 'btn small', ['Sign in']);
           signBtn.type = 'button';
           signBtn.addEventListener('click', function () { ccSignIn(s, signBtn); });
-          row.appendChild(signBtn);
+          foot.appendChild(signBtn);
         }
-        if (s.loginCmd) row.appendChild(el('small', 'cc-login', [(s.installed ? '' : 'not installed · ') + s.loginCmd]));
-        copy.appendChild(row);
+        if (s.loginCmd) foot.appendChild(el('small', 'cc-login', [(s.installed ? '' : 'not installed · ') + s.loginCmd]));
       }
+      copy.appendChild(foot);
       card.appendChild(copy);
       wrap.appendChild(card);
     });
   }
+
+  function ccOpenLane(seat, btn) {
+    btn.disabled = true;
+    bridgePost('/api/command-center/open', { providers: [seat.id], lane: true }).then(function (r) {
+      btn.disabled = false;
+      if (!r.ok) return toast(r.data.error || 'Could not open the lane.', 'critical');
+      toast(seat.label + ' opened in the Command Center window.', 'success', { title: 'Lane' });
+    });
+  }
+
+  // --- council dialog ---
+  var ccScrim = document.getElementById('cc-scrim');
+  var ccModal = document.getElementById('cc-modal');
+  function ccOpenCouncil() {
+    var ids = ccSelected();
+    var names = ccSeats.filter(function (s) { return ids.indexOf(s.id) !== -1; }).map(function (s) { return s.label; });
+    document.getElementById('cc-modal-seats').textContent = names.length ? 'Asking: ' + names.join(' · ') : 'No lane is ticked — tick at least one seat first.';
+    ccScrim.classList.add('open'); ccModal.classList.add('open');
+    document.getElementById('cc-question').focus();
+  }
+  function ccCloseCouncil() { ccScrim.classList.remove('open'); ccModal.classList.remove('open'); }
+  document.getElementById('cc-council-btn').addEventListener('click', ccOpenCouncil);
+  document.getElementById('cc-close').addEventListener('click', ccCloseCouncil);
+  ccScrim.addEventListener('click', ccCloseCouncil);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && ccModal.classList.contains('open')) ccCloseCouncil(); });
 
   function ccSetModel(seat, model) {
     var patch = {}; patch[seat.id] = model;
@@ -5953,7 +6005,7 @@
     bridgePost('/api/command-center/open', { providers: ids }).then(function (r) {
       if (!r.ok) return toast(r.data.error || 'Could not open the terminals.', 'critical');
       var n = r.data.seats.length;
-      toast('Opened ' + n + ' terminal pane' + (n === 1 ? '' : 's') + ': ' + r.data.seats.join(', '), 'success', { title: 'Command Center' });
+      toast('Opened ' + n + ' lane' + (n === 1 ? '' : 's') + ' in a new window: ' + r.data.seats.join(', '), 'success', { title: 'Command Center' });
     });
   });
 

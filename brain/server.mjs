@@ -4811,6 +4811,20 @@ function openConsole(title, argv) {
   });
 }
 
+// One lane at a time: every lane-open targets the SAME named Windows Terminal
+// window, so the first click creates it and each later click adds a pane
+// beside the others — the HUD's lanes and the console's panes stay in step.
+const CC_WINDOW = 'alfred-command-center';
+function laneArgv(seats, cfg) {
+  const home = os.homedir();
+  const argv = ['-w', CC_WINDOW];
+  seats.forEach((s, i) => {
+    if (i) argv.push(';');
+    argv.push('split-pane', '-V', '-d', home, '--title', s.label, ...paneArgv(s, cfg));
+  });
+  return argv;
+}
+
 async function handleCommandCenterOpen(req, res) {
   let body;
   try { body = await readJsonBody(req); } catch { return sendJson(res, 400, { error: 'invalid JSON body' }); }
@@ -4820,9 +4834,10 @@ async function handleCommandCenterOpen(req, res) {
   const seats = (wanted ? all.filter((s) => wanted.includes(s.id)) : all).filter((s) => s.ready && s.bin);
   if (!seats.length) return sendJson(res, 409, { error: 'no seat is ready — install and sign in to at least one CLI' });
   const cfg = commandCenterConfig();
-  const argv = commandCenterArgv(seats, cfg);
+  const lane = body.lane === true;
+  const argv = lane ? laneArgv(seats, cfg) : commandCenterArgv(seats, cfg);
   if (process.env.ALFRED_CC_DRY_RUN === '1') {
-    return sendJson(res, 200, { ok: true, dryRun: true, seats: seats.map((s) => s.id), argv });
+    return sendJson(res, 200, { ok: true, dryRun: true, lane, seats: seats.map((s) => s.id), argv });
   }
   execFile('wt.exe', argv, (err) => {
     if (!err) return;

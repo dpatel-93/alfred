@@ -154,6 +154,9 @@ if (!(await up())) {
   const argv2 = two.d?.argv || [];
   chk('POST open (dry run) builds one wt window with two panes', two.s === 200 && two.d.dryRun && argv2[0] === '-w' && argv2[1] === 'new' && argv2.filter((a) => a === 'split-pane').length === 1 && argv2.includes('0.500'), JSON.stringify(argv2));
   chk('panes are titled by seat label', argv2.includes('Claude (Anthropic)') && argv2.includes('Grok (xAI, via Grok Build CLI)'), JSON.stringify(argv2));
+  const lane = await j('/api/command-center/open', { method: 'POST', headers: H, body: JSON.stringify({ providers: ['grok'], lane: true }) });
+  const argvL = lane.d?.argv || [];
+  chk('a lane open targets the shared named window and adds one pane', lane.s === 200 && lane.d.lane && argvL[0] === '-w' && argvL[1] === 'alfred-command-center' && argvL[2] === 'split-pane' && !argvL.includes('new-tab') && argvL.includes('Grok (xAI, via Grok Build CLI)'), JSON.stringify(argvL));
   const all = await j('/api/command-center/open', { method: 'POST', headers: H, body: JSON.stringify({}) });
   const argvAll = all.d?.argv || [];
   const sizes = argvAll.filter((a) => /^0\.\d{3}$/.test(a));
