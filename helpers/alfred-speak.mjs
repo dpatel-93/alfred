@@ -25,6 +25,7 @@ const QUEUE_PATH = path.join(HERE, '.alfred-speak-queue.txt');
 const PID_PATH = path.join(HERE, '.alfred-speak.pid');
 const PS_SCRIPT = path.join(HERE, 'alfred-speak.ps1');
 const PLAY_SCRIPT = path.join(HERE, 'alfred-play.ps1');
+const LAUNCHER_VBS = path.join(HERE, 'alfred-speak-launcher.vbs');
 const TASK_NAME = 'AlfredSpeak';
 const TAIL_BYTES = 2 * 1024 * 1024; // transcripts grow unbounded; only the end matters
 
@@ -392,9 +393,20 @@ function taskCommand(psInline) {
 }
 
 function installTask() {
+  // wscript.exe, not powershell.exe, is the entry point Task Scheduler
+  // launches: PowerShell's own -WindowStyle Hidden still lets conhost.exe
+  // flash a console window for a frame before the style applies, once per
+  // task run. WScript.Shell.Run's window-style argument is honored before
+  // any window is created, so routing through this tiny VBS wrapper is
+  // genuinely silent. Same trick brain/Install-AlfredStartup.ps1 already
+  // uses for the HUD's own autostart.
+  const vbsContent =
+    'Set objShell = CreateObject("WScript.Shell")\r\n' +
+    `objShell.Run "powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File \\"${PS_SCRIPT}\\"", 0, False\r\n`;
+  fs.writeFileSync(LAUNCHER_VBS, vbsContent, 'utf8');
+
   const psInline = [
-    `$arg = '-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "${PS_SCRIPT}"';`,
-    `$a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arg;`,
+    `$a = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument '"${LAUNCHER_VBS}" //B';`,
     `$p = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\\$env:USERNAME" -LogonType Interactive -RunLevel Limited;`,
     `$s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries`,
     `  -ExecutionTimeLimit (New-TimeSpan -Minutes 10) -MultipleInstances Parallel -Hidden;`,

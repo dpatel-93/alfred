@@ -167,7 +167,7 @@ function main() {
   if (REGISTER) { selfRegister(); }
   if (throttled()) { process.exit(0); }
 
-  const policy = readJson(policyPath, { model: 'opus', fallbackModel: 'sonnet', autoUpdatesChannel: 'latest', auditEveryDays: 7 });
+  const policy = readJson(policyPath, { model: 'opus', fallbackModel: ['sonnet'], autoUpdatesChannel: 'latest', auditEveryDays: 7 });
   const state = readJson(statePath, {});
 
   try { enforceSettings(policy); } catch (e) { notes.push('enforceSettings error: ' + e.message); }
