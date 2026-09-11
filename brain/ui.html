@@ -5823,22 +5823,90 @@
     }
     ccSeats.forEach(function (s) {
       var state = ccSeatState(s);
-      var card = el('label', 'cc-seat' + (s.ready ? '' : ' is-off'), []);
+      var card = el('div', 'cc-seat' + (s.ready ? '' : ' is-off'), []);
+      var copy = el('div', 'cc-seat-copy', []);
+
+      // The tick lives on its own label so the model box and buttons beside it
+      // do not toggle it — a <label> card would forward every click to the box.
+      var title = el('label', 'cc-seat-title', []);
       var box = document.createElement('input');
       box.type = 'checkbox'; box.disabled = !s.ready; box.checked = !!ccChecked[s.id];
       box.addEventListener('change', function () { ccChecked[s.id] = box.checked; });
-      card.appendChild(box);
-      var copy = el('div', 'cc-seat-copy', []);
-      var head = el('div', 'cc-seat-head', [el('strong', null, [s.label])]);
+      title.appendChild(box);
+      title.appendChild(el('strong', null, [s.label]));
+      var head = el('div', 'cc-seat-head', [title]);
       head.appendChild(el('span', 'badge pill ' + state.cls, [state.text]));
       copy.appendChild(head);
+
       var meta = [s.cost, s.approval === 'ask-per-use' ? 'ask first' : 'no gate'];
       if (s.specialism) meta.push(s.specialism);
       copy.appendChild(el('small', null, [meta.join(' · ')]));
-      if (s.installed && !s.signedIn && s.loginCmd) copy.appendChild(el('small', 'cc-login', ['→ ' + s.loginCmd]));
+
+      // Model: what this seat runs, in council and in its pane. Blank = registry default.
+      var modelRow = el('div', 'cc-seat-row', [el('span', 'k', ['model'])]);
+      var modelInput = document.createElement('input');
+      modelInput.type = 'text'; modelInput.className = 'cc-model-input'; modelInput.autocomplete = 'off';
+      modelInput.value = s.model || '';
+      modelInput.placeholder = s.defaultModel ? 'default: ' + s.defaultModel : 'provider default';
+      modelInput.title = 'Blank = ' + (s.defaultModel ? 'the registry default (' + s.defaultModel + ')' : 'let the provider pick');
+      if (s.models && s.models.length) {
+        var dl = document.createElement('datalist');
+        dl.id = 'cc-models-' + s.id;
+        s.models.forEach(function (m) { var o = document.createElement('option'); o.value = m; dl.appendChild(o); });
+        modelRow.appendChild(dl);
+        modelInput.setAttribute('list', dl.id);
+      }
+      modelInput.addEventListener('change', function () { ccSetModel(s, modelInput.value.trim()); });
+      modelRow.appendChild(modelInput);
+      copy.appendChild(modelRow);
+
+      if (!s.ready) {
+        var row = el('div', 'cc-seat-row', []);
+        if (s.installed && s.canSignIn) {
+          var signBtn = el('button', 'btn small', ['Sign in']);
+          signBtn.type = 'button';
+          signBtn.addEventListener('click', function () { ccSignIn(s, signBtn); });
+          row.appendChild(signBtn);
+        }
+        if (s.loginCmd) row.appendChild(el('small', 'cc-login', [(s.installed ? '' : 'not installed · ') + s.loginCmd]));
+        copy.appendChild(row);
+      }
       card.appendChild(copy);
       wrap.appendChild(card);
     });
+  }
+
+  function ccSetModel(seat, model) {
+    var patch = {}; patch[seat.id] = model;
+    bridgePost('/api/command-center/config', { models: patch }).then(function (r) {
+      if (!r.ok) return toast(r.data.error || 'Could not save the model.', 'critical');
+      toast(seat.label + ' → ' + (model || (seat.defaultModel ? seat.defaultModel + ' (default)' : 'provider default')), 'success', { title: 'Model set' });
+      refreshCommandCenter(false);
+    });
+  }
+
+  function ccSignIn(seat, btn) {
+    btn.disabled = true;
+    bridgePost('/api/command-center/signin', { provider: seat.id }).then(function (r) {
+      btn.disabled = false;
+      if (!r.ok) return toast(r.data.error || 'Could not open the sign-in.', 'critical');
+      toast('Finish the sign-in in the console that just opened, then this seat lights up on the next refresh.', 'info', { title: seat.label });
+      // Most browser sign-ins take under a minute; look again then rather than making the operator click.
+      setTimeout(function () { refreshCommandCenter(true); }, 45000);
+    });
+  }
+
+  function ccRenderSummary(d) {
+    var seats = d.seats || [];
+    var ready = seats.filter(function (s) { return s.ready; }).length;
+    var pending = seats.filter(function (s) { return s.installed && !s.signedIn; }).length;
+    var missing = seats.length - ready - pending;
+    var parts = [ready + ' ready'];
+    if (pending) parts.push(pending + ' need sign-in');
+    if (missing) parts.push(missing + ' not installed');
+    document.getElementById('cc-summary').textContent = parts.join(' · ');
+    var synth = document.getElementById('cc-synth-model');
+    if (document.activeElement !== synth) synth.value = d.synthModel && d.synthModel !== 'sonnet' ? d.synthModel : '';
   }
 
   function refreshCommandCenter(force) {
@@ -5851,8 +5919,26 @@
           if (!s.ready) ccChecked[s.id] = false;
         });
         renderCcSeats();
+        ccRenderSummary(d);
       });
   }
+
+  document.getElementById('cc-synth-model').addEventListener('change', function () {
+    var v = this.value.trim();
+    bridgePost('/api/command-center/config', { synthModel: v }).then(function (r) {
+      if (!r.ok) return toast(r.data.error || 'Could not save the chair model.', 'critical');
+      toast('The council is chaired by ' + (r.data.synthModel || 'sonnet') + '.', 'success', { title: 'Model set' });
+    });
+  });
+
+  // On load, say once which installed seats still need a sign-in — the cached
+  // credential is used when there is one; when there is not, this is the nudge.
+  bridgeFetch('/api/command-center/seats').then(function (r) { return r.json(); }).then(function (d) {
+    var pending = (d.seats || []).filter(function (s) { return s.installed && !s.signedIn; });
+    if (!pending.length) return;
+    toast(pending.map(function (s) { return s.label; }).join(', ') + (pending.length === 1 ? ' needs' : ' need') + ' a sign-in.',
+          'warn', { title: 'Command Center', action: { label: 'Open', onClick: function () { switchView('command'); } } });
+  }).catch(function () {});
   function pollCommandCenter() { return refreshCommandCenter(false); }
 
   function ccSelected() {
