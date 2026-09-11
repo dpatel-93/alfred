@@ -1599,34 +1599,24 @@
     <h1>Command Center</h1>
     <div class="stage-head-controls">
       <span id="cc-summary" class="panel-help"></span>
-      <button class="btn primary" id="cc-council-btn" title="One question to every ticked seat, in a dialog">&#9673; Ask the Council</button>
       <button class="btn" id="cc-open-btn" title="Open every ticked seat at once in a fresh Windows Terminal window, equal columns">&#9002; Open all lanes</button>
       <button class="filter-chip" id="cc-refresh" title="Re-check which seats are installed and signed in">&#8635; Refresh</button>
     </div>
   </div>
-  <!-- One lane per seat. Each lane's Open drops that seat's console pane into
-       the shared Command Center window, so the lanes here and the panes there
-       line up one to one. The council lives in the dialog, not on the stage. -->
-  <div id="cc-seats" class="cc-lanes"></div>
-  <div class="panel-help">Tick a lane to include it in the council and in "Open all lanes". Open drops that seat's console pane into the Command Center window. Sign in opens the provider's own login in a real console. The model box sets what that seat runs — blank is the registry's cheap default; the expensive tiers are a choice, never a default.</div>
-</div>
-
-<!-- Council dialog. Same scrim/modal chrome as the Field Manual, widened for
-     the answer columns. Opened from the Command Center; a run keeps going and
-     toasts if the dialog is closed mid-council. -->
-<div id="cc-scrim" class="scrim"></div>
-<div id="cc-modal" class="modal wide" role="dialog" aria-modal="true" aria-labelledby="cc-modal-title">
-  <div class="modal-head">
-    <div>
-      <h2 id="cc-modal-title">Council</h2>
-      <div class="editor-meta" id="cc-modal-seats"></div>
-    </div>
-    <button class="icon-btn" id="cc-close" aria-label="Close">&#10005;</button>
+  <!-- One card per seat. Each card's Open drops that seat's console pane into
+       the shared Command Center window, so the cards here and the panes there
+       line up one to one. The council sits beneath, on the same stage. -->
+  <div class="stage-section">
+    <div class="section-title">Lanes</div>
+    <div id="cc-seats" class="cc-lanes"></div>
+    <div class="panel-help">Tick a lane to include it in the council and in "Open all lanes". Open drops that seat's console pane into the Command Center window. Sign in opens the provider's own login in a real console. The model box sets what that seat runs — blank is the registry's cheap default; the expensive tiers are a choice, never a default.</div>
   </div>
-  <div class="modal-body cc-modal-body">
+  <div class="stage-section" id="cc-council">
+    <div class="section-title">Council</div>
+    <div class="panel-help" id="cc-asking"></div>
     <textarea id="cc-question" class="cc-question" rows="4" placeholder="One question for every ticked seat. Each answers on its own; then Claude chairs." spellcheck="true"></textarea>
     <div class="cc-actions">
-      <button class="btn primary" id="cc-ask-btn">&#9673; Ask</button>
+      <button class="btn primary" id="cc-ask-btn">&#9673; Ask the Council</button>
       <label class="cc-check"><input type="checkbox" id="cc-synth" checked> Claude chairs a verdict as</label>
       <input id="cc-synth-model" class="cc-model-input" list="cc-synth-models" placeholder="sonnet" title="Which Claude model chairs the council (blank = sonnet)" autocomplete="off">
       <datalist id="cc-synth-models"><option value="sonnet"><option value="opus"><option value="haiku"><option value="fable"></datalist>
