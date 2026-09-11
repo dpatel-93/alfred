@@ -1019,6 +1019,69 @@
   .stage-search:focus { outline: none; border-color: var(--accent-primary); }
   .stage-head-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
+  /* --- Command Center: seat cards (§2.2), answer columns, verdict panel --- */
+  .cc-seats { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .cc-seat {
+    --accent: var(--mint);
+    display: flex; gap: 10px; align-items: flex-start; cursor: pointer; position: relative;
+    padding: 10px 12px 10px 14px;
+    background: color-mix(in srgb, var(--surface-2) 78%, transparent);
+    border: 1px solid var(--border); border-radius: 6px;
+    transition: border-color .13s ease, background .13s ease;
+  }
+  .cc-seat::before, .cc-answer::before, .cc-verdict::before {
+    content: ''; position: absolute; left: -1px; top: 10px; bottom: 10px; width: 3px; border-radius: 2px;
+    background: var(--accent); box-shadow: 0 0 9px color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+  .cc-seat:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border-strong, var(--border))); background: var(--surface-3, var(--surface-2)); }
+  .cc-seat.is-off { --accent: var(--gray, #93a1b2); opacity: .7; cursor: default; }
+  .cc-seat input { margin: 3px 0 0; accent-color: var(--mint); }
+  .cc-seat-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+  .cc-seat-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .cc-seat-head strong { font-size: 12px; font-weight: 500; color: var(--text); }
+  .cc-seat-copy small { font-size: 10px; color: var(--text-dim); letter-spacing: .04em; }
+  .cc-seat-copy small.cc-login { color: var(--amber); }
+  .cc-question {
+    width: 100%; box-sizing: border-box; resize: vertical; min-height: 84px;
+    background: var(--surface-2); border: 1px solid var(--border-focusable); border-radius: 4px;
+    color: var(--text); font-family: inherit; font-size: 12px; line-height: 1.5; padding: 8px 10px;
+  }
+  .cc-question::placeholder { color: var(--text-dim); }
+  .cc-question:focus { outline: none; border-color: var(--accent-primary); }
+  .cc-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .cc-check { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); letter-spacing: .04em; cursor: pointer; }
+  .cc-check input { accent-color: var(--mint); }
+  .cc-answers { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .cc-answer, .cc-verdict {
+    --accent: var(--blue);
+    position: relative; display: flex; flex-direction: column; gap: 6px;
+    padding: 10px 12px 10px 14px;
+    background: color-mix(in srgb, var(--surface-2) 82%, transparent);
+    border: 1px solid var(--border); border-radius: 6px; backdrop-filter: blur(4px);
+  }
+  .cc-answer.running, .cc-answer.queued { --accent: var(--mint); }
+  .cc-answer.error { --accent: var(--red); }
+  .cc-verdict { --accent: var(--amber); }
+  .cc-answer-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .cc-answer-head strong { font-size: 12px; font-weight: 500; color: var(--text); }
+  .cc-answer-meta { font-size: 10px; color: var(--text-dim); letter-spacing: .04em; font-variant-numeric: tabular-nums; min-height: 1em; }
+  /* Long-form answers are the one place mono steps aside (DESIGN-UI-SYSTEM §2.11). */
+  .cc-answer-body {
+    font-family: 'Aptos', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+    font-size: 13px; line-height: 1.6; color: var(--text-soft, var(--text));
+    max-height: 440px; overflow-y: auto; overflow-wrap: anywhere;
+  }
+  .cc-answer-body h1, .cc-answer-body h2, .cc-answer-body h3 {
+    font-family: inherit; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--blue); margin: 10px 0 4px;
+  }
+  .cc-answer-body p { margin: 0 0 8px; }
+  .cc-answer-body pre { background: rgba(0, 0, 0, 0.32); border: 1px solid var(--border); border-radius: 3px; padding: 8px; overflow-x: auto; font-size: 11px; }
+  .cc-verdict .cc-answer-body { max-height: none; }
+  .cc-err { color: var(--red); font-size: 11px; }
+  .cc-progress { height: 3px; background: var(--surface-3, var(--border)); border-radius: 2px; overflow: hidden; margin-top: 4px; }
+  .cc-progress > i { display: block; height: 100%; width: 34%; background: var(--mint); box-shadow: 0 0 6px var(--mint); animation: cc-sweep 1.15s cubic-bezier(0.2, 0.8, 0.2, 1) infinite; }
+  @keyframes cc-sweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(295%); } }
+
   [data-reveal] { opacity: 0; transform: translateY(4px); transition: opacity .2s cubic-bezier(0.2,0.8,0.2,1), transform .2s cubic-bezier(0.2,0.8,0.2,1); }
   [data-reveal].revealed { opacity: 1; transform: none; }
 
@@ -1415,6 +1478,7 @@
   <button class="view-btn" data-view="ops" role="tab" aria-selected="false" aria-controls="stage-ops">Enterprise</button>
   <button class="view-btn" data-view="directory" role="tab" aria-selected="false" aria-controls="stage-directory">Operative Roster</button>
   <button class="view-btn" data-view="library" role="tab" aria-selected="false" aria-controls="stage-library">Library</button>
+  <button class="view-btn" data-view="command" role="tab" aria-selected="false" aria-controls="stage-command">Command Center</button>
 </div>
 
 <div id="topleft">
@@ -1508,6 +1572,36 @@
      scrollable content region inset clear of the rail and command bar;
      hidden (not unmounted) so switchView() can toggle without losing
      scroll position or re-fetching on every visit. -->
+<!-- Command Center: every AI seat in one window, and the council. Both actions
+     leave the HUD an observe surface — the terminals are real consoles opened
+     beside it, and the council runs through council-run.mjs exactly as it
+     would from a shell. -->
+<div id="stage-command" class="stage" hidden>
+  <div class="stage-head">
+    <h1>Command Center</h1>
+    <div class="stage-head-controls">
+      <button class="btn primary" id="cc-open-btn" title="One Windows Terminal window, one pane per ticked seat">&#9002; Open Terminals</button>
+      <button class="filter-chip" id="cc-refresh" title="Re-check which seats are installed and signed in">&#8635; Refresh</button>
+    </div>
+  </div>
+  <div class="stage-section">
+    <div class="section-title">Seats</div>
+    <div id="cc-seats" class="cc-seats"></div>
+    <div class="panel-help">A seat is a signed-in AI CLI on this machine. Ticked seats get a terminal pane and a council vote. Seats marked ASK FIRST only ever receive the question you send from here — the tick is that approval.</div>
+  </div>
+  <div class="stage-section">
+    <div class="section-title">Council</div>
+    <textarea id="cc-question" class="cc-question" rows="4" placeholder="One question for every ticked seat. Each answers on its own; then Claude chairs." spellcheck="true"></textarea>
+    <div class="cc-actions">
+      <button class="btn primary" id="cc-ask-btn">&#9673; Ask the Council</button>
+      <label class="cc-check"><input type="checkbox" id="cc-synth" checked> Claude chairs a verdict</label>
+      <span id="cc-run-status" class="panel-help"></span>
+    </div>
+    <div id="cc-answers" class="cc-answers"></div>
+    <div id="cc-verdict" class="cc-verdict" hidden></div>
+  </div>
+</div>
+
 <div id="stage-dev" class="stage" hidden>
   <div class="stage-head">
     <h1>Workshop</h1>
@@ -2388,7 +2482,7 @@
   // document.hidden freezes every poller in this table without needing to
   // touch the Claude-session poller's own always-on loop elsewhere in the file.
   // ============================================================
-  var VALID_VIEWS = ['brain', 'dev', 'auto', 'ops', 'directory', 'library'];
+  var VALID_VIEWS = ['brain', 'dev', 'auto', 'ops', 'directory', 'library', 'command'];
   var viewGeneration = 0;
   var activePollTimers = [];
 
@@ -2412,6 +2506,7 @@
     ops:   [{ fn: pollOrg, ms: 5000 }, { fn: pollUsage, ms: 60000 }],
     directory: [{ fn: pollDirectory, ms: 60000 }],
     library: [{ fn: pollLibrary, ms: 60000 }],
+    command: [{ fn: pollCommandCenter, ms: 60000 }],
   };
 
   // Skipping ticks while hidden is right — a background tab should not poll —
@@ -2460,11 +2555,11 @@
   // 0.12 opacity and stops accepting pointer events so the new content grid
   // reads as the surface, not a canvas the user could still drag underneath.
   function applyCanvasPersistence(view) {
-    canvas.classList.toggle('canvas-ghost', view === 'dev' || view === 'auto' || view === 'directory' || view === 'library');
+    canvas.classList.toggle('canvas-ghost', view === 'dev' || view === 'auto' || view === 'directory' || view === 'library' || view === 'command');
   }
 
   function showStage(view) {
-    ['dev', 'auto', 'directory', 'library'].forEach(function (v) {
+    ['dev', 'auto', 'directory', 'library', 'command'].forEach(function (v) {
       var stageEl = document.getElementById('stage-' + v);
       if (stageEl) stageEl.hidden = (v !== view);
     });
@@ -5686,6 +5781,162 @@
       // opens a fresh `claude` instead.
       sessionNote(r.data.resumed ? 'Opened a console on your most recent session.'
                                  : 'Opened a console — no session to resume, starting fresh.', 'success');
+    });
+  });
+
+  // --- Command Center ---------------------------------------------------
+  // "Open Terminals" is the button above multiplied: every ticked seat gets a
+  // real console pane in one Windows Terminal window. "Ask the Council" sends
+  // one question to every ticked seat in parallel through council-run.mjs and,
+  // if asked, has Claude chair the answers into a verdict. The ticks are the
+  // per-use approval providers.json demands for seats that leave the machine.
+  var ccSeats = [];
+  var ccChecked = {};
+  var ccPollTimer = null;
+
+  function ccSeatState(s) {
+    if (s.ready) return { cls: 'live', text: 'ready' };
+    if (s.installed) return { cls: 'warn', text: 'sign in' };
+    return { cls: 'idle', text: 'not installed' };
+  }
+
+  function renderCcSeats() {
+    var wrap = document.getElementById('cc-seats');
+    wrap.textContent = '';
+    if (!ccSeats.length) {
+      wrap.appendChild(el('div', 'panel-help', ['No seats found — is council-run.mjs in ~/.claude/helpers?']));
+      return;
+    }
+    ccSeats.forEach(function (s) {
+      var state = ccSeatState(s);
+      var card = el('label', 'cc-seat' + (s.ready ? '' : ' is-off'), []);
+      var box = document.createElement('input');
+      box.type = 'checkbox'; box.disabled = !s.ready; box.checked = !!ccChecked[s.id];
+      box.addEventListener('change', function () { ccChecked[s.id] = box.checked; });
+      card.appendChild(box);
+      var copy = el('div', 'cc-seat-copy', []);
+      var head = el('div', 'cc-seat-head', [el('strong', null, [s.label])]);
+      head.appendChild(el('span', 'badge pill ' + state.cls, [state.text]));
+      copy.appendChild(head);
+      var meta = [s.cost, s.approval === 'ask-per-use' ? 'ask first' : 'no gate'];
+      if (s.specialism) meta.push(s.specialism);
+      copy.appendChild(el('small', null, [meta.join(' · ')]));
+      if (s.installed && !s.signedIn && s.loginCmd) copy.appendChild(el('small', 'cc-login', ['→ ' + s.loginCmd]));
+      card.appendChild(copy);
+      wrap.appendChild(card);
+    });
+  }
+
+  function refreshCommandCenter(force) {
+    return bridgeFetch('/api/command-center/seats' + (force ? '?refresh=1' : ''))
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        ccSeats = d.seats || [];
+        ccSeats.forEach(function (s) {
+          if (!(s.id in ccChecked)) ccChecked[s.id] = !!s.ready;
+          if (!s.ready) ccChecked[s.id] = false;
+        });
+        renderCcSeats();
+      });
+  }
+  function pollCommandCenter() { return refreshCommandCenter(false); }
+
+  function ccSelected() {
+    return ccSeats.filter(function (s) { return s.ready && ccChecked[s.id]; }).map(function (s) { return s.id; });
+  }
+
+  document.getElementById('cc-refresh').addEventListener('click', function () { refreshCommandCenter(true); });
+
+  document.getElementById('cc-open-btn').addEventListener('click', function () {
+    var ids = ccSelected();
+    if (!ids.length) return toast('Tick at least one ready seat first.', 'warn');
+    bridgePost('/api/command-center/open', { providers: ids }).then(function (r) {
+      if (!r.ok) return toast(r.data.error || 'Could not open the terminals.', 'critical');
+      var n = r.data.seats.length;
+      toast('Opened ' + n + ' terminal pane' + (n === 1 ? '' : 's') + ': ' + r.data.seats.join(', '), 'success', { title: 'Command Center' });
+    });
+  });
+
+  function renderCouncil(run) {
+    var statusEl = document.getElementById('cc-run-status');
+    var answers = document.getElementById('cc-answers');
+    var verdict = document.getElementById('cc-verdict');
+    answers.textContent = '';
+    var done = 0;
+    Object.keys(run.seats).forEach(function (id) {
+      var s = run.seats[id];
+      if (s.status === 'done') done++;
+      var col = el('div', 'cc-answer ' + s.status, []);
+      var head = el('div', 'cc-answer-head', [el('strong', null, [s.label || id])]);
+      var badgeCls = s.status === 'done' ? 'info' : s.status === 'error' ? 'critical' : 'live';
+      var busy = s.status === 'running' || s.status === 'queued';
+      head.appendChild(el('span', 'badge pill ' + badgeCls, [busy ? 'thinking' : s.status]));
+      col.appendChild(head);
+      var meta = [];
+      if (s.model) meta.push(s.model);
+      if (s.ms != null) meta.push((s.ms / 1000).toFixed(1) + 's');
+      if (s.inTokens || s.outTokens) meta.push(s.inTokens + ' in / ' + s.outTokens + ' out');
+      col.appendChild(el('small', 'cc-answer-meta', [meta.join(' · ')]));
+      var body = el('div', 'cc-answer-body', []);
+      if (s.status === 'error') body.appendChild(el('span', 'cc-err', [s.error || 'failed']));
+      else if (s.text) renderMarkdown(s.text, body);
+      else body.appendChild(el('div', 'cc-progress', [el('i', null, [])]));
+      col.appendChild(body);
+      answers.appendChild(col);
+    });
+
+    verdict.textContent = '';
+    if (run.synthesis && run.synthesis.status === 'done') {
+      verdict.hidden = false;
+      var vh = el('div', 'cc-answer-head', [el('strong', null, ['Council verdict'])]);
+      vh.appendChild(el('span', 'badge pill info', [run.synthesis.model || 'claude']));
+      verdict.appendChild(vh);
+      var vb = el('div', 'cc-answer-body', []);
+      renderMarkdown(run.synthesis.text, vb);
+      verdict.appendChild(vb);
+    } else if (run.synthesis && run.synthesis.status === 'error') {
+      verdict.hidden = false;
+      verdict.appendChild(el('div', 'cc-err', ['Verdict failed: ' + (run.synthesis.error || 'unknown')]));
+    } else {
+      verdict.hidden = true;
+    }
+
+    var total = run.providers.length;
+    var chairing = run.synthesis && run.synthesis.status === 'pending' && done === total;
+    statusEl.textContent = run.status === 'running'
+      ? (chairing ? 'All seats in — Claude is chairing…' : done + '/' + total + ' answered…')
+      : run.status === 'failed' ? 'Council failed: ' + (run.error || 'unknown')
+      : 'Council done — ' + done + '/' + total + ' answered.';
+  }
+
+  function pollCouncilRun(id) {
+    clearInterval(ccPollTimer);
+    ccPollTimer = setInterval(function () {
+      bridgeFetch('/api/council/' + id).then(function (r) { return r.json(); }).then(function (run) {
+        if (!run.id) { clearInterval(ccPollTimer); return; }
+        renderCouncil(run);
+        if (run.status !== 'running') {
+          clearInterval(ccPollTimer);
+          document.getElementById('cc-ask-btn').disabled = false;
+          toast(run.status === 'done' ? 'The council has answered.' : 'The council failed.',
+                run.status === 'done' ? 'success' : 'critical', { title: 'Council' });
+        }
+      }).catch(function () {});
+    }, 1000);
+  }
+
+  document.getElementById('cc-ask-btn').addEventListener('click', function () {
+    var q = document.getElementById('cc-question').value.trim();
+    var ids = ccSelected();
+    if (!q) return toast('Type a question first.', 'warn');
+    if (!ids.length) return toast('Tick at least one ready seat.', 'warn');
+    var btn = document.getElementById('cc-ask-btn');
+    btn.disabled = true;
+    var synth = document.getElementById('cc-synth').checked;
+    bridgePost('/api/council', { question: q, providers: ids, synthesize: synth }).then(function (r) {
+      if (!r.ok) { btn.disabled = false; return toast(r.data.error || 'Could not convene the council.', 'critical'); }
+      renderCouncil(r.data);
+      pollCouncilRun(r.data.id);
     });
   });
 

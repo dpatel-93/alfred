@@ -4672,6 +4672,180 @@ function handleChatOpenTerminal(req, res) {
   sendJson(res, 200, { ok: true, sessionId: sid, resumed: !!sid });
 }
 
+// --- Command Center: every AI seat in one window, and the council -------------
+// Two affordances on one surface. "Open Terminals" is the Open Terminal button
+// multiplied: one Windows Terminal window, one real console pane per signed-in
+// CLI (claude, agy, grok, codex...). "Ask the Council" sends one question to
+// every chosen seat in parallel and, if asked, has Claude chair the answers.
+//
+// The seat list comes from `council-run.mjs --status` rather than a second copy
+// of the detection rules here: one source of truth for "who is installed and
+// signed in", and it is the same helper the council itself runs through.
+const COUNCIL_HELPER = process.env.ALFRED_COUNCIL_HELPER || path.join(HELPERS_DIR, 'council-run.mjs');
+const SEAT_ID_RE = /^[a-z0-9-]+$/;
+const SEATS_TTL_MS = 30 * 1000;
+let seatsCache = { at: 0, seats: [] };
+
+function councilSeats(force) {
+  if (!force && Date.now() - seatsCache.at < SEATS_TTL_MS) return Promise.resolve(seatsCache.seats);
+  return new Promise((resolve) => {
+    if (!fs.existsSync(COUNCIL_HELPER)) return resolve([]);
+    execFile(process.execPath, [COUNCIL_HELPER, '--status', '--json'],
+      { cwd: os.homedir(), windowsHide: true, timeout: 30000, maxBuffer: 1e6 }, (err, stdout) => {
+        if (err) return resolve(seatsCache.seats);
+        let seats;
+        try { seats = JSON.parse(stdout).seats || []; } catch { return resolve(seatsCache.seats); }
+        seatsCache = { at: Date.now(), seats };
+        resolve(seats);
+      });
+  });
+}
+
+async function handleCommandCenterSeats(req, res, url) {
+  const seats = await councilSeats(url.searchParams.get('refresh') === '1');
+  // The resolved binary path stays server-side; the page only needs state.
+  sendJson(res, 200, {
+    seats: seats.map((s) => ({
+      id: s.id, label: s.label, installed: s.installed, signedIn: s.signedIn, ready: s.ready,
+      cost: s.cost, approval: s.approval, specialism: s.specialism, loginCmd: s.loginCmd,
+    })),
+  });
+}
+
+// One window, equal columns. Each split takes the pane created before it, so
+// the k-th split claims (n-k)/(n-k+1) of what is left: 2/3 then 1/2 gives three
+// equal columns; 3/4, 2/3, 1/2 gives four.
+function commandCenterArgv(seats) {
+  const home = os.homedir();
+  const n = seats.length;
+  const argv = ['-w', 'new', 'new-tab', '-d', home, '--title', seats[0].label, seats[0].bin];
+  for (let k = 1; k < n; k++) {
+    const size = ((n - k) / (n - k + 1)).toFixed(3);
+    argv.push(';', 'split-pane', '-V', '-s', size, '-d', home, '--title', seats[k].label, seats[k].bin);
+  }
+  return argv;
+}
+
+async function handleCommandCenterOpen(req, res) {
+  let body;
+  try { body = await readJsonBody(req); } catch { return sendJson(res, 400, { error: 'invalid JSON body' }); }
+  const wanted = Array.isArray(body.providers) && body.providers.length ? body.providers.map(String) : null;
+  if (wanted && wanted.some((id) => !SEAT_ID_RE.test(id))) return sendJson(res, 400, { error: 'invalid provider id' });
+  const all = await councilSeats(false);
+  const seats = (wanted ? all.filter((s) => wanted.includes(s.id)) : all).filter((s) => s.ready && s.bin);
+  if (!seats.length) return sendJson(res, 409, { error: 'no seat is ready — install and sign in to at least one CLI' });
+  const argv = commandCenterArgv(seats);
+  if (process.env.ALFRED_CC_DRY_RUN === '1') {
+    return sendJson(res, 200, { ok: true, dryRun: true, seats: seats.map((s) => s.id), argv });
+  }
+  execFile('wt.exe', argv, (err) => {
+    if (!err) return;
+    // No Windows Terminal: one plain console per seat is the honest fallback.
+    for (const s of seats) {
+      execFile('cmd.exe', ['/c', 'start', s.label, 'cmd.exe', '/k', s.bin], { cwd: os.homedir() }, () => {});
+    }
+  });
+  sendJson(res, 200, { ok: true, seats: seats.map((s) => s.id) });
+}
+
+const councilRuns = new Map(); // id -> run record
+let councilCounter = 0;
+
+function councilSummary(run) {
+  return {
+    id: run.id, question: run.question, providers: run.providers, synthesize: run.synthesize,
+    status: run.status, startedAt: run.startedAt, endedAt: run.endedAt,
+    seats: run.seats, synthesis: run.synthesis, error: run.error,
+  };
+}
+
+function applyCouncilEvent(run, ev) {
+  switch (ev.type) {
+    case 'seat':
+      run.seats[ev.provider] = { label: ev.label, status: 'running', text: '', model: null, ms: null, error: null };
+      break;
+    case 'answer':
+      run.seats[ev.provider] = { label: ev.label, status: 'done', text: ev.text, model: ev.model, ms: ev.ms, inTokens: ev.inTokens, outTokens: ev.outTokens, error: null };
+      break;
+    case 'error':
+      run.seats[ev.provider] = { label: ev.label, status: 'error', text: '', model: null, ms: ev.ms, error: ev.message };
+      break;
+    case 'synthesis':
+      run.synthesis = { status: 'done', text: ev.text, model: ev.model, ms: ev.ms, error: null };
+      break;
+    case 'synthesis-error':
+      run.synthesis = { status: 'error', text: '', model: null, ms: null, error: ev.message };
+      break;
+    default: break;
+  }
+}
+
+function launchCouncil(question, providers, synthesize) {
+  councilCounter += 1;
+  const id = 'council' + councilCounter;
+  const run = {
+    id, question, providers, synthesize,
+    status: 'running', startedAt: new Date().toISOString(), endedAt: null,
+    seats: {}, error: null, pid: null,
+    synthesis: synthesize ? { status: 'pending', text: '', model: null, ms: null, error: null } : null,
+  };
+  for (const p of providers) run.seats[p] = { label: p, status: 'queued', text: '', model: null, ms: null, error: null };
+  councilRuns.set(id, run);
+
+  const args = [COUNCIL_HELPER, '--json', question, '--providers', providers.join(',')];
+  if (!synthesize) args.push('--no-synth');
+  let proc;
+  try {
+    // shell:false + an args array: the question is one argv entry, so nothing in it is parsed.
+    proc = spawn(process.execPath, args, { cwd: os.homedir(), stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, shell: false });
+  } catch (err) {
+    run.status = 'failed'; run.error = err.message; run.endedAt = new Date().toISOString();
+    return run;
+  }
+  run.pid = proc.pid;
+  let stderr = '';
+  const splitter = makeLineSplitter((line) => {
+    const t = line.trim();
+    if (!t.startsWith('{')) return;
+    try { applyCouncilEvent(run, JSON.parse(t)); } catch { /* not an event line */ }
+  });
+  proc.stdout.on('data', (c) => splitter.push(c));
+  proc.stderr.on('data', (c) => { stderr += c; });
+  proc.on('error', (err) => { run.status = 'failed'; run.error = err.message; run.endedAt = new Date().toISOString(); });
+  proc.on('close', (code) => {
+    splitter.flush();
+    if (run.status !== 'running') return;
+    run.status = code === 0 ? 'done' : 'failed';
+    if (code !== 0) run.error = stderr.trim().slice(0, 500) || `council-run exited ${code}`;
+    run.endedAt = new Date().toISOString();
+  });
+  return run;
+}
+
+async function handleCouncilAsk(req, res) {
+  let body;
+  try { body = await readJsonBody(req); } catch { return sendJson(res, 400, { error: 'invalid JSON body' }); }
+  const question = String(body.question || '').trim();
+  if (!question) return sendJson(res, 400, { error: 'missing question' });
+  if (question.length > 200000) return sendJson(res, 400, { error: 'question too long' });
+  const providers = Array.isArray(body.providers) ? body.providers.map(String) : [];
+  if (!providers.length) return sendJson(res, 400, { error: 'pick at least one seat' });
+  if (providers.some((id) => !SEAT_ID_RE.test(id))) return sendJson(res, 400, { error: 'invalid provider id' });
+  if (!fs.existsSync(COUNCIL_HELPER)) return sendJson(res, 503, { error: 'council-run.mjs helper not found' });
+  const run = launchCouncil(question, providers, body.synthesize !== false);
+  sendJson(res, 202, councilSummary(run));
+}
+
+function handleCouncilList(req, res) {
+  sendJson(res, 200, { runs: [...councilRuns.values()].map(councilSummary) });
+}
+
+function handleCouncilGet(req, res, id) {
+  const run = councilRuns.get(id);
+  if (!run) return sendJson(res, 404, { error: 'no such council run' });
+  sendJson(res, 200, councilSummary(run));
+}
+
 // POST /api/org/selftest [token] — prove the chain of command actually wires up.
 //
 // Spawns ONE real Claude Code turn whose prompt instructs a three-deep delegation:
@@ -5063,12 +5237,15 @@ async function main() {
           || url.pathname === '/api/source/save'
           || url.pathname === '/api/github/device/start'
           || url.pathname === '/api/github/disconnect'
-
+          || url.pathname === '/api/command-center/open'
+          || url.pathname === '/api/council'
           || agentAction;
         if (!isBridgePost) return sendJson(res, 404, { error: 'not found' });
         if (!authorize(req, res)) return;
 
         if (url.pathname === '/api/claude/open-terminal') return handleChatOpenTerminal(req, res);
+        if (url.pathname === '/api/command-center/open') return await handleCommandCenterOpen(req, res);
+        if (url.pathname === '/api/council') return await handleCouncilAsk(req, res);
         if (url.pathname === '/api/agents/launch') return await handleAgentLaunch(req, res);
         if (url.pathname === '/api/org/selftest') return await handleOrgSelfTest(req, res);
         if (url.pathname === '/api/interns/run') return await handleInternRun(req, res);
@@ -5090,12 +5267,17 @@ async function main() {
       // joins them because it used to be read through /api/terminal/output,
       // which was gated — dropping the gate would be a silent widening.
       const agentOutput = url.pathname.match(/^\/api\/agents\/([\w-]+)\/output$/);
+      const councilGet = url.pathname.match(/^\/api\/council\/([\w-]+)$/);
       if (url.pathname === '/api/reindex/status'
           || url.pathname === '/api/interns/pull/status' || url.pathname === '/api/settings'
           || url.pathname === '/api/agents' || url.pathname === '/api/interns/models'
           || url.pathname === '/api/github/status' || url.pathname === '/api/workshop'
-          || agentOutput) {
+          || url.pathname === '/api/command-center/seats' || url.pathname === '/api/council'
+          || councilGet || agentOutput) {
         if (!authorize(req, res)) return;
+        if (url.pathname === '/api/command-center/seats') return await handleCommandCenterSeats(req, res, url);
+        if (url.pathname === '/api/council') return handleCouncilList(req, res);
+        if (councilGet) return handleCouncilGet(req, res, councilGet[1]);
         if (url.pathname === '/api/github/status') return await handleGithubStatus(req, res);
         if (url.pathname === '/api/workshop') return await handleWorkshop(req, res, url);
         if (url.pathname === '/api/reindex/status') return handleReindexStatus(req, res, url);
