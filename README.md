@@ -250,13 +250,23 @@ query the same index directly instead of guessing filenames.
   `ollama pull qwen3.5:4b` for noticeably better answer quality at the cost of
   10-60+ seconds per answer (`ALFRED_ASK_MODEL=qwen3.5:4b` to switch).
 - **Claude Code** — the CLI, or the VS Code extension. Either reads `~/.claude/`.
-- **No runtime dependencies.** The server, the indexer and the HUD are plain
-  Node — nothing to `npm install` before running Alfred. Text-to-speech was the
-  only package the server ever needed, and it was removed along with the voice
-  layer, so there is no 80MB ONNX runtime to download and no runtime supply
-  chain to keep patched. The only `package.json` entry left is Playwright, a
-  devDependency used solely by the browser test suite; `npm install` inside
-  `brain/` is needed only if you intend to run those tests.
+- **Five runtime packages, all for the Command Center's live consoles.** The
+  indexer, search and every other HUD view are plain Node. The lanes that show a
+  real terminal in the page need `node-pty` (a genuine Windows console per lane —
+  ConPTY), `ws` (the socket between console and page) and `@xterm/xterm` with
+  two addons (the screen). Run `npm install` inside `brain/` once; `node-pty`
+  ships prebuilt binaries for current Node releases, and `package.json` carries
+  the `allowScripts` entry its install step needs. Without that install the server
+  still starts and every other view works — only the in-page consoles are absent,
+  and each lane's "native window" button still opens Windows Terminal instead.
+  Playwright remains a devDependency used only by the browser test suite.
+- **Optional AI CLIs for the Command Center.** Every signed-in CLI on the machine
+  becomes a seat: Claude Code (the host), Grok Build (`npm i -g @xai-official/grok`,
+  SuperGrok / X Premium+), Google's Antigravity CLI (`agy`, Google AI Pro/Ultra),
+  Codex (`npm i -g @openai/codex`, ChatGPT Plus/Pro), local Ollama models, and the
+  DeepSeek Harness (`npm i -g @deepseek-ai/dsh`) pointed at that Ollama. All are
+  subscription or local — no per-token API keys are needed for any of them, and
+  none is required: the council and the lanes use whatever is ready.
 - **Any markdown editor works for hand-editing brain notes** — VS Code,
   Obsidian, Notepad, whatever you like. The brain is just a folder of `.md`
   files; Alfred doesn't call any editor's API or require one to be installed.
@@ -327,8 +337,8 @@ it prints the Route B command for you automatically.
 
 ## Using Alfred
 
-Six views across the top; number keys `1`-`6` switch between them, `?` lists every
-shortcut. Search is global — it works from any view.
+Seven views across the top; number keys `1`-`6` switch between the first six, `?` lists
+every shortcut. Search is global — it works from any view.
 
 ### Reading the status line
 
@@ -360,6 +370,7 @@ that governs you.
 | **Enterprise** | The org chart, with live delegation lineage and per-branch spend |
 | **Operative Roster** | Every agent's charter — mission, tier, model, reporting line |
 | **Library** | Every skill, command, hook and instruction file, with its source and usedBy |
+| **Command Center** | Every AI CLI on the machine as a lane — a live console in the page, sign-in, and the model it runs — plus the council: one question to all of them, with Claude chairing a verdict |
 
 Protocols, the Operative Roster and the Library are also where you **edit** this stuff.
 Clicking through to a file opens it as raw text, frontmatter included; changing it and
@@ -379,6 +390,57 @@ Everything else happens from the search bar:
 | Click a node | Opens that note in the side panel, with its linked notes listed below |
 | Reindex button (status rail) | Rebuilds the search index, with live progress; the Indexed stat next to it turns amber when the index is stale |
 | Settings (status rail) | Where an optional free cloud-model key is entered; the saved key is proven against the provider, and a rejected key is reported in the Interns panel. Also where GitHub is connected for the Workshop view |
+
+### Command Center
+
+One page that houses every AI you have signed into on this machine. A **seat** is any
+provider in `helpers/providers.json` that is the host (Claude Code), a CLI you can sign into
+(Grok Build, Antigravity, Codex, the DeepSeek Harness) or the local Ollama daemon. Adding a
+seat is a data edit in that registry — there is no code to change.
+
+Each seat is a **lane** — a card that shows whether the CLI is installed and signed in, which
+model it runs, and two buttons:
+
+- **Open terminal** starts the seat's CLI in a real Windows console on the server
+  (`node-pty`, ConPTY) and shows it in the page through xterm.js. This is a true terminal, not
+  a chat imitation: the CLI's own TUI, colours, cursor, keyboard shortcuts and sign-in flows
+  all work, and because the process is native, Claude Code's `Alt+V` screenshot paste still
+  reads your clipboard. Drag a file onto a lane and it lands in a temp folder with its path
+  typed into the console. Consoles belong to the server — reload the page and they reattach
+  with their scrollback; **hide** keeps one running out of sight; **kill** stops it and
+  everything it spawned. `Ctrl+Shift+C` / `Ctrl+Shift+V` stay with the browser; every other
+  key goes to the CLI.
+- **↗ native window** opens the same seat in Windows Terminal instead, adding a pane to one
+  shared "alfred-command-center" window per click. **Open all lanes** does that for every
+  ticked seat at once, equal columns.
+
+**Sign in** appears on any seat that is installed but not signed in. It opens the provider's
+own login command (`claude auth login`, `agy`, `grok login`, `codex login`) in a real console
+and steps aside — the HUD never sees a credential. On load, the HUD says once which seats
+still need one.
+
+**Models.** Each lane has a model box. The registry's `councilModel` is the cheap default every
+machine starts from (Claude → `sonnet`, Gemini → a Flash tier, Ollama → whatever you set);
+what you raise it to is saved per machine in `~/.alfred/config.json` and used both in council
+and when that lane's console opens. The expensive tiers are therefore a per-seat choice you
+make, never a default you inherit.
+
+**The council.** Beneath the lanes: tick the seats you want, type one question, and every
+ticked seat answers it in parallel through `helpers/council-run.mjs`. Answers land in
+side-by-side columns as they arrive; then, if you leave the chair box ticked, Claude reads all
+of them and writes a verdict — where they agree, where they disagree, and what it recommends,
+honouring each provider's registry contract (Grok's answers are leads to verify, never facts).
+The same engine works from any shell:
+
+```
+node ~/.claude/helpers/council-run.mjs "Which IaC tool for this?"          # every ready seat, Claude chairs
+node ~/.claude/helpers/council-run.mjs "…" --providers claude,grok --no-synth
+node ~/.claude/helpers/council-run.mjs "…" --models claude=opus,gemini=gemini-3.1-pro-high
+node ~/.claude/helpers/council-run.mjs --status                            # who can sit right now
+```
+
+Seats marked *ask first* in the registry (anything that leaves the machine) only ever receive
+the question you send from here — ticking the seat is that approval, per question.
 
 ### API reference
 
@@ -423,6 +485,14 @@ behind the token too, that is one line in the router's allowlist.
 | `POST` | `/api/org/selftest` | token | Runs a real VP → manager → employee delegation so the org chart has a genuine lineage to draw; state is published on `/api/org` as `selfTest` |
 | `POST` | `/api/interns/run` \| `/pull` | token | Runs or downloads a local Ollama model |
 | `POST` | `/api/claude/open-terminal` | token | Opens a real console resumed on your most recent idle session |
+| `GET` | `/api/command-center/seats` | token | Every seat with installed / signed-in / ready state, its effective model and suggestions (`?refresh=1` bypasses the 30s cache) |
+| `POST` | `/api/command-center/open` | token | Opens ticked seats in Windows Terminal — `{"providers":[…]}` for a fresh equal-column window, `"lane": true` to add a pane to the shared window |
+| `POST` | `/api/command-center/signin` | token | Opens the seat's own login command in a real console; `{"provider": "codex"}` |
+| `POST` | `/api/command-center/config` | token | Saves per-seat models and the chair model to `~/.alfred/config.json`; a blank model returns a seat to the registry default |
+| `POST` | `/api/council` | token | Convenes a council — `{"question", "providers": […], "synthesize"}` — and returns a run id; poll `GET /api/council/<id>` for answers and the verdict as they land |
+| `POST` | `/api/terminals` | token | Starts a seat's CLI in a real console (`{"provider", "cols", "rows"}`); `GET /api/terminals` lists them, `POST /api/terminals/<id>/kill` \| `/resize` \| `/drop` control one |
+| `WS` | `/ws/terminal/<id>?token=…` | token | The console's screen and keyboard: `{"type":"input"}` and `{"type":"resize"}` down, `hello` (with scrollback), `data` and `exit` up. Origin-checked, loopback only |
+| `GET` | `/vendor/xterm/<file>` | — | xterm.js and its two addons, served from `node_modules` by allowlist so the HUD works offline |
 
 `/api/library/item` is worth calling out as a pattern rather than a route: the caller passes
 an opaque id that is looked up in a map the server built by scanning its own directories. No
@@ -451,6 +521,11 @@ the page, and `/api/github/status` is asserted in the test suite to never return
 | `ALFRED_PROJECT_ROOTS` | `~/OneDrive/Desktop/_Projects` | Folders scanned for local git clones, used to annotate Workshop cards. Semicolon-separated. |
 | `OLLAMA_API_KEY` | unset | Ollama Cloud key. Unlocks the cloud half of the Interns panel, so intern-tier work can run on a free hosted model instead of your own GPU. Get one at [ollama.com](https://ollama.com) → Settings → Keys. **You don't need this variable** — the HUD's own Settings panel takes the key and saves it to `~/.alfred/config.json`. Set it here only if you'd rather manage it as an environment variable; it takes precedence over the saved one. |
 | `OLLAMA_CLOUD_URL` | `https://ollama.com` | Override the cloud endpoint (self-hosted or a compatible provider) |
+| `ALFRED_COUNCIL_CLAUDE_MODEL` / `ALFRED_COUNCIL_SYNTH_MODEL` | `sonnet` | Fallback model for Claude's seat and for the chair when neither the HUD nor `--models` / `--synth-model` names one |
+| `ALFRED_COUNCIL_TIMEOUT_MS` | `600000` | How long a single seat may take before the council gives up on it |
+| `ALFRED_LOCAL_CONFIG_DIR` | `~/.alfred` | Where `config.json` (GitHub token, saved keys, per-seat models) lives — the test servers point this at a temp folder so they never touch yours |
+| `ALFRED_TOKEN_FILE` | `~/.claude/alfred-session.token` | Where the per-boot bridge token is written for hooks to read — likewise redirected by the test servers |
+| `DSH_OLLAMA_KEY` | unset | Only if you seat the DeepSeek Harness: its config schema insists on a key *name* even for a local Ollama route, so this holds a dummy value that Ollama ignores |
 
 ### Naming the org chart's lanes
 
