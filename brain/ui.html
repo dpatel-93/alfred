@@ -1052,13 +1052,15 @@
   }
   .cc-model-input::placeholder { color: var(--text-dim); }
   .cc-model-input:focus { outline: none; border-color: var(--accent-primary); }
-  /* Lanes: one column per seat, side by side, the width of the stage. */
-  .cc-lanes { display: flex; gap: 12px; align-items: stretch; flex: 1 1 auto; min-height: 0; overflow-x: auto; padding-bottom: 4px; }
-  .cc-lanes .cc-seat { flex: 1 1 0; min-width: 210px; max-width: 360px; align-items: stretch; }
+  /* Lanes: compact cards, one per seat, wrapping to the stage width. */
+  .cc-lanes { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); align-items: stretch; }
+  .cc-lanes .cc-seat { align-items: stretch; }
   .cc-lanes .cc-seat-copy { flex: 1; }
   .cc-lane-foot { margin-top: auto; padding-top: 10px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-  .cc-modal-body { display: flex; flex-direction: column; gap: 12px; }
-  .cc-modal-body .cc-answer-body { max-height: 320px; }
+  /* The Open button is the card's reason to exist — make it the biggest thing on it. */
+  .cc-lane-foot .btn.big { flex: 1 1 100%; min-height: 40px; font-size: 12px; letter-spacing: .12em; border-color: color-mix(in srgb, var(--mint) 55%, var(--border-focusable)); color: var(--mint); }
+  .cc-lane-foot .btn.big:hover { background: color-mix(in srgb, var(--mint) 12%, transparent); border-color: var(--mint); color: var(--mint); }
+  #cc-council { padding-top: 6px; border-top: 1px solid var(--hairline); }
   .cc-question {
     width: 100%; box-sizing: border-box; resize: vertical; min-height: 84px;
     background: var(--surface-2); border: 1px solid var(--border-focusable); border-radius: 4px;
@@ -5842,7 +5844,7 @@
       var title = el('label', 'cc-seat-title', []);
       var box = document.createElement('input');
       box.type = 'checkbox'; box.disabled = !s.ready; box.checked = !!ccChecked[s.id];
-      box.addEventListener('change', function () { ccChecked[s.id] = box.checked; });
+      box.addEventListener('change', function () { ccChecked[s.id] = box.checked; ccRenderAsking(); });
       title.appendChild(box);
       title.appendChild(el('strong', null, [s.label]));
       var head = el('div', 'cc-seat-head', [title]);
@@ -5873,8 +5875,9 @@
 
       var foot = el('div', 'cc-lane-foot', []);
       if (s.ready) {
-        var openBtn = el('button', 'btn small', ['〉 Open']);
+        var openBtn = el('button', 'btn big', ['〉 Open']);
         openBtn.type = 'button';
+        openBtn.textContent = '〉 Open terminal';
         openBtn.title = 'Open this seat in its own pane of the Command Center window';
         openBtn.addEventListener('click', function () { ccOpenLane(s, openBtn); });
         foot.appendChild(openBtn);
@@ -5902,21 +5905,12 @@
     });
   }
 
-  // --- council dialog ---
-  var ccScrim = document.getElementById('cc-scrim');
-  var ccModal = document.getElementById('cc-modal');
-  function ccOpenCouncil() {
+  // The council section says who is in the room, live with the ticks above it.
+  function ccRenderAsking() {
     var ids = ccSelected();
     var names = ccSeats.filter(function (s) { return ids.indexOf(s.id) !== -1; }).map(function (s) { return s.label; });
-    document.getElementById('cc-modal-seats').textContent = names.length ? 'Asking: ' + names.join(' · ') : 'No lane is ticked — tick at least one seat first.';
-    ccScrim.classList.add('open'); ccModal.classList.add('open');
-    document.getElementById('cc-question').focus();
+    document.getElementById('cc-asking').textContent = names.length ? 'Asking: ' + names.join(' · ') : 'No lane is ticked — tick at least one seat above.';
   }
-  function ccCloseCouncil() { ccScrim.classList.remove('open'); ccModal.classList.remove('open'); }
-  document.getElementById('cc-council-btn').addEventListener('click', ccOpenCouncil);
-  document.getElementById('cc-close').addEventListener('click', ccCloseCouncil);
-  ccScrim.addEventListener('click', ccCloseCouncil);
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && ccModal.classList.contains('open')) ccCloseCouncil(); });
 
   function ccSetModel(seat, model) {
     var patch = {}; patch[seat.id] = model;
@@ -5962,6 +5956,7 @@
         });
         renderCcSeats();
         ccRenderSummary(d);
+        ccRenderAsking();
       });
   }
 
