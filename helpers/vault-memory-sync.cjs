@@ -42,19 +42,31 @@ function getVaultRoot() {
   // ALFRED_VAULT wins, matching how the brain server resolves the same folder.
   // One machine, one answer — a hook and a server disagreeing about where the
   // vault is would sync memories somewhere the brain never reads.
+  //
+  // The fixture guard used to live only on this branch. On 2026-09-12 real
+  // memories (including a security-audit note) landed in
+  // brain/test/fixtures/vault anyway and got swept into a public push by
+  // alfred-sync.mjs's `git add -A` — the profile fallback below had no guard
+  // at all, so anything resolving through it (e.g. a profile temporarily
+  // pointed at a fixture path during setup/testing) sailed straight through.
+  // The check now applies to whatever path is ultimately resolved, from
+  // either source, not just the env-var branch.
+  let candidate;
   if (process.env.ALFRED_VAULT) {
-    return isFixturePath(process.env.ALFRED_VAULT) ? null : process.env.ALFRED_VAULT;
+    candidate = process.env.ALFRED_VAULT;
+  } else {
+    try {
+      const text = fs.readFileSync(PROFILE_PATH, 'utf8');
+      const m = text.match(/^\s*-\s*\*\*Knowledge vault path[^*]*\*\*:\s*(.+)$/m);
+      if (!m) return null;
+      const value = m[1].replace(/\s*\(.*?\)\s*$/, '').trim();
+      if (!value || /^\(?not specified\)?$/i.test(value)) return null;
+      candidate = value;
+    } catch {
+      return null;
+    }
   }
-  try {
-    const text = fs.readFileSync(PROFILE_PATH, 'utf8');
-    const m = text.match(/^\s*-\s*\*\*Knowledge vault path[^*]*\*\*:\s*(.+)$/m);
-    if (!m) return null;
-    const value = m[1].replace(/\s*\(.*?\)\s*$/, '').trim();
-    if (!value || /^\(?not specified\)?$/i.test(value)) return null;
-    return value;
-  } catch {
-    return null;
-  }
+  return isFixturePath(candidate) ? null : candidate;
 }
 
 const VAULT_ROOT = getVaultRoot();
