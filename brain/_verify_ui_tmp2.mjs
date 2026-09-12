@@ -47,7 +47,7 @@ try {
   if (!up) { console.log('SERVER FAILED TO START\n' + log); process.exit(1); }
 
   browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 900, height: 500 } });
+  const page = await browser.newPage({ viewport: { width: 1400, height: 1000 } });
   page.on('pageerror', err => console.log('PAGE EXCEPTION:', err.message));
 
   // Never actually let the browser hit the real dsh binary or open a real tab:
