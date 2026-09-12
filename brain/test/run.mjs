@@ -54,6 +54,7 @@ const SUITES = [
   { name: 'search-nav', file: 'search-nav.mjs', browser: true },
   { name: 'org', file: 'org.mjs', browser: true },
   { name: 'charter', file: 'charter.mjs', browser: true },
+  { name: 'redesign', file: 'redesign.mjs', browser: true },
 ];
 
 const wanted = process.argv.slice(2);
