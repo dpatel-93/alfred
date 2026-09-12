@@ -53,13 +53,10 @@ try {
 
   await page.goto(B + '/', { waitUntil: 'networkidle' });
 
-  // Switch to the Command Center view.
-  const clicked = await page.evaluate(() => { if (typeof switchView === 'function') { switchView('command'); return true; } return false; });
-  console.log('switched to command view:', clicked);
+  // Switch to the Command Center view via the real nav button.
+  await page.click('.view-btn[data-view="command"]');
 
-  await page.waitForFunction(() => window.ccSeats && window.ccSeats === undefined || true); // no-op guard
-  // ccSeats is a module-local var, not global — wait for the rendered DOM instead.
-  await page.waitForSelector('#cc-seats .cc-seat', { timeout: 10000 });
+  await page.waitForSelector('#cc-seats .cc-seat', { timeout: 15000 });
 
   const seatsInfo = await page.evaluate(() => {
     var cards = Array.from(document.querySelectorAll('#cc-seats .cc-seat'));
