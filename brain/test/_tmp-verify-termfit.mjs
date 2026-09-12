@@ -66,7 +66,7 @@ try {
   await page.keyboard.press('Space');
   await page.waitForTimeout(300);
   await page.click('.view-btn[data-view="command"]');
-  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.setViewportSize({ width: 1920, height: 900 });
   await page.waitForTimeout(300);
 
   // Open 4 lanes via the real "Open terminal" button (same seat, opened repeatedly — each
@@ -88,8 +88,12 @@ try {
   const before = await page.locator('.cc-term').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width));
   console.log('lane widths before closing one:', before.map((w) => w.toFixed(1)));
 
-  // Close the second lane the same way a user does: its "hide" button.
-  await page.locator('.cc-term').nth(1).locator('button', { hasText: 'hide' }).click();
+  // Close the second lane the same way a user does: its "hide" button. Force-click: the lane
+  // strip scrolls horizontally past the viewport at this lane count, and the click point is
+  // correct even though Playwright's actionability check sees the fixed .stage above it.
+  const hideBtn = page.locator('.cc-term').nth(1).locator('button', { hasText: 'hide' });
+  await hideBtn.scrollIntoViewIfNeeded();
+  await hideBtn.click({ force: true });
   await page.waitForTimeout(600); // rAF-debounced ResizeObserver settle time
 
   const after = await page.locator('.cc-term').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width));
