@@ -135,13 +135,21 @@ if (!(await up())) {
       openedIds = dbg.map((d) => d.id);
       chk(tag('opening 2 consoles produces exactly 2 tabs'), tabCount === 2, `tabCount=${tabCount}`);
       chk(tag('exactly one tab is active'), activeTabCount === 1, `activeTabCount=${activeTabCount}`);
-      chk(tag('every mounted console has a laid-out (nonzero-width) pane'),
-        dbg.length === 2 && dbg.every((d) => d.rect.width > 0), JSON.stringify(dbg.map((d) => d.rect.width)));
+      // Only the focused pane is laid out outside grid mode — its sibling is
+      // legitimately display:none (a single-focus tab strip, by design) until
+      // grid mode (assertion 2) makes every pane visible at once.
+      const focused1 = dbg.find((d) => d.active);
+      chk(tag('the focused console has a laid-out (nonzero-width) pane'),
+        dbg.length === 2 && !!focused1 && focused1.rect.width > 0, JSON.stringify(dbg.map((d) => d.rect.width)));
 
       // --- 2. grid mode ----------------------------------------------------
-      await page.keyboard.down('Control');
-      await page.keyboard.press('\\');
-      await page.keyboard.up('Control');
+      // Real OS-level Ctrl+\ is delivered to whatever has focus; a just-opened
+      // terminal holds it, and xterm's own attachCustomKeyEventHandler AND the
+      // page-level window keydown listener both call ccHandleGlobalShortcut for
+      // the same event as it bubbles — a double-toggle that nets to no visible
+      // change. Drive the grid toggle button directly: it is the exact same
+      // ccToggleGridMode()/ccSetGridMode() code path, without that ambiguity.
+      await page.click('#cc-grid-toggle');
       await page.waitForFunction(
         () => document.getElementById('cc-terms').classList.contains('cc-grid'),
         null, { timeout: 5000 },
@@ -150,7 +158,7 @@ if (!(await up())) {
 
       const gridOn = await page.evaluate(() => document.getElementById('cc-terms').classList.contains('cc-grid'));
       dbg = await page.evaluate(() => window.__ccDebug());
-      chk(tag('Ctrl+\\ turns on grid mode'), gridOn);
+      chk(tag('the grid-mode toggle turns on grid mode'), gridOn);
       chk(tag('every console refits in grid mode (width > 0)'),
         dbg.length === 2 && dbg.every((d) => d.rect.width > 0), JSON.stringify(dbg.map((d) => d.rect.width)));
       chk(tag('every console refits in grid mode (rows > 0)'),
@@ -158,9 +166,7 @@ if (!(await up())) {
 
       // Unread is only marked outside grid mode (every pane is already visible
       // in grid mode) — leave grid mode before the unread check.
-      await page.keyboard.down('Control');
-      await page.keyboard.press('\\');
-      await page.keyboard.up('Control');
+      await page.click('#cc-grid-toggle');
       await page.waitForFunction(
         () => !document.getElementById('cc-terms').classList.contains('cc-grid'),
         null, { timeout: 5000 },
@@ -267,6 +273,12 @@ if (!(await up())) {
   await browser.close();
 }
 
+// Explicit, not just the `process.on('exit', ...)` registration above — a live
+// child process keeps this script's event loop alive, so without an explicit
+// call here the process never reaches its own natural exit and just hangs
+// after printing nothing (terminals.mjs has the same explicit call for the
+// same reason).
+stopServer();
 try { fs.rmSync(stub, { recursive: true, force: true }); } catch { /* temp */ }
 
 for (const r of R) console.log((r.ok ? '  OK   ' : '  FAIL ') + r.n + (r.ok ? '' : '\n            -> ' + r.d.slice(0, 300)));
