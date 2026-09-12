@@ -21,7 +21,7 @@ const sleep = ms => new Promise(r=>setTimeout(r,ms));
 async function up(){ const dl=Date.now()+20000; while(Date.now()<dl){ try{ if((await fetch(B+'/api/status')).ok) return true; }catch{} await sleep(300);} return false; }
 await up();
 const browser = await chromium.launch();
-const page = await browser.newPage({viewport:{width:1600,height:1000}});
+const page = await browser.newPage({viewport:{width:1600,height:1400}});
 await page.goto(B+'/');
 await sleep(500);
 await page.keyboard.press('Escape');
