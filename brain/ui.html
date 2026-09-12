@@ -153,6 +153,7 @@
     --cmdbar-w:      580px;
     --gutter:        18px;
   }
+  body.rail-collapsed { --rail-w: var(--rail-w-narrow); }
   * { box-sizing: border-box; }
   html, body {
     margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
@@ -667,10 +668,22 @@
          system-readout column so the right side stays free for content panels.
          Width lives here once so every panel in the stack matches. --- */
   #topleft {
-    position: fixed; top: 18px; left: 18px; z-index: 20; width: 250px;
+    position: fixed; top: 18px; left: 18px; z-index: 20; width: var(--rail-w);
     display: flex; flex-direction: column; gap: 10px;
+    transition: width var(--t-base) var(--ease-out);
   }
   #topleft > * { width: 100%; }
+
+  /* --- collapsible rail: `[` toggles body.rail-collapsed, persisted in
+       localStorage. Each rail panel keeps a compact glyph visible and hides
+       its expanded body, so the rail narrows to --rail-w-narrow without
+       losing at-a-glance status. --- */
+  .rail-glyph { display: none; text-align: center; font-size: 16px; line-height: 1; padding: 8px 0; color: var(--accent-primary); }
+  body.rail-collapsed .rail-glyph { display: block; }
+  body.rail-collapsed #status .body,
+  body.rail-collapsed #radial-menu .body,
+  body.rail-collapsed #ask-panel .body,
+  body.rail-collapsed #interns-panel .body { display: none; }
 
   /* --- category filter menu (filters the graph by folder) --- */
   #radial-menu {
@@ -979,9 +992,10 @@
      moves with viewport size. */
   .stage {
     position: fixed; top: 66px; bottom: 140px;
-    left: 286px; right: 18px; z-index: 20;
+    left: calc(var(--rail-w) + var(--gutter) * 2); right: var(--gutter); z-index: 20;
     overflow-y: auto; overscroll-behavior: contain;
     display: flex; flex-direction: column; gap: 16px;
+    transition: left var(--t-base) var(--ease-out);
   }
   /* The plain [hidden] UA rule and .stage's own `display: flex` are equal
      specificity, so without this the stage's display would win the cascade
@@ -1062,11 +1076,11 @@
   .cc-lane-foot .btn.big:hover { background: color-mix(in srgb, var(--mint) 12%, transparent); border-color: var(--mint); color: var(--mint); }
   #cc-council { padding-top: 6px; border-top: 1px solid var(--hairline); }
   /* Live consoles: side by side, each a real PTY drawn by xterm.js. */
-  .cc-terms { display: flex; gap: 12px; align-items: stretch; overflow-x: auto; flex: 0 0 auto; }
+  .cc-terms { display: flex; gap: 12px; align-items: stretch; overflow-x: auto; flex: 1 1 auto; min-height: 0; }
   .cc-terms:empty { display: none; }
   .cc-term {
     --accent: var(--mint);
-    flex: 1 1 0; min-width: 420px; height: 58vh; min-height: 320px;
+    flex: 1 1 0; min-width: 420px; height: 100%;
     display: flex; flex-direction: column; position: relative;
     background: var(--surface-1); border: 1px solid var(--border-strong, var(--border)); border-radius: 6px; overflow: hidden;
     border-top-color: color-mix(in srgb, var(--accent) 45%, transparent);
@@ -1415,7 +1429,7 @@
   }
 
   @media (max-width: 1080px) {
-    .stage { left: 76px; }
+    :root { --rail-w: var(--rail-w-narrow); }
   }
 </style>
 
@@ -1525,6 +1539,8 @@
 
 <div id="topleft">
   <div id="status" class="frame">
+    <div class="rail-glyph" aria-hidden="true" title="Status">&#9673;</div>
+    <div class="body">
     <div class="row" id="stat-files-row" title="Everything Alfred can see: vault notes, agent charters, and every Library artifact"><span>Files</span><span class="val" id="stat-notes">--</span></div>
     <div id="stat-files-breakdown"></div>
     <div class="row"><span>Leads</span><span class="val" id="stat-links">--</span></div>
@@ -1559,29 +1575,38 @@
          a faked chain would make this button lie in the one place people photograph. -->
     <button id="org-selftest-btn" title="Run a real VP → manager → employee delegation and watch the lineage light up">&#9671; Org Self-Test</button>
     <div id="org-selftest-status" class="panel-help" hidden></div>
+    </div>
   </div>
   <div id="radial-menu" class="frame">
+    <div class="rail-glyph" aria-hidden="true" title="Filters">&#9638;</div>
+    <div class="body">
     <div class="cat-btn" data-folder="Projects" style="--accent:#5ca8ff;">PRJ</div>
     <div class="cat-btn" data-folder="Patterns" style="--accent:#f0b35a;">PAT</div>
     <div class="cat-btn" data-folder="Decisions" style="--accent:#ad8cff;">DEC</div>
     <div class="cat-btn" data-folder="Learning" style="--accent:#63e6b5;">LRN</div>
     <div class="cat-btn" data-folder="Claude-Code" style="--accent:#f18b5b;">CLD</div>
+    </div>
   </div>
   <!-- Ask Alfred — moved into the rail per the P0 layout amendment. Results
        and the spoken-answer view now live in #ask-drawer, a left-edge
        slide-in panel, rather than growing upward from the bottom. -->
   <div id="ask-panel" class="frame">
+    <div class="rail-glyph" aria-hidden="true" title="Ask">&#8981;</div>
+    <div class="body">
     <div class="ask-inputline">
       <span class="prompt">&gt;</span>
       <input id="search-input" placeholder="SEARCH OR ASK..." autocomplete="off" />
     </div>
     <div id="search-hint">Type &mdash; instant search &middot; Enter &mdash; semantic &middot; Shift+Enter &mdash; ask</div>
+    </div>
   </div>
 
   <!-- Observe, don't do: the "prompt the intern" box was removed with the
        terminal, for the same reason. Alfred watches how models are used in
        real sessions elsewhere; it is not a chat surface of its own. -->
   <div id="interns-panel" class="frame">
+    <div class="rail-glyph" aria-hidden="true" title="Interns">&#9881;</div>
+    <div class="body">
     <div class="panel-title">Interns</div>
     <div id="intern-providers"></div>
     <div class="intern-add">
@@ -1589,6 +1614,7 @@
       <button id="intern-pull-btn" class="icon-btn compact" title="Pull this model with ollama" aria-label="Pull model">&#43;</button>
     </div>
     <div id="intern-pull-status" class="panel-help"></div>
+    </div>
   </div>
 </div>
 
@@ -1926,6 +1952,8 @@
   var audioCtx = null;
   var audioEnabled = true;
   try { audioEnabled = localStorage.getItem('alfred-muted') !== '1'; } catch (e) { /* localStorage unavailable */ }
+
+  try { if (localStorage.getItem('alfred-rail-collapsed') === '1') document.body.classList.add('rail-collapsed'); } catch (e) { /* localStorage unavailable */ }
 
   function ensureAudioCtx() {
     if (!audioCtx) {
@@ -3592,6 +3620,7 @@
   var KB_MAP = [
     ['1-6', 'Switch view: Brain / Workshop / Protocols / Enterprise / Operative Roster / Library'],
     ['/', 'Focus the omnibox'],
+    ['[', 'Collapse/expand the left rail'],
     ['Shift+Enter', 'Ask (in the omnibox)'],
     ['r', "Refresh the active view's data"],
     ['f', "Focus the active view's filter chips"],
@@ -4031,6 +4060,12 @@
       return;
     }
     if (e.key === '/') { e.preventDefault(); document.getElementById('search-input').focus(); return; }
+    if (e.key === '[') {
+      e.preventDefault();
+      document.body.classList.toggle('rail-collapsed');
+      try { localStorage.setItem('alfred-rail-collapsed', document.body.classList.contains('rail-collapsed') ? '1' : '0'); } catch (e) { /* localStorage unavailable */ }
+      return;
+    }
     if (e.key === 'r' || e.key === 'R') {
       stopViewPolls();
       startViewPolls(currentView);
@@ -6023,8 +6058,21 @@
     term.loadAddon(fit);
     term.loadAddon(new window.WebLinksAddon.WebLinksAddon());
     term.open(body);
-    var entry = { id: info.id, term: term, fit: fit, ws: null, root: root, badge: badge, metaEl: metaEl, exited: false };
+    var entry = { id: info.id, term: term, fit: fit, ws: null, root: root, badge: badge, metaEl: metaEl, exited: false, ro: null, roRaf: null };
     ccTerms[info.id] = entry;
+
+    // Opening or closing one lane changes every other live lane's rendered
+    // width, but nothing told them to refit — their PTY cols/rows went stale
+    // relative to their actual pixel width. A ResizeObserver on this lane's
+    // own body catches that. Debounced via rAF because a CSS transition
+    // (e.g. the rail collapse/expand) fires the observer many times in
+    // quick succession, and each fit sends a resize/SIGWINCH to a live
+    // process — one per animation frame, not one per observer tick.
+    entry.ro = new ResizeObserver(function () {
+      if (entry.roRaf) return;
+      entry.roRaf = requestAnimationFrame(function () { entry.roRaf = null; ccFitTerm(entry); });
+    });
+    entry.ro.observe(body);
 
     // Copy/paste stay with the browser on Ctrl+Shift+C / Ctrl+Shift+V; every
     // other key — including Alt+V, which Claude Code uses to paste a
@@ -6064,6 +6112,8 @@
     });
     closeBtn.addEventListener('click', function () {
       try { if (entry.ws) entry.ws.close(); } catch (e) {}
+      if (entry.ro) entry.ro.disconnect();
+      if (entry.roRaf) cancelAnimationFrame(entry.roRaf);
       term.dispose();
       root.remove();
       delete ccTerms[info.id];
