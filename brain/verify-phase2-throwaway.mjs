@@ -65,10 +65,9 @@ page.on('pageerror', (e) => consoleErrors.push('pageerror: ' + e.message));
 page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push('console: ' + msg.text()); });
 
 await page.goto(B + '/');
-await page.waitForSelector('#cc-seats', { timeout: 15000 });
+await page.waitForFunction(() => typeof window.switchView === 'function', { timeout: 15000 });
 
-// Switch to the Command Center view (key '3' per byIndex order: brain/dev/auto/ops/directory/library — Command Center is "auto")
-await page.evaluate(() => window.switchView('auto'));
+await page.evaluate(() => window.switchView('command'));
 await page.waitForSelector('#cc-seats .cc-seat', { timeout: 15000 });
 
 // Open 4 terminals via the API directly (mirrors ccOpenBrowserTerminal) then mount them.
