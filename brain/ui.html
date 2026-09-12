@@ -1512,20 +1512,17 @@
     font-size: 11px; background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
   }
 
-  /* Narrowing --rail-w alone used to leave the panels' full-width content
-     rendering inside that narrow box — it doesn't reflow, it overflows,
-     spilling past the rail into the stage (confirmed via Playwright at
-     1024x768). Applying the same body-hiding/glyph-showing rules that
-     body.rail-collapsed uses keeps the narrow rail visually consistent with
-     what it actually contains. */
-  @media (max-width: 1080px) {
-    :root { --rail-w: var(--rail-w-narrow); }
-    .rail-glyph { display: block; }
-    #status .body,
-    #radial-menu .body,
-    #ask-panel .body,
-    #interns-panel .body { display: none; }
-  }
+  /* This used to force --rail-w down to the "collapsed" width on any narrow
+     viewport, but nothing hid the panels' full-width content to match, so it
+     just overflowed the narrow box into the stage (confirmed via Playwright
+     at 1024x768). Mirroring body.rail-collapsed's body-hiding here instead
+     traded that for a worse bug: the only way to leave that state (clicking
+     a rail glyph) doesn't work yet (tracked separately as the "no mouse
+     affordance for rail toggle" item), so it made the rail permanently
+     unreachable at <=1080px width, not just visually broken. Since #topleft
+     now scrolls internally instead of clipping, the rail stays fully usable
+     at its normal width at every tested viewport size, so it no longer needs
+     to narrow here at all. */
 </style>
 
 <div id="landing">
