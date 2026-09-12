@@ -209,26 +209,9 @@ if (!(await up())) {
     }
 
     // --- 4. Interns catalog search ---------------------------------------
-    if (process.env.ALFRED_REDESIGN_DEBUG) {
-      const dbg4 = await page.evaluate(() => {
-        const el = document.getElementById('intern-pull-input');
-        const rect = el.getBoundingClientRect();
-        const topleft = document.getElementById('topleft');
-        const cx = rect.x + rect.width / 2, cy = rect.y + rect.height / 2;
-        const hit = document.elementFromPoint(cx, cy);
-        let anc = el, chain = [];
-        while (anc) {
-          const cs = getComputedStyle(anc);
-          chain.push({ tag: anc.tagName, id: anc.id, cls: anc.className, display: cs.display, visibility: cs.visibility, opacity: cs.opacity, pe: cs.pointerEvents });
-          anc = anc.parentElement;
-        }
-        return { rect, scrollTop: topleft.scrollTop, scrollHeight: topleft.scrollHeight, clientHeight: topleft.clientHeight,
-          bodyClass: document.body.className, computedVisibility: getComputedStyle(el).visibility,
-          hitTag: hit ? hit.tagName : null, hitId: hit ? hit.id : null, hitClass: hit ? hit.className : null,
-          chain };
-      });
-      console.error('DEBUG intern-pull-input state: ' + JSON.stringify(dbg4));
-    }
+    // The pull input lives inside the "Available" <details>, closed by
+    // default (only "Installed" starts open) — open it before typing.
+    await page.evaluate(() => { document.getElementById('intern-section-available').open = true; });
     await page.fill('#intern-pull-input', '');
     await page.fill('#intern-pull-input', 'qwen');
     await page.dispatchEvent('#intern-pull-input', 'input');
