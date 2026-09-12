@@ -64,7 +64,9 @@ const consoleErrors = [];
 page.on('pageerror', (e) => consoleErrors.push('pageerror: ' + e.message));
 page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push('console: ' + msg.text()); });
 
-const resp = await page.goto(B + '/');
+page.on('requestfailed', (req) => console.log('REQFAIL', req.url(), req.failure() && req.failure().errorText));
+page.on('response', (r) => { if (!r.ok()) console.log('RESP', r.status(), r.url()); });
+const resp = await page.goto(B + '/', { waitUntil: 'networkidle' });
 console.log('goto status:', resp && resp.status());
 await sleep(1000);
 console.log('early console errors:', JSON.stringify(consoleErrors));
