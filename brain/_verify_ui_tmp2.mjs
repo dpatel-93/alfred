@@ -5,8 +5,8 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 
 const HERE = process.cwd();
-const stub = fs.mkdtempSync(path.join(os.tmpdir(), 'alfred-verify-ui-'));
-const PORT = 7901;
+const stub = fs.mkdtempSync(path.join(os.tmpdir(), 'alfred-verify-ui2-'));
+const PORT = 7902;
 const B = `http://127.0.0.1:${PORT}`;
 
 const server = spawn(process.execPath, [path.join(HERE, 'server.mjs')], {
@@ -47,41 +47,50 @@ try {
   if (!up) { console.log('SERVER FAILED TO START\n' + log); process.exit(1); }
 
   browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 1400, height: 1000 } });
-  page.on('console', msg => { if (msg.type() === 'error') console.log('PAGE ERROR:', msg.text()); });
+  const page = await browser.newPage({ viewport: { width: 900, height: 500 } });
   page.on('pageerror', err => console.log('PAGE EXCEPTION:', err.message));
 
-  await page.goto(B + '/', { waitUntil: 'networkidle' });
+  // Never actually let the browser hit the real dsh binary or open a real tab:
+  // stub the two endpoints ccOpenWebPanel/ccKillWebPanel call, and neutralize window.open.
+  let fakeCounter = 0;
+  await page.route('**/api/terminals', async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    fakeCounter += 1;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ terminal: { id: 'faketerm' + fakeCounter, provider: 'dsh', status: 'running' } }) });
+  });
+  await page.route('**/api/terminals/*/kill', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+  });
 
-  // Dismiss the landing/authorize splash before the nav is interactive.
+  await page.goto(B + '/', { waitUntil: 'networkidle' });
+  await page.addScriptTag({ content: "window.open = function(u){ window.__lastOpen = u; return null; };" });
+
   const landingBtn = await page.$('#landing-enter');
   if (landingBtn) { await landingBtn.click(); await page.waitForTimeout(300); }
 
-  // Switch to the Command Center view via the real nav button.
   await page.click('.view-btn[data-view="command"]');
-
   await page.waitForSelector('#cc-seats .cc-seat', { timeout: 15000 });
 
-  const seatsInfo = await page.evaluate(() => {
-    var cards = Array.from(document.querySelectorAll('#cc-seats .cc-seat'));
-    return cards.map(function (c) {
-      var label = c.querySelector('.cc-seat-title strong');
-      var btns = Array.from(c.querySelectorAll('button')).map(function (b) { return b.textContent.trim(); });
-      var help = c.querySelector('.panel-help');
-      return {
-        label: label ? label.textContent : null,
-        buttons: btns,
-        panelHelp: help ? help.textContent : null,
-        html: c.outerHTML.slice(0, 2000),
-      };
-    });
-  });
-  console.log('SEAT CARDS:', JSON.stringify(seatsInfo, null, 2));
+  // Locate the DeepSeek card and click "Open panel".
+  const dshCard = page.locator('#cc-seats .cc-seat', { hasText: 'DeepSeek Harness' });
+  await dshCard.locator('button', { hasText: 'Open panel' }).click();
+  await page.waitForTimeout(400);
 
-  await page.screenshot({ path: '/tmp/cc-seats.png', fullPage: false });
-  const wrap = await page.$('#cc-seats');
-  if (wrap) await wrap.screenshot({ path: '/tmp/cc-seats-panel.png' });
-  console.log('Screenshots saved.');
+  const afterOpen = await dshCard.evaluate((el) => el.outerHTML);
+  console.log('AFTER OPEN:', afterOpen);
+  const lastOpen = await page.evaluate(() => window.__lastOpen);
+  console.log('window.open called with:', lastOpen);
+
+  const panel = await dshCard.screenshot();
+  fs.writeFileSync('/tmp/cc-dsh-running.png', panel);
+
+  // Now kill it.
+  await dshCard.locator('button', { hasText: 'kill' }).click();
+  await page.waitForTimeout(400);
+  const afterKill = await dshCard.evaluate((el) => el.outerHTML);
+  console.log('AFTER KILL:', afterKill);
+  const panel2 = await dshCard.screenshot();
+  fs.writeFileSync('/tmp/cc-dsh-exited.png', panel2);
 } finally {
   if (browser) await browser.close();
   stop();
