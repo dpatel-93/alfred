@@ -1913,16 +1913,29 @@ const INTERN_HELPER = path.join(os.homedir(), '.claude', 'helpers', 'intern-run.
 // a static list silently drifts from what `ollama pull` has actually fetched,
 // and the failure only shows up as a 404 at run time. Embedding models are
 // filtered out: they have no chat endpoint, so they can't answer a prompt.
+//
+// Hits the daemon's own API rather than shelling `ollama list` — /api/tags
+// returns structured JSON (size, parameter count, quantization, context
+// length) instead of a padded text table that only ever gave up a name.
 async function listInternModels() {
-  const out = await execFileText('ollama', ['list']);
-  const lines = out.split(/\r?\n/).filter((l) => l.trim());
-  const models = [];
-  for (const line of lines.slice(1)) {
-    const name = line.trim().split(/\s{2,}/)[0];
-    if (!name || /embed/i.test(name)) continue;
-    models.push(name);
-  }
-  return models;
+  try {
+    const res = await fetch(`${OLLAMA_URL}/api/tags`, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.models || [])
+      .map((m) => {
+        const details = (m && m.details) || {};
+        return {
+          name: m.name || m.model,
+          size: typeof m.size === 'number' ? m.size : null,
+          parameterSize: details.parameter_size || null,
+          quantization: details.quantization_level || null,
+          contextLength: typeof details.context_length === 'number' ? details.context_length : null,
+          capabilities: Array.isArray(m.capabilities) ? m.capabilities : [],
+        };
+      })
+      .filter((m) => m.name && !/embed/i.test(m.name));
+  } catch { return []; }
 }
 
 // --- the intern bench: local models plus any configured free cloud tier ---
@@ -2178,13 +2191,20 @@ async function listCloudModels() {
 }
 
 async function buildInternBench() {
-  const [local, cloud] = await Promise.all([listInternModels(), listCloudModels()]);
+  const [local, cloud, psOutput] = await Promise.all([
+    listInternModels(), listCloudModels(), execFileText('ollama', ['ps']),
+  ]);
+  // `ollama ps` is already shelled elsewhere (loadInternAgents) to know what is
+  // resident in VRAM — this just reuses that same data against the installed
+  // list instead of leaving it unused.
+  const resident = new Set(parseOllamaPs(psOutput).map((m) => m.name));
+  const localWithResidency = local.map((m) => ({ ...m, resident: resident.has(m.name) }));
   return {
     providers: [
       {
         id: 'local', label: 'Local · Ollama', kind: 'local', configured: true,
-        models: local, error: null,
-        hint: local.length ? null : 'no local models — run `ollama pull qwen3:4b`',
+        models: localWithResidency, error: null,
+        hint: localWithResidency.length ? null : 'no local models — run `ollama pull qwen3:4b`',
       },
       {
         id: 'ollama-cloud', label: 'Cloud · Ollama', kind: 'cloud',
@@ -2197,6 +2217,82 @@ async function buildInternBench() {
       },
     ],
   };
+}
+
+// GET /api/interns/catalog?q=<term> | &name=<model> — what CAN be pulled.
+//
+// There is no JSON catalog of pullable models anywhere. Verified live
+// (2026-09-12): https://ollama.com/api/library, https://ollama.com/library.json
+// and https://registry.ollama.ai/v2/_catalog all 404. The only place this
+// list exists at all is the HTML pages meant for a browser —
+// https://ollama.com/search?q=<term> (base model names) and
+// https://ollama.com/library/<name>/tags (concrete pullable tags, e.g.
+// "qwen3.5:27b"). So this scrapes those two pages with plain string/regex
+// parsing rather than calling an API that does not exist. If ollama.com ever
+// ships a real JSON catalog, replace this — don't assume one already exists
+// and "simplify" this into a call that will 404.
+const MODEL_CATALOG_TTL_MS = 60 * 60 * 1000;
+const modelCatalogCache = new Map(); // key -> { at, data }
+
+function catalogCacheGet(key) {
+  const hit = modelCatalogCache.get(key);
+  if (hit && Date.now() - hit.at < MODEL_CATALOG_TTL_MS) return hit.data;
+  return null;
+}
+function catalogCacheSet(key, data) {
+  modelCatalogCache.set(key, { at: Date.now(), data });
+}
+
+async function searchOllamaCatalog(q) {
+  const key = 'search:' + q;
+  const cached = catalogCacheGet(key);
+  if (cached) return cached;
+  const res = await fetch(OLLAMA_CLOUD_URL + '/search?q=' + encodeURIComponent(q), {
+    signal: AbortSignal.timeout(6000),
+  });
+  if (!res.ok) return [];
+  const html = await res.text();
+  const names = new Set();
+  for (const m of html.matchAll(/href="\/library\/([\w][\w.-]*)"/g)) names.add(m[1]);
+  const results = [...names].sort();
+  catalogCacheSet(key, results);
+  return results;
+}
+
+async function fetchOllamaModelTags(name) {
+  const key = 'tags:' + name;
+  const cached = catalogCacheGet(key);
+  if (cached) return cached;
+  const res = await fetch(OLLAMA_CLOUD_URL + '/library/' + encodeURIComponent(name) + '/tags', {
+    signal: AbortSignal.timeout(6000),
+  });
+  if (!res.ok) return [];
+  const html = await res.text();
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp('href="/library/' + escaped + ':([\\w][\\w.-]*)"', 'g');
+  const tags = new Set();
+  for (const m of html.matchAll(re)) tags.add(name + ':' + m[1]);
+  const results = [...tags].sort();
+  catalogCacheSet(key, results);
+  return results;
+}
+
+const CATALOG_QUERY_RE = /^[\w][\w. -]{0,80}$/;
+
+async function handleInternCatalog(req, res, url) {
+  const name = (url.searchParams.get('name') || '').trim();
+  const q = (url.searchParams.get('q') || '').trim();
+  try {
+    if (name) {
+      if (!MODEL_NAME_RE.test(name)) return sendJson(res, 400, { error: 'invalid model name' });
+      return sendJson(res, 200, { tags: await fetchOllamaModelTags(name) });
+    }
+    if (!q) return sendJson(res, 200, { results: [] });
+    if (!CATALOG_QUERY_RE.test(q)) return sendJson(res, 400, { error: 'invalid search term' });
+    return sendJson(res, 200, { results: await searchOllamaCatalog(q) });
+  } catch (err) {
+    sendJson(res, 502, { error: err.name === 'TimeoutError' ? 'ollama.com timed out' : err.message });
+  }
 }
 
 // POST /api/interns/pull [token] — `ollama pull <model>` for the local bench.
@@ -5599,6 +5695,7 @@ async function main() {
       if (url.pathname === '/api/reindex/status'
           || url.pathname === '/api/interns/pull/status' || url.pathname === '/api/settings'
           || url.pathname === '/api/agents' || url.pathname === '/api/interns/models'
+          || url.pathname === '/api/interns/catalog'
           || url.pathname === '/api/github/status' || url.pathname === '/api/workshop'
           || url.pathname === '/api/command-center/seats' || url.pathname === '/api/council'
           || url.pathname === '/api/terminals'
@@ -5613,6 +5710,7 @@ async function main() {
         if (url.pathname === '/api/reindex/status') return handleReindexStatus(req, res, url);
         if (url.pathname === '/api/agents') return handleAgentList(req, res);
         if (url.pathname === '/api/interns/models') return sendJson(res, 200, { models: await listInternModels(), ...(await buildInternBench()) });
+        if (url.pathname === '/api/interns/catalog') return await handleInternCatalog(req, res, url);
         if (url.pathname === '/api/interns/pull/status') return handleInternPullStatus(req, res, url);
         if (url.pathname === '/api/settings') return handleSettingsGet(req, res);
         return handleAgentOutput(req, res, agentOutput[1], url);
