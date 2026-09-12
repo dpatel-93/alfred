@@ -87,7 +87,14 @@ try {
 
   const dump = await page.locator('.cc-term').first().evaluate((el) => {
     const canvases = [...el.querySelectorAll('canvas')].map((c) => ({ cls: c.className, w: c.width, h: c.height, styleW: c.style.width }));
-    return { canvases, viewport: el.querySelector('.xterm-viewport') ? el.querySelector('.xterm-viewport').getBoundingClientRect().width : null };
+    const rows = el.querySelector('.xterm-rows');
+    return {
+      canvases,
+      viewport: el.querySelector('.xterm-viewport') ? el.querySelector('.xterm-viewport').getBoundingClientRect().width : null,
+      rowsStyleWidth: rows ? rows.style.width : null,
+      rowsRectWidth: rows ? rows.getBoundingClientRect().width : null,
+      html: el.querySelector('.cc-term-body').innerHTML.slice(0, 1500),
+    };
   });
   console.log('xterm DOM probe:', JSON.stringify(dump));
 
