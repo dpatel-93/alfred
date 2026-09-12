@@ -1088,6 +1088,12 @@
   .cc-seat-title input { margin: 0; accent-color: var(--mint); }
   .cc-seat-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
   .cc-seat-row .k { font-size: 10px; color: var(--text-dim); letter-spacing: .08em; text-transform: uppercase; }
+  /* Same idiom as .cc-tab .dot (the terminal tab-strip's live/exited light),
+     reused here for a seat whose surface is a web panel rather than a pane. */
+  .cc-seat-row .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; box-shadow: 0 0 5px currentColor; }
+  .cc-seat-row .dot.on { background: var(--mint); box-shadow: 0 0 5px var(--mint); }
+  .cc-seat-row .dot.off { background: var(--gray, #93a1b2); opacity: .6; box-shadow: none; }
+  .cc-seat-row .dot.err { background: var(--red); box-shadow: 0 0 5px var(--red); }
   .cc-model-input {
     flex: 1 1 120px; min-width: 120px; max-width: 260px;
     background: var(--surface-2); border: 1px solid var(--border-focusable); border-radius: 3px;
@@ -5986,6 +5992,11 @@
   var ccSeats = [];
   var ccChecked = {};
   var ccPollTimer = null;
+  // Seats whose surface is "web" (e.g. DeepSeek Harness) run a real HTTP UI in
+  // a browser tab, not an in-page terminal pane. The PTY still has to exist —
+  // it *is* the web server — so this tracks that PTY's id/status per seat id
+  // for the lane card's status dot and kill button, without mounting a pane.
+  var ccWebPanels = {};
 
   function ccSeatState(s) {
     if (s.ready) return { cls: 'live', text: 'ready' };
@@ -6021,6 +6032,19 @@
       if (s.specialism) meta.push(s.specialism);
       copy.appendChild(el('small', null, [meta.join(' · ')]));
 
+      // A "web" surface seat's real interface is its own browser tab, not this
+      // card's terminal pane — say so plainly, and show whether that tab's
+      // backing process (the PTY, once opened) is still alive.
+      var panel = s.surface === 'web' ? ccWebPanels[s.id] : null;
+      if (s.surface === 'web') {
+        var panelRow = el('div', 'cc-seat-row', []);
+        var panelDotState = panel ? (panel.status === 'running' ? 'on' : 'err') : 'off';
+        panelRow.appendChild(el('span', 'dot ' + panelDotState, []));
+        panelRow.appendChild(el('small', null, [panel ? (panel.status === 'running' ? 'panel live' : 'panel exited') : 'panel not running']));
+        copy.appendChild(panelRow);
+        copy.appendChild(el('small', 'panel-help', ['This provider’s interface is a web app opened externally, not an in-page terminal.']));
+      }
+
       // Model: what this seat runs, in council and in its pane. Blank = registry default.
       var modelRow = el('div', 'cc-seat-row', [el('span', 'k', ['model'])]);
       var modelInput = document.createElement('input');
@@ -6040,7 +6064,26 @@
       copy.appendChild(modelRow);
 
       var foot = el('div', 'cc-lane-foot', []);
-      if (s.ready) {
+      if (s.ready && s.surface === 'web') {
+        if (panel && panel.status === 'running') {
+          var reopenBtn = el('button', 'btn big', ['↗ Reopen tab']);
+          reopenBtn.type = 'button';
+          reopenBtn.title = 'Reopen ' + s.label + '’s web panel in a new browser tab';
+          reopenBtn.addEventListener('click', function () { window.open(s.webUrl, '_blank'); });
+          foot.appendChild(reopenBtn);
+          var killWebBtn = el('button', 'btn small danger', ['✕ kill']);
+          killWebBtn.type = 'button';
+          killWebBtn.title = 'Stop the web server backing this panel';
+          killWebBtn.addEventListener('click', function () { ccKillWebPanel(s, panel, killWebBtn); });
+          foot.appendChild(killWebBtn);
+        } else {
+          var openWebBtn = el('button', 'btn big', ['Open panel ↗ (external)']);
+          openWebBtn.type = 'button';
+          openWebBtn.title = s.label + ' opens its own web interface in a new browser tab, not an in-page terminal.';
+          openWebBtn.addEventListener('click', function () { ccOpenWebPanel(s, openWebBtn); });
+          foot.appendChild(openWebBtn);
+        }
+      } else if (s.ready) {
         var openBtn = el('button', 'btn big', ['〉 Open']);
         openBtn.type = 'button';
         openBtn.textContent = '〉 Open terminal';
@@ -6356,13 +6399,68 @@
     });
   }
 
-  // Consoles started earlier (or before a reload) come back on their own.
+  // A "web" surface seat's PTY is the web server, not something to look at —
+  // it starts the terminal exactly like any other seat (so kill still works),
+  // then hands the operator the real interface: the seat's own page, in its
+  // own tab. No in-page pane is mounted for it.
+  function ccOpenWebPanel(seat, btn) {
+    btn.disabled = true;
+    bridgePost('/api/terminals', { provider: seat.id, cols: 100, rows: 30 }).then(function (r) {
+      btn.disabled = false;
+      if (!r.ok) return toast(r.data.error || 'Could not start ' + seat.label + '.', 'critical');
+      ccWebPanels[seat.id] = { id: r.data.terminal.id, status: 'running' };
+      window.open(seat.webUrl, '_blank');
+      toast(seat.label + ' is live — opened in a new browser tab.', 'success', { title: 'External panel' });
+      renderCcSeats();
+    });
+  }
+
+  function ccKillWebPanel(seat, panel, btn) {
+    btn.disabled = true;
+    bridgePost('/api/terminals/' + panel.id + '/kill', {}).then(function (r) {
+      btn.disabled = false;
+      if (!r.ok) return toast(r.data.error || 'Could not kill ' + seat.label + '.', 'critical');
+      ccWebPanels[seat.id] = { id: panel.id, status: 'exited' };
+      toast(seat.label + ' stopped.', 'success', { title: 'External panel' });
+      renderCcSeats();
+    });
+  }
+
+  // Polled alongside the seat list (refreshCommandCenter) so a web panel's dot
+  // and kill button track the underlying PTY even though no ws/xterm is ever
+  // opened for it. Skipped when no seat is web-surfaced — one extra idle GET
+  // per poll otherwise.
+  function ccSyncWebPanels() {
+    if (!ccSeats.some(function (s) { return s.surface === 'web'; })) return;
+    bridgeFetch('/api/terminals').then(function (r) { return r.json(); }).then(function (d) {
+      var terms = d.terminals || [];
+      var changed = false;
+      ccSeats.forEach(function (s) {
+        if (s.surface !== 'web') return;
+        var matches = terms.filter(function (t) { return t.provider === s.id; });
+        var t = matches.length ? matches[matches.length - 1] : null;
+        var prev = ccWebPanels[s.id];
+        if (!t) { if (prev) { delete ccWebPanels[s.id]; changed = true; } return; }
+        if (!prev || prev.id !== t.id || prev.status !== t.status) { ccWebPanels[s.id] = { id: t.id, status: t.status }; changed = true; }
+      });
+      if (changed) renderCcSeats();
+    }).catch(function () {});
+  }
+
+  // Consoles started earlier (or before a reload) come back on their own —
+  // except a web-surface seat's PTY, which never had a pane mounted in the
+  // first place; it only needs its ccWebPanels status restored.
   var ccReattached = false;
   function ccReattachTerminals() {
     if (ccReattached) return;
     ccReattached = true;
     bridgeFetch('/api/terminals').then(function (r) { return r.json(); }).then(function (d) {
-      (d.terminals || []).forEach(function (t) { if (t.status === 'running') ccMountTerminal(t); });
+      (d.terminals || []).forEach(function (t) {
+        if (t.status !== 'running') return;
+        var seat = ccSeats.filter(function (s) { return s.id === t.provider; })[0];
+        if (seat && seat.surface === 'web') { ccWebPanels[t.provider] = { id: t.id, status: t.status }; renderCcSeats(); return; }
+        ccMountTerminal(t);
+      });
       var saved = null;
       try { saved = localStorage.getItem('alfred-cc-last-tab'); } catch (e) { /* localStorage unavailable */ }
       if (saved && ccTerms[saved]) ccFocusTerm(saved);
@@ -6440,6 +6538,7 @@
         ccRenderSummary(d);
         ccRenderAsking();
         ccReattachTerminals();
+        ccSyncWebPanels();
       });
   }
 

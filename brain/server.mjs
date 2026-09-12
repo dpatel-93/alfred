@@ -4842,6 +4842,7 @@ async function handleCommandCenterSeats(req, res, url) {
       id: s.id, label: s.label, installed: s.installed, signedIn: s.signedIn, ready: s.ready,
       cost: s.cost, approval: s.approval, specialism: s.specialism, loginCmd: s.loginCmd,
       canSignIn: Array.isArray(s.signin),
+      surface: s.surface || 'tty', webUrl: s.webUrl || null,
       model: seatModel(s, cfg), defaultModel: s.councilModel || null,
       // Ollama's list is whatever is actually pulled; a static list would drift.
       models: s.id === 'ollama' ? ollama : (s.models || []),

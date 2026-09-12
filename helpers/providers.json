@@ -272,6 +272,8 @@
       "effortFlag": null
     },
     "launchArgv": ["web"],
+    "surface": "web",
+    "webUrl": "http://127.0.0.1:3080",
     "loginCmd": "none needed — models come from ~/.dsh/settings.yaml (local Ollama route)",
     "authPaths": [],
     "cost": "local",

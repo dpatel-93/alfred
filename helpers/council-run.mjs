@@ -130,6 +130,10 @@ function councilStatus(registry) {
       loginCmd: spec.loginCmd ?? null, outputContract: spec.outputContract ?? null,
       models: Array.isArray(spec.models) ? spec.models : [],
       councilModel: spec.councilModel ?? null,
+      // Every seat is a console (tty) unless the registry says otherwise — dsh's
+      // "web" surface runs a real HTTP UI in the browser, not a TUI in the pane.
+      surface: spec.surface ?? 'tty',
+      webUrl: spec.webUrl ?? null,
       modelFlag: spec.headless?.modelFlag ?? null,
       modelPositional: Boolean(spec.modelPositional),
     });
