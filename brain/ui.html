@@ -809,7 +809,6 @@
      the tier is knowing what runs free on your own GPU versus what leaves the
      machine, and a flat list of names hides exactly that. */
   .intern-btn.cloud { color: var(--accent-primary); border-color: color-mix(in srgb, var(--accent-primary) 45%, transparent); }
-  .intern-provider { margin-bottom: 6px; }
   /* The chips carry model names like "qwen2.5-coder:1.5b-base", which are far
      wider than the 250px rail — they must wrap as whole chips, and the labels
      inside must not break mid-name. */
@@ -820,10 +819,40 @@
     font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
     color: var(--text-dim); opacity: .7; margin-bottom: 3px;
   }
-  .intern-provider-head .dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; }
-  .intern-provider-head .dot.on { background: var(--mint); box-shadow: 0 0 5px var(--mint); }
-  .intern-provider-head .dot.off { background: var(--text-dim); opacity: .5; }
+  .intern-provider-head .dot, .intern-model-row .dot {
+    width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto;
+  }
+  .intern-provider-head .dot.on, .intern-model-row .dot.on { background: var(--mint); box-shadow: 0 0 5px var(--mint); }
+  .intern-provider-head .dot.off, .intern-model-row .dot.off { background: var(--text-dim); opacity: .5; }
   .intern-provider-head .dot.err { background: var(--red); box-shadow: 0 0 5px var(--red); }
+  /* Three collapsible sections replacing the old flat chip list — Installed
+     open by default since "what's on my own GPU right now" is the answer the
+     operator wants without a click; Cloud/Available collapsed since they are
+     either a settled config or an occasional action. */
+  .intern-section { margin: 0; }
+  .intern-section summary {
+    cursor: pointer; font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--text-dim); opacity: .8; padding: 2px 0; list-style: revert;
+  }
+  .intern-section summary:hover { color: var(--text); opacity: 1; }
+  .intern-section[open] summary { margin-bottom: 3px; }
+  .intern-model-row {
+    display: flex; align-items: center; gap: 6px; font-size: 11px; padding: 2px 0;
+  }
+  .intern-model-name {
+    flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; color: var(--text);
+  }
+  .intern-model-meta { flex: 0 0 auto; font-size: 9px; color: var(--text-dim); opacity: .7; }
+  .intern-catalog-list {
+    display: flex; flex-direction: column; gap: 2px; margin-top: 4px;
+    max-height: 140px; overflow-y: auto;
+  }
+  .intern-catalog-item {
+    font-size: 10px; padding: 3px 6px; cursor: pointer; color: var(--text-dim);
+    border: 1px solid var(--border-focusable); transition: color .2s ease, border-color .2s ease;
+  }
+  .intern-catalog-item:hover { color: var(--accent-primary); border-color: var(--accent-primary); }
   .intern-add { display: flex; align-items: center; gap: 5px; margin-top: 4px; }
   #intern-pull-input {
     flex: 1; min-width: 0; background: rgba(0,0,0,0.3);
@@ -1608,12 +1637,23 @@
     <div class="rail-glyph" aria-hidden="true" title="Interns">&#9881;</div>
     <div class="body">
     <div class="panel-title">Interns</div>
-    <div id="intern-providers"></div>
-    <div class="intern-add">
-      <input id="intern-pull-input" placeholder="add a local model&hellip;" autocomplete="off" spellcheck="false" />
-      <button id="intern-pull-btn" class="icon-btn compact" title="Pull this model with ollama" aria-label="Pull model">&#43;</button>
-    </div>
-    <div id="intern-pull-status" class="panel-help"></div>
+    <details class="intern-section" id="intern-section-installed" open>
+      <summary>Installed</summary>
+      <div id="intern-installed-list"></div>
+    </details>
+    <details class="intern-section" id="intern-section-cloud">
+      <summary>Cloud &middot; Ollama</summary>
+      <div id="intern-cloud-body"></div>
+    </details>
+    <details class="intern-section" id="intern-section-available">
+      <summary>Available</summary>
+      <div class="intern-add">
+        <input id="intern-pull-input" placeholder="search or type a model&hellip;" autocomplete="off" spellcheck="false" />
+        <button id="intern-pull-btn" class="icon-btn compact" title="Pull this model with ollama" aria-label="Pull model">&#43;</button>
+      </div>
+      <div id="intern-catalog-results"></div>
+      <div id="intern-pull-status" class="panel-help"></div>
+    </details>
     </div>
   </div>
 </div>
@@ -6322,43 +6362,77 @@
   });
 
   // --- interns ---------------------------------------------------------
-  // Populated from `ollama list` via the server, so the buttons always match
-  // what is actually pulled. A hardcoded list drifts and fails at run time.
-  // The intern bench: which models Alfred can route cheap work to, grouped by
-  // provider so "runs free on my GPU" is distinguishable from "leaves the
-  // machine". The names are labels, not buttons — nothing is prompted from
-  // here. Adding a model is provisioning, which is a different thing from
-  // operating one, and is the only action this panel offers.
-  function renderInternBench(d) {
-    var wrap = document.getElementById('intern-providers');
+  // Populated from the server's own bench (which itself reads the ollama
+  // daemon's /api/tags), so the panel always matches what is actually
+  // pulled. A hardcoded list drifts and fails at run time.
+  //
+  // Three sections: Installed (this machine's own GPU — what "interns" mostly
+  // means), Cloud (a configured free tier, same meaning as before), and
+  // Available (browsing what CAN be pulled, via the catalog search below).
+  // The Installed/Cloud rows are labels, not buttons — nothing is prompted
+  // from here. Adding a model is provisioning, which is a different thing
+  // from operating one, and is the only action this panel offers.
+  function formatModelBytes(n) {
+    if (!n) return '';
+    var gb = n / (1024 * 1024 * 1024);
+    if (gb >= 1) return gb.toFixed(1) + ' GB';
+    return (n / (1024 * 1024)).toFixed(0) + ' MB';
+  }
+
+  function renderInstalledModels(models) {
+    var wrap = document.getElementById('intern-installed-list');
     wrap.textContent = '';
-    (d.providers || []).forEach(function (p) {
-      var box = el('div', 'intern-provider', []);
-      var dotClass = p.error ? 'err' : (p.configured && p.models.length ? 'on' : 'off');
-      var head = el('div', 'intern-provider-head', []);
-      head.appendChild(el('span', null, [p.label]));
-      head.appendChild(el('span', 'dot ' + dotClass, []));
-      box.appendChild(head);
-      if (p.models && p.models.length) {
-        var row = el('div', 'intern-models-row', []);
-        p.models.forEach(function (m) {
-          var chip = el('span', 'intern-btn' + (p.kind === 'cloud' ? ' cloud' : ''), [m]);
-          // Says which of the two things this chip means. "Cloud" models are never
-          // downloaded — they run on the provider's hardware via your key — so there is
-          // nothing to install and no reason for a click to do anything.
-          chip.title = p.kind === 'cloud'
-            ? m + ' — available through your provider key; runs on their hardware, nothing to install'
-            : m + ' — installed locally, runs on your own GPU';
-          row.appendChild(chip);
-        });
-        box.appendChild(row);
-      }
-      // An error outranks the hint: "key rejected (401)" is actionable, while
-      // the generic setup hint would be actively misleading once a key exists.
-      if (p.error) box.appendChild(el('div', 'panel-help', [p.error]));
-      else if (p.hint) box.appendChild(el('div', 'panel-help', [p.hint]));
-      wrap.appendChild(box);
+    if (!models || !models.length) {
+      wrap.appendChild(el('div', 'panel-help', ['no local models — pull one below']));
+      return;
+    }
+    models.forEach(function (m) {
+      var row = el('div', 'intern-model-row', []);
+      var dot = el('span', 'dot ' + (m.resident ? 'on' : 'off'), []);
+      dot.title = m.resident ? 'loaded in VRAM right now' : 'installed, not currently loaded';
+      row.appendChild(dot);
+      var name = el('span', 'intern-model-name', [m.name]);
+      name.title = m.name + ' — installed locally, runs on your own GPU';
+      row.appendChild(name);
+      var meta = [m.parameterSize, formatModelBytes(m.size)].filter(Boolean).join(' · ');
+      if (meta) row.appendChild(el('span', 'intern-model-meta', [meta]));
+      wrap.appendChild(row);
     });
+  }
+
+  function renderCloudSection(p) {
+    var wrap = document.getElementById('intern-cloud-body');
+    wrap.textContent = '';
+    if (!p) return;
+    var dotClass = p.error ? 'err' : (p.configured && p.models.length ? 'on' : 'off');
+    var head = el('div', 'intern-provider-head', []);
+    head.appendChild(el('span', null, ['status']));
+    head.appendChild(el('span', 'dot ' + dotClass, []));
+    wrap.appendChild(head);
+    if (p.models && p.models.length) {
+      var row = el('div', 'intern-models-row', []);
+      p.models.forEach(function (m) {
+        var chip = el('span', 'intern-btn cloud', [m]);
+        // "Cloud" models are never downloaded — they run on the provider's
+        // hardware via your key — so there is nothing to install and no
+        // reason for a click to do anything.
+        chip.title = m + ' — available through your provider key; runs on their hardware, nothing to install';
+        row.appendChild(chip);
+      });
+      wrap.appendChild(row);
+    }
+    // An error outranks the hint: "key rejected (401)" is actionable, while
+    // the generic setup hint would be actively misleading once a key exists.
+    if (p.error) wrap.appendChild(el('div', 'panel-help', [p.error]));
+    else if (p.hint) wrap.appendChild(el('div', 'panel-help', [p.hint]));
+  }
+
+  function renderInternBench(d) {
+    var providers = d.providers || [];
+    var local = providers.filter(function (p) { return p.id === 'local'; })[0];
+    var cloud = providers.filter(function (p) { return p.id === 'ollama-cloud'; })[0];
+    renderInstalledModels(local ? local.models : []);
+    renderCloudSection(cloud);
   }
 
   function refreshInternBench() {
@@ -6373,6 +6447,54 @@
   var pullInput = document.getElementById('intern-pull-input');
   var pullBtn = document.getElementById('intern-pull-btn');
   var pullStatus = document.getElementById('intern-pull-status');
+
+  // --- catalog type-ahead: what CAN be pulled, not just what's installed ---
+  // Typing searches ollama.com/search for base model names; picking one drills
+  // into its /tags page for concrete pull targets (e.g. "qwen3.5:27b"). A pick
+  // just writes the exact name into the existing pull input, so submission
+  // stays the ordinary free-text path below — typing and never picking a
+  // suggestion still works exactly as before.
+  var catalogResultsEl = document.getElementById('intern-catalog-results');
+  var catalogDebounce = null;
+
+  function clearCatalogResults() { catalogResultsEl.textContent = ''; }
+
+  function renderCatalogList(items, onPick) {
+    clearCatalogResults();
+    if (!items || !items.length) return;
+    var list = el('div', 'intern-catalog-list', []);
+    items.slice(0, 12).forEach(function (name) {
+      var item = el('div', 'intern-catalog-item', [name]);
+      item.addEventListener('click', function () { onPick(name); });
+      list.appendChild(item);
+    });
+    catalogResultsEl.appendChild(list);
+  }
+
+  function pickCatalogModel(name) {
+    bridgeFetch('/api/interns/catalog?name=' + encodeURIComponent(name))
+      .then(function (r) { return r.ok ? r.json() : { tags: [] }; })
+      .then(function (d) {
+        var tags = d.tags || [];
+        if (!tags.length) { pullInput.value = name; clearCatalogResults(); return; }
+        renderCatalogList(tags, function (tag) { pullInput.value = tag; clearCatalogResults(); });
+      })
+      .catch(function () { pullInput.value = name; clearCatalogResults(); });
+  }
+
+  function runCatalogSearch(q) {
+    bridgeFetch('/api/interns/catalog?q=' + encodeURIComponent(q))
+      .then(function (r) { return r.ok ? r.json() : { results: [] }; })
+      .then(function (d) { renderCatalogList(d.results || [], pickCatalogModel); })
+      .catch(function () {});
+  }
+
+  pullInput.addEventListener('input', function () {
+    var q = pullInput.value.trim();
+    clearTimeout(catalogDebounce);
+    if (!q) { clearCatalogResults(); return; }
+    catalogDebounce = setTimeout(function () { runCatalogSearch(q); }, 300);
+  });
 
   function followPull(tries) {
     if (tries <= 0) { pullStatus.textContent = 'still downloading in the background…'; setPullBusy(false); return; }
@@ -6420,6 +6542,7 @@
         return toast((r.data && r.data.error) || 'Could not start the pull.', 'critical', { title: 'Interns' });
       }
       pullInput.value = '';
+      clearCatalogResults();
       followPull(600); // ~12 min ceiling; multi-GB weights over a slow link
     }).catch(function (err) {
       setPullBusy(false); pullStatus.textContent = '';
