@@ -28,16 +28,17 @@ await page.keyboard.press('Escape');
 await page.locator('.view-btn[data-view="command"]').click();
 await page.waitForSelector('#cc-seats .cc-seat', {timeout:15000});
 await sleep(500);
+await page.locator('.cc-lane-foot .btn.big').first().click();
+await page.waitForSelector('.cc-terms .cc-term', {timeout:10000});
+await sleep(500);
 const info = await page.evaluate(() => {
-  function r(sel){ const e=document.querySelector(sel); if(!e) return null; const b=e.getBoundingClientRect(); return {h:b.height,w:b.width, scrollH: e.scrollHeight}; }
+  function r(sel){ const e=document.querySelector(sel); if(!e) return null; const b=e.getBoundingClientRect(); return {h:b.height,w:b.width}; }
   return {
     viewport: {w: window.innerWidth, h: window.innerHeight},
     stage: r('#stage-command'),
-    head: r('#stage-command .stage-head'),
     lanes: r('#stage-command .stage-section'),
-    termStage: r('#cc-term-stage'),
-    tabstrip: r('.cc-tabstrip'),
     terms: r('#cc-terms'),
+    term: r('.cc-term'),
     council: r('#cc-council'),
   };
 });
