@@ -85,8 +85,19 @@ try {
   console.log('.cc-term lanes mounted:', countAfterOpen);
   if (countAfterOpen < 3) { console.log('FAIL - fewer than 3 lanes actually mounted'); throw new Error('mount'); }
 
+  const dump = await page.locator('.cc-term').first().evaluate((el) => {
+    const canvases = [...el.querySelectorAll('canvas')].map((c) => ({ cls: c.className, w: c.width, h: c.height, styleW: c.style.width }));
+    return { canvases, viewport: el.querySelector('.xterm-viewport') ? el.querySelector('.xterm-viewport').getBoundingClientRect().width : null };
+  });
+  console.log('xterm DOM probe:', JSON.stringify(dump));
+
   const before = await page.locator('.cc-term').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width));
   console.log('lane widths before closing one:', before.map((w) => w.toFixed(1)));
+  const canvasBefore = await page.locator('.cc-term').evaluateAll((els) => els.map((el) => {
+    const c = el.querySelector('canvas.xterm-text-layer') || el.querySelector('canvas');
+    return c ? c.width : null;
+  }));
+  console.log('canvas pixel widths before:', canvasBefore);
 
   // Close the second lane the same way a user does: its "hide" button. Force-click: the lane
   // strip scrolls horizontally past the viewport at this lane count, and the click point is
@@ -98,13 +109,21 @@ try {
 
   const after = await page.locator('.cc-term').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width));
   console.log('lane widths after closing one:', after.map((w) => w.toFixed(1)));
+  const canvasAfter = await page.locator('.cc-term').evaluateAll((els) => els.map((el) => {
+    const c = el.querySelector('canvas.xterm-text-layer') || el.querySelector('canvas');
+    return c ? c.width : null;
+  }));
+  console.log('canvas pixel widths after:', canvasAfter);
 
   const remainingBefore = before.filter((_, i) => i !== 1);
+  const canvasRemainingBefore = canvasBefore.filter((_, i) => i !== 1);
   const grew = after.every((w, i) => w > remainingBefore[i] + 5);
-  console.log(grew ? 'PASS - remaining lanes widened after a lane closed (refit fired)' : 'FAIL - remaining lanes did NOT resize after a lane closed');
+  const canvasGrew = canvasAfter.every((w, i) => w != null && canvasRemainingBefore[i] != null && w > canvasRemainingBefore[i] + 5);
+  console.log(grew ? 'PASS - remaining lane DIVs widened after a lane closed' : 'FAIL - remaining lane DIVs did NOT resize after a lane closed');
+  console.log(canvasGrew ? 'PASS - remaining terminals actually REFIT (xterm canvas pixel width grew, cols/rows updated)' : 'FAIL - remaining terminals did NOT refit (xterm canvas stayed stale) -- THIS IS THE CORE BUG');
 
   await browser.close();
-  exitCode = grew && countAfterOpen >= 3 ? 0 : 1;
+  exitCode = grew && canvasGrew && countAfterOpen >= 3 ? 0 : 1;
 } catch (e) {
   console.log('error:', e.message);
 } finally {
