@@ -96,7 +96,9 @@ page.on('pageerror', (e) => consoleErrors.push('pageerror: ' + e.message));
 page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push('console: ' + msg.text()); });
 
 await page.goto(B + '/');
-await page.waitForFunction(() => typeof window.el === 'undefined' || true, {}); // just let the script parse
+await sleep(500);
+await page.keyboard.press('Escape'); // dismisses the #landing entry screen
+await page.waitForSelector('#landing.dismissed', { timeout: 10000 }).catch(() => {});
 await page.locator('.view-btn[data-view="command"]').click();
 await page.waitForSelector('#cc-seats .cc-seat', { timeout: 15000 });
 
