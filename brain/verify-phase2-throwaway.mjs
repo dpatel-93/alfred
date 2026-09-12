@@ -94,7 +94,7 @@ function inject(id, data) {
 }
 
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
+const page = await browser.newPage({ viewport: { width: 1600, height: 1400 } });
 const consoleErrors = [];
 page.on('pageerror', (e) => consoleErrors.push('pageerror: ' + e.message));
 page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push('console: ' + msg.text()); });
