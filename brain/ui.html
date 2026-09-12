@@ -34,11 +34,13 @@
     --focus:     var(--bone);
     --focus-rgb: 240, 233, 221;   /* for rgba() where color-mix is awkward (canvas, shadows) */
 
-    /* ---------- Legacy accent hooks — re-pointed, NOT removed (85+ call sites) ---------- */
-    --accent-primary:     var(--focus);
-    --accent-primary-hot: color-mix(in srgb, var(--focus) 72%, white);
-    --alfred-amber:       var(--focus);      /* landing + reactor legacy */
-    --alfred-amber-hot:   var(--accent-primary-hot);
+    /* ---------- Legacy accent hooks — re-pointed, NOT removed (85+ call sites) ----------
+       --accent-primary/-hot, --alfred-amber/-hot and the glow ladder are declared on the
+       `body` rule below, NOT here. A custom property's var() substitution resolves once
+       per element and the RESULT inherits down — it does not re-run when a descendant's
+       --focus later changes. Declaring these in :root would freeze them at :root's own
+       (never-written) --focus and silently break every seat re-tint; body is where
+       setFocusSeat() actually writes, so that is where the reactive chain must live. */
     --alfred-cyan:        var(--p-gemini);
 
     /* ---------- Semantic contract — UNCHANGED MEANING, re-toned for the warm ground ---------- */
@@ -136,15 +138,8 @@
     --z-modal:       110;
     --z-landing:     200;
 
-    /* ---------- Glow ladder — now keyed to --focus, so glow follows the seat ---------- */
-    --glow-color: var(--focus);
+    /* ---------- Glow ladder — keyed to --focus; full ladder declared on `body` below ---------- */
     --glow-0: none;
-    --glow-1: 0 0 8px  color-mix(in srgb, var(--glow-color) 22%, transparent);
-    --glow-2: 0 0 14px color-mix(in srgb, var(--glow-color) 35%, transparent);
-    --glow-3: 0 0 24px color-mix(in srgb, var(--glow-color) 45%, transparent);
-    --glow-inset: inset 0 0 12px color-mix(in srgb, var(--glow-color) 6%, transparent);
-    --glow-text-1: 0 0 6px  color-mix(in srgb, var(--glow-color) 50%, transparent);
-    --glow-text-2: 0 0 10px color-mix(in srgb, var(--glow-color) 70%, transparent);
 
     --shadow-panel:  0 8px 28px rgba(0, 0, 0, 0.45);
     --shadow-modal:  0 32px 90px rgba(0, 0, 0, 0.62);
@@ -173,7 +168,24 @@
     --cmdbar-w:      580px;
     --gutter:        14px;
   }
-  body { --focus: var(--bone); }   /* the cascade root the JS writes to */
+  body {
+    --focus: var(--bone);   /* the cascade root the JS writes to */
+
+    /* Re-pointed legacy accent hooks + glow ladder — MUST live here, not in :root,
+       so they recompute against this element's own --focus on every write. See the
+       comment beside :root's (removed) copies for why. */
+    --accent-primary:     var(--focus);
+    --accent-primary-hot: color-mix(in srgb, var(--focus) 72%, white);
+    --alfred-amber:       var(--focus);      /* landing + reactor legacy */
+    --alfred-amber-hot:   var(--accent-primary-hot);
+    --glow-color: var(--focus);
+    --glow-1: 0 0 8px  color-mix(in srgb, var(--glow-color) 22%, transparent);
+    --glow-2: 0 0 14px color-mix(in srgb, var(--glow-color) 35%, transparent);
+    --glow-3: 0 0 24px color-mix(in srgb, var(--glow-color) 45%, transparent);
+    --glow-inset: inset 0 0 12px color-mix(in srgb, var(--glow-color) 6%, transparent);
+    --glow-text-1: 0 0 6px  color-mix(in srgb, var(--glow-color) 50%, transparent);
+    --glow-text-2: 0 0 10px color-mix(in srgb, var(--glow-color) 70%, transparent);
+  }
   body.rail-collapsed { --rail-w: var(--rail-w-narrow); }
   * { box-sizing: border-box; }
   html, body {
