@@ -48,7 +48,6 @@ await page.route('**/api/org*', (r) => {
 
 await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(900);
-await page.click('#landing'); await page.waitForTimeout(1000);
 await page.click('[data-view="ops"]'); await page.waitForTimeout(2500);
 
 async function clickNode(id) {

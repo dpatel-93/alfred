@@ -33,7 +33,6 @@ const payload = fleet();
 await page.route('**/api/org*', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payload) }));
 await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(900);
-await page.click('#landing'); await page.waitForTimeout(1000);
 await page.click('[data-view="ops"]'); await page.waitForTimeout(2500);
 
 T('no JS errors rendering 51 agents', errs.length === 0, errs.slice(0, 3).join(' | '));
@@ -186,7 +185,6 @@ T('no node off-screen at default zoom', spill.offscreen === 0, JSON.stringify(sp
 const deep = await (await b.newContext({ viewport: { width: 1600, height: 900 } })).newPage();
 await deep.goto(BASE + '/#ops', { waitUntil: 'domcontentloaded' });
 await deep.waitForTimeout(900);
-await deep.click('#landing');
 await deep.waitForTimeout(4000);
 const railText = await deep.evaluate(() =>
   [...document.querySelectorAll('#topleft .row, #topleft [class*=row]')].map(r => r.textContent.trim()).join(' | '));
