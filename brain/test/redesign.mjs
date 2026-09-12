@@ -214,8 +214,18 @@ if (!(await up())) {
         const el = document.getElementById('intern-pull-input');
         const rect = el.getBoundingClientRect();
         const topleft = document.getElementById('topleft');
+        const cx = rect.x + rect.width / 2, cy = rect.y + rect.height / 2;
+        const hit = document.elementFromPoint(cx, cy);
+        let anc = el, chain = [];
+        while (anc) {
+          const cs = getComputedStyle(anc);
+          chain.push({ tag: anc.tagName, id: anc.id, cls: anc.className, display: cs.display, visibility: cs.visibility, opacity: cs.opacity, pe: cs.pointerEvents });
+          anc = anc.parentElement;
+        }
         return { rect, scrollTop: topleft.scrollTop, scrollHeight: topleft.scrollHeight, clientHeight: topleft.clientHeight,
-          bodyClass: document.body.className, elVisible: rect.width > 0 && rect.height > 0 };
+          bodyClass: document.body.className, computedVisibility: getComputedStyle(el).visibility,
+          hitTag: hit ? hit.tagName : null, hitId: hit ? hit.id : null, hitClass: hit ? hit.className : null,
+          chain };
       });
       console.error('DEBUG intern-pull-input state: ' + JSON.stringify(dbg4));
     }
