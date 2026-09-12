@@ -70,7 +70,7 @@ const { chromium } = await import('playwright');
 
   const views = ['brain', 'dev', 'auto', 'ops', 'directory', 'library', 'command'];
   for (const v of views) {
-    await page.evaluate((view) => { if (typeof switchView === 'function') switchView(view); }, v);
+    await page.click(`.view-btn[data-view="${v}"]`);
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(OUT, `view-${v}.png`), fullPage: false });
     console.log('screenshotted', v);
