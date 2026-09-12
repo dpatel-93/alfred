@@ -211,7 +211,8 @@ await page.locator('.cc-term.active .cc-term-body').click();
 await sleep(150);
 await page.keyboard.press('Control+2');
 await sleep(300);
-chk('Ctrl+2 switches tabs even while a terminal has real DOM focus', await focusClass(ids[1]));
+// ids[1] was hidden earlier in this run, so the current 2nd tab is ids[2].
+chk('Ctrl+2 switches tabs even while a terminal has real DOM focus', await focusClass(ids[2]));
 dbg = await ccDebug();
 chk('Ctrl+2 did not leak a literal "2" keystroke into lane 1', !/GOT:.*2/.test(dbg.find((e) => e.id === ids[0]).text.slice(-50)), dbg.find((e) => e.id === ids[0]).text.slice(-80));
 
