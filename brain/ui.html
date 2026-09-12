@@ -1104,18 +1104,52 @@
   .cc-lane-foot .btn.big { flex: 1 1 100%; min-height: 40px; font-size: 12px; letter-spacing: .12em; border-color: color-mix(in srgb, var(--mint) 55%, var(--border-focusable)); color: var(--mint); }
   .cc-lane-foot .btn.big:hover { background: color-mix(in srgb, var(--mint) 12%, transparent); border-color: var(--mint); color: var(--mint); }
   #cc-council { padding-top: 6px; border-top: 1px solid var(--hairline); }
-  /* Live consoles: side by side, each a real PTY drawn by xterm.js. */
-  .cc-terms { display: flex; gap: 12px; align-items: stretch; overflow-x: auto; flex: 1 1 auto; min-height: 0; }
-  .cc-terms:empty { display: none; }
+  /* Live consoles: a tab strip + single focused pane by default (each console
+     is a real PTY drawn by xterm.js, kept mounted while backgrounded so
+     switching tabs is instant); Ctrl+\ / the Grid button toggle every open
+     console into a responsive grid for side-by-side comparison. */
+  .cc-term-stage { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-height: 0; }
+  .cc-term-stage[hidden] { display: none; }
+  .cc-tabstrip { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--hairline); }
+  .cc-tabs { display: flex; align-items: flex-end; gap: 3px; overflow-x: auto; flex: 1 1 auto; min-width: 0; }
+  .cc-tab {
+    display: flex; align-items: center; gap: 6px; padding: 6px 8px 6px 10px; max-width: 220px;
+    background: var(--surface-2); border: 1px solid var(--hairline); border-bottom: none; border-radius: 5px 5px 0 0;
+    color: var(--text-dim); font-size: 11px; letter-spacing: .03em; white-space: nowrap; cursor: pointer;
+  }
+  .cc-tab .cc-tab-label { overflow: hidden; text-overflow: ellipsis; }
+  .cc-tab.active { color: var(--text); background: var(--surface-1); border-color: var(--border-strong, var(--border)); }
+  .cc-tab .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; box-shadow: 0 0 5px currentColor; }
+  .cc-tab .dot.on { background: var(--mint); box-shadow: 0 0 5px var(--mint); }
+  .cc-tab .dot.off { background: var(--gray, #93a1b2); opacity: .6; box-shadow: none; }
+  .cc-tab .dot.err { background: var(--red); box-shadow: 0 0 5px var(--red); }
+  .cc-tab .unread { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--amber); box-shadow: 0 0 5px var(--amber); opacity: 0; transition: opacity .15s; }
+  .cc-tab.has-unread .unread { opacity: 1; }
+  .cc-tab-close {
+    flex: none; border: none; background: transparent; color: var(--text-dim); font-size: 13px; line-height: 1;
+    padding: 0 1px; cursor: pointer; border-radius: 3px;
+  }
+  .cc-tab-close:hover { color: var(--red); background: color-mix(in srgb, var(--red) 15%, transparent); }
+  .cc-grid-toggle { flex: none; }
+  .cc-grid-toggle.active { color: var(--mint); border-color: color-mix(in srgb, var(--mint) 55%, var(--border-focusable)); }
+  .cc-terms { position: relative; flex: 1 1 auto; min-height: 0; }
   .cc-term {
     --accent: var(--mint);
-    flex: 1 1 0; min-width: 420px; height: 100%;
-    display: flex; flex-direction: column; position: relative;
+    display: none; width: 100%; height: 100%;
+    flex-direction: column; position: relative;
     background: var(--surface-1); border: 1px solid var(--border-strong, var(--border)); border-radius: 6px; overflow: hidden;
     border-top-color: color-mix(in srgb, var(--accent) 45%, transparent);
   }
+  .cc-term.active { display: flex; }
   .cc-term.exited { --accent: var(--gray, #93a1b2); opacity: .8; }
   .cc-term.drop { outline: 2px dashed var(--mint); outline-offset: -4px; }
+  /* Grid ("pop out") mode: every open console at once, sized to fit however
+     many are open — shrinking columns rather than a fixed 1/2-pane cap. */
+  .cc-terms.cc-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    grid-auto-rows: minmax(260px, 1fr); gap: 12px; overflow: auto;
+  }
+  .cc-terms.cc-grid .cc-term { display: flex !important; min-width: 0; }
   .cc-term-head {
     display: flex; align-items: center; gap: 8px; padding: 6px 10px;
     border-bottom: 1px solid var(--hairline); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-dim);
@@ -1702,8 +1736,17 @@
     <div class="panel-help">Tick a lane to include it in the council and in "Open all lanes". Open drops that seat's console pane into the Command Center window. Sign in opens the provider's own login in a real console. The model box sets what that seat runs — blank is the registry's cheap default; the expensive tiers are a choice, never a default.</div>
   </div>
   <!-- Live consoles, one per opened lane. Real Windows consoles on the server
-       (node-pty); xterm.js here is their screen and keyboard. -->
-  <div id="cc-terms" class="cc-terms"></div>
+       (node-pty); xterm.js here is their screen and keyboard. A tab strip
+       shows one focused console at a time; the Grid button (or Ctrl+\) pops
+       every open console into a comparison grid, both reading from the same
+       mounted set below so switching is instant and scrollback is never lost. -->
+  <div id="cc-term-stage" class="cc-term-stage" hidden>
+    <div class="cc-tabstrip">
+      <div id="cc-tabs" class="cc-tabs" role="tablist"></div>
+      <button id="cc-grid-toggle" class="btn small ghost cc-grid-toggle" type="button" title="Show every open console in a grid, side by side (Ctrl+\)">&#9638; Grid</button>
+    </div>
+    <div id="cc-terms" class="cc-terms"></div>
+  </div>
   <div class="stage-section" id="cc-council">
     <div class="section-title">Council</div>
     <div class="panel-help" id="cc-asking"></div>
@@ -3666,6 +3709,8 @@
     ['f', "Focus the active view's filter chips"],
     ['Esc', 'Close dialog -> close panel -> dismiss toasts -> blur omnibox, in that order'],
     ['?', 'This help overlay'],
+    ['Ctrl+1-9', 'Command Center: focus the Nth open console tab'],
+    ['Ctrl+\\', 'Command Center: toggle grid view of every open console'],
   ];
   var kbScrim = document.getElementById('kb-scrim');
   var kbModal = document.getElementById('kb-modal');
@@ -4080,6 +4125,19 @@
     return tag === 'INPUT' || tag === 'TEXTAREA' || a.isContentEditable;
   }
 
+  // Ctrl+1-9 / Ctrl+\ drive the Command Center's tab strip. They must win
+  // over both the plain 1-6 view-switch keys below (same digits, Ctrl held)
+  // and the browser's own Ctrl+1-8 "jump to tab N" shortcut, and they must
+  // still fire while a terminal has focus — xterm's hidden textarea makes
+  // isTextInputFocused() true, so this is called from two places: here, and
+  // from each terminal's attachCustomKeyEventHandler below.
+  function ccHandleGlobalShortcut(e) {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return false;
+    if (e.key >= '1' && e.key <= '9') { e.preventDefault(); ccFocusTabByIndex(parseInt(e.key, 10)); return true; }
+    if (e.key === '\\') { e.preventDefault(); ccToggleGridMode(); return true; }
+    return false;
+  }
+
   window.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
       if (srcModal.classList.contains('open')) { closeSourceEditor(); return; }
@@ -4092,9 +4150,10 @@
       if (document.activeElement === document.getElementById('search-input')) document.getElementById('search-input').blur();
       return;
     }
+    if (ccHandleGlobalShortcut(e)) return;
     if (isTextInputFocused()) return;
     if (e.key === '?') { e.preventDefault(); openKbHelp(); return; }
-    if (e.key >= '1' && e.key <= '6') {
+    if (e.key >= '1' && e.key <= '6' && !e.ctrlKey && !e.metaKey) {
       var byIndex = ['brain', 'dev', 'auto', 'ops', 'directory', 'library'];
       switchView(byIndex[parseInt(e.key, 10) - 1]);
       return;
@@ -6022,7 +6081,14 @@
   // Each opened lane is a real Windows console on the server (node-pty)
   // running the seat's CLI; xterm.js here is only its screen and keyboard.
   // The session outlives this page: a reload reattaches instead of restarting.
-  var ccTerms = {}; // id -> { term, fit, ws, root }
+  // Terminals mount into a tab strip + single focused pane by default (a hard
+  // side-by-side cap turned unwieldy past 2-3 lanes); the Grid toggle below
+  // pops every mounted terminal visible at once for comparison. Either way
+  // every terminal here is mounted exactly once and never disposed just for
+  // being backgrounded — only the tab-strip "hide" (or kill) removes it.
+  var ccTerms = {}; // id -> { term, fit, ws, root, tabEl, dotEl, unread }
+  var ccFocusedId = null; // last-focused tab id, remembered across grid<->focus toggles
+  var ccGridMode = false;
   var CC_XTERM_THEME = {
     background: '#0b0f16', foreground: '#d9e2ec', cursor: '#63e6b5', cursorAccent: '#06111a',
     selectionBackground: 'rgba(92, 168, 255, 0.28)',
@@ -6048,7 +6114,13 @@
     ws.onmessage = function (ev) {
       var msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
       if (msg.type === 'hello') { if (msg.scrollback) entry.term.write(msg.scrollback); ccSetTermMeta(entry, msg.terminal); }
-      else if (msg.type === 'data') entry.term.write(msg.data);
+      else if (msg.type === 'data') {
+        entry.term.write(msg.data);
+        // A pane stays fully mounted while backgrounded, so output keeps
+        // flowing into its scrollback whether or not it's on screen — this is
+        // the only signal the operator gets that something happened there.
+        if (!ccGridMode && info.id !== ccFocusedId) ccMarkUnread(info.id);
+      }
       else if (msg.type === 'exit') ccTermExited(entry, msg.code);
     };
     ws.onclose = function (ev) {
@@ -6066,7 +6138,113 @@
     entry.exited = true;
     entry.root.classList.add('exited');
     entry.badge.className = 'badge pill idle'; entry.badge.textContent = 'exited ' + (code == null ? '' : code);
+    if (entry.dotEl) entry.dotEl.className = 'dot ' + (code ? 'err' : 'off');
     entry.term.write('\r\n\x1b[2m[alfred] process exited' + (code == null ? '' : ' (' + code + ')') + ']\x1b[0m\r\n');
+  }
+
+  // --- tab strip + focus/grid mode ------------------------------------
+  function ccUpdateStageVisibility() {
+    document.getElementById('cc-term-stage').hidden = Object.keys(ccTerms).length === 0;
+  }
+
+  function ccMarkUnread(id) {
+    var entry = ccTerms[id];
+    if (!entry || !entry.tabEl) return;
+    entry.unread = true;
+    entry.tabEl.classList.add('has-unread');
+  }
+
+  function ccClearUnread(id) {
+    var entry = ccTerms[id];
+    if (!entry) return;
+    entry.unread = false;
+    if (entry.tabEl) entry.tabEl.classList.remove('has-unread');
+  }
+
+  function ccBuildTab(info, entry) {
+    var tab = el('button', 'cc-tab', []);
+    tab.type = 'button';
+    tab.setAttribute('role', 'tab');
+    tab.title = info.label;
+    var dot = el('span', 'dot on', []);
+    tab.appendChild(dot);
+    tab.appendChild(el('span', 'cc-tab-label', [info.label]));
+    tab.appendChild(el('span', 'unread', []));
+    var closeX = el('button', 'cc-tab-close', ['×']);
+    closeX.type = 'button';
+    closeX.title = 'Hide this lane; the console keeps running and reattaches on reload';
+    closeX.addEventListener('click', function (e) { e.stopPropagation(); ccHideTerm(info.id); });
+    tab.appendChild(closeX);
+    tab.addEventListener('click', function () { ccFocusTerm(info.id); if (ccGridMode) ccSetGridMode(false); });
+    document.getElementById('cc-tabs').appendChild(tab);
+    entry.tabEl = tab;
+    entry.dotEl = dot;
+  }
+
+  // Focusing a tab never tears anything down — every other terminal stays
+  // mounted (xterm alive, WebSocket open) so switching back is instant with
+  // full scrollback, no server round-trip.
+  function ccFocusTerm(id) {
+    var entry = ccTerms[id];
+    if (!entry) return;
+    ccFocusedId = id;
+    Object.keys(ccTerms).forEach(function (tid) {
+      var e = ccTerms[tid];
+      var isActive = tid === id;
+      e.root.classList.toggle('active', isActive);
+      if (e.tabEl) e.tabEl.classList.toggle('active', isActive);
+    });
+    ccClearUnread(id);
+    try { localStorage.setItem('alfred-cc-last-tab', id); } catch (e) { /* localStorage unavailable */ }
+    // The pane may be going from display:none to visible — its box size just
+    // changed, so give layout a tick before asking xterm to fit to it.
+    requestAnimationFrame(function () { ccFitTerm(entry); entry.term.focus(); });
+  }
+
+  function ccFocusTabByIndex(n) {
+    var ids = Object.keys(ccTerms);
+    if (ids[n - 1]) { ccFocusTerm(ids[n - 1]); if (ccGridMode) ccSetGridMode(false); }
+  }
+
+  function ccSetGridMode(on) {
+    ccGridMode = !!on;
+    document.getElementById('cc-terms').classList.toggle('cc-grid', ccGridMode);
+    document.getElementById('cc-grid-toggle').classList.toggle('active', ccGridMode);
+    document.getElementById('cc-grid-toggle').setAttribute('aria-pressed', ccGridMode ? 'true' : 'false');
+    // Every pane's box just changed size (grid cell <-> full stage); the
+    // ResizeObserver on each body catches this too, but a direct pass here
+    // makes it immediate rather than waiting on the observer's next tick.
+    setTimeout(function () {
+      Object.keys(ccTerms).forEach(function (id) { ccFitTerm(ccTerms[id]); });
+      if (!ccGridMode && ccFocusedId && ccTerms[ccFocusedId]) ccTerms[ccFocusedId].term.focus();
+    }, 60);
+  }
+
+  function ccToggleGridMode() { ccSetGridMode(!ccGridMode); }
+
+  document.getElementById('cc-grid-toggle').addEventListener('click', ccToggleGridMode);
+
+  // The "hide" action (tab's x, or the pane header's own button) is the
+  // pre-existing semantic: it tears the console down from THIS page only —
+  // the server-side PTY keeps running and reattaches on reload. This is
+  // distinct from backgrounding a tab (which never disposes anything) and
+  // from kill (which stops the process itself).
+  function ccHideTerm(id) {
+    var entry = ccTerms[id];
+    if (!entry) return;
+    try { if (entry.ws) entry.ws.close(); } catch (e) {}
+    if (entry.ro) entry.ro.disconnect();
+    if (entry.roRaf) cancelAnimationFrame(entry.roRaf);
+    entry.term.dispose();
+    entry.root.remove();
+    if (entry.tabEl) entry.tabEl.remove();
+    delete ccTerms[id];
+    if (ccFocusedId === id) {
+      ccFocusedId = null;
+      var remaining = Object.keys(ccTerms);
+      if (remaining.length) ccFocusTerm(remaining[0]);
+    }
+    ccUpdateStageVisibility();
   }
 
   function ccMountTerminal(info) {
@@ -6098,8 +6276,9 @@
     term.loadAddon(fit);
     term.loadAddon(new window.WebLinksAddon.WebLinksAddon());
     term.open(body);
-    var entry = { id: info.id, term: term, fit: fit, ws: null, root: root, badge: badge, metaEl: metaEl, exited: false, ro: null, roRaf: null };
+    var entry = { id: info.id, term: term, fit: fit, ws: null, root: root, badge: badge, metaEl: metaEl, exited: false, ro: null, roRaf: null, tabEl: null, dotEl: null, unread: false };
     ccTerms[info.id] = entry;
+    ccBuildTab(info, entry);
 
     // Opening or closing one lane changes every other live lane's rendered
     // width, but nothing told them to refit — their PTY cols/rows went stale
@@ -6116,9 +6295,14 @@
 
     // Copy/paste stay with the browser on Ctrl+Shift+C / Ctrl+Shift+V; every
     // other key — including Alt+V, which Claude Code uses to paste a
-    // screenshot from the Windows clipboard — goes to the console.
+    // screenshot from the Windows clipboard — goes to the console. Ctrl+1-9 /
+    // Ctrl+\ drive the tab strip even while this terminal has focus: xterm
+    // owns keydown here, so the page-level listener never sees these unless
+    // we hand them back ourselves (and eat them so xterm doesn't also act on
+    // them as ordinary input).
     term.attachCustomKeyEventHandler(function (e) {
       if (e.ctrlKey && e.shiftKey && (e.key === 'C' || e.key === 'V')) return false;
+      if (e.type === 'keydown' && ccHandleGlobalShortcut(e)) return false;
       return true;
     });
     term.onData(function (d) { ccSendTerm(entry, { type: 'input', data: d }); });
@@ -6150,17 +6334,11 @@
         if (!r.ok) return toast(r.data.error || 'Could not kill the console.', 'critical');
       });
     });
-    closeBtn.addEventListener('click', function () {
-      try { if (entry.ws) entry.ws.close(); } catch (e) {}
-      if (entry.ro) entry.ro.disconnect();
-      if (entry.roRaf) cancelAnimationFrame(entry.roRaf);
-      term.dispose();
-      root.remove();
-      delete ccTerms[info.id];
-    });
+    closeBtn.addEventListener('click', function () { ccHideTerm(info.id); });
 
     ccConnectTerm(entry, info);
-    setTimeout(function () { ccFitTerm(entry); term.focus(); }, 50);
+    ccUpdateStageVisibility();
+    ccFocusTerm(info.id);
     return entry;
   }
 
@@ -6185,6 +6363,9 @@
     ccReattached = true;
     bridgeFetch('/api/terminals').then(function (r) { return r.json(); }).then(function (d) {
       (d.terminals || []).forEach(function (t) { if (t.status === 'running') ccMountTerminal(t); });
+      var saved = null;
+      try { saved = localStorage.getItem('alfred-cc-last-tab'); } catch (e) { /* localStorage unavailable */ }
+      if (saved && ccTerms[saved]) ccFocusTerm(saved);
     }).catch(function () { ccReattached = false; });
   }
 
