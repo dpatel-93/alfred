@@ -667,12 +667,20 @@
   /* --- top-left cluster: tabs + status + filters + terminal, stacked as one
          system-readout column so the right side stays free for content panels.
          Width lives here once so every panel in the stack matches. --- */
+  /* max-height + overflow-y: fixed positioning takes #topleft out of flow, so
+     nothing ever pushed back when its stacked panels (status/filters/interns)
+     exceeded the viewport height — confirmed via Playwright: at 1440x900 the
+     Interns "Available" header rendered below row 900, and at 1024x768 the
+     whole Interns panel was outside the viewport and unclickable. Scrolling
+     the rail itself, capped to the viewport minus its own top/bottom margin,
+     guarantees every panel stays reachable regardless of how much is open. */
   #topleft {
     position: fixed; top: 18px; left: 18px; z-index: 20; width: var(--rail-w);
+    max-height: calc(100vh - 36px); overflow-y: auto; overflow-x: hidden;
     display: flex; flex-direction: column; gap: 10px;
     transition: width var(--t-base) var(--ease-out);
   }
-  #topleft > * { width: 100%; }
+  #topleft > * { width: 100%; flex: none; }
 
   /* --- collapsible rail: `[` toggles body.rail-collapsed, persisted in
        localStorage. Each rail panel keeps a compact glyph visible and hides
@@ -1114,7 +1122,14 @@
      is a real PTY drawn by xterm.js, kept mounted while backgrounded so
      switching tabs is instant); Ctrl+\ / the Grid button toggle every open
      console into a responsive grid for side-by-side comparison. */
-  .cc-term-stage { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-height: 0; }
+  /* min-height is a floor, not 0: without it this is the only flex item in
+     .stage that's allowed to shrink (everything else has content-based
+     min-height), so at <=1440px width — where the seat cards above wrap to
+     two rows and eat the stage's height budget — this collapsed to 0px
+     (confirmed via Playwright: #cc-terms measured height 0, rows=1). The
+     floor forces .stage's own overflow-y:auto to absorb the overflow
+     instead, so the terminal always renders at a real, usable height. */
+  .cc-term-stage { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-height: 300px; }
   .cc-term-stage[hidden] { display: none; }
   .cc-tabstrip { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--hairline); }
   .cc-tabs { display: flex; align-items: flex-end; gap: 3px; overflow-x: auto; flex: 1 1 auto; min-width: 0; }
@@ -1497,8 +1512,19 @@
     font-size: 11px; background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
   }
 
+  /* Narrowing --rail-w alone used to leave the panels' full-width content
+     rendering inside that narrow box — it doesn't reflow, it overflows,
+     spilling past the rail into the stage (confirmed via Playwright at
+     1024x768). Applying the same body-hiding/glyph-showing rules that
+     body.rail-collapsed uses keeps the narrow rail visually consistent with
+     what it actually contains. */
   @media (max-width: 1080px) {
     :root { --rail-w: var(--rail-w-narrow); }
+    .rail-glyph { display: block; }
+    #status .body,
+    #radial-menu .body,
+    #ask-panel .body,
+    #interns-panel .body { display: none; }
   }
 </style>
 
@@ -3707,7 +3733,7 @@
   // focus is in a text input (except Esc, which always applies).
   // ============================================================
   var KB_MAP = [
-    ['1-6', 'Switch view: Brain / Workshop / Protocols / Enterprise / Operative Roster / Library'],
+    ['1-7', 'Switch view: Brain / Workshop / Protocols / Enterprise / Operative Roster / Library / Command Center'],
     ['/', 'Focus the omnibox'],
     ['[', 'Collapse/expand the left rail'],
     ['Shift+Enter', 'Ask (in the omnibox)'],
@@ -4139,7 +4165,15 @@
   // from each terminal's attachCustomKeyEventHandler below.
   function ccHandleGlobalShortcut(e) {
     if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return false;
-    if (e.key >= '1' && e.key <= '9') { e.preventDefault(); ccFocusTabByIndex(parseInt(e.key, 10)); return true; }
+    // Only actionable in the Command Center with at least one console open —
+    // otherwise these keys are the browser's own Ctrl+1-9 tab-switching and
+    // Ctrl+\ (IME on some layouts), and hijacking them everywhere broke that
+    // native behavior on every page load, terminals or not.
+    if (currentView !== 'command' || Object.keys(ccTerms).length === 0) return false;
+    if (e.key >= '1' && e.key <= '9') {
+      if (!Object.keys(ccTerms)[parseInt(e.key, 10) - 1]) return false; // no Nth tab to focus
+      e.preventDefault(); ccFocusTabByIndex(parseInt(e.key, 10)); return true;
+    }
     if (e.key === '\\') { e.preventDefault(); ccToggleGridMode(); return true; }
     return false;
   }
@@ -4159,8 +4193,8 @@
     if (ccHandleGlobalShortcut(e)) return;
     if (isTextInputFocused()) return;
     if (e.key === '?') { e.preventDefault(); openKbHelp(); return; }
-    if (e.key >= '1' && e.key <= '6' && !e.ctrlKey && !e.metaKey) {
-      var byIndex = ['brain', 'dev', 'auto', 'ops', 'directory', 'library'];
+    if (e.key >= '1' && e.key <= '7' && !e.ctrlKey && !e.metaKey) {
+      var byIndex = ['brain', 'dev', 'auto', 'ops', 'directory', 'library', 'command'];
       switchView(byIndex[parseInt(e.key, 10) - 1]);
       return;
     }
