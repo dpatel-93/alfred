@@ -101,10 +101,10 @@ try {
   const before = await page.locator('.cc-term').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width));
   console.log('lane widths before closing one:', before.map((w) => w.toFixed(1)));
   const canvasBefore = await page.locator('.cc-term').evaluateAll((els) => els.map((el) => {
-    const c = el.querySelector('canvas.xterm-text-layer') || el.querySelector('canvas');
-    return c ? c.width : null;
+    const s = el.querySelector('.xterm-screen');
+    return s ? s.getBoundingClientRect().width : null;
   }));
-  console.log('canvas pixel widths before:', canvasBefore);
+  console.log('xterm-screen (actual rendered terminal grid) widths before:', canvasBefore);
 
   // Close the second lane the same way a user does: its "hide" button. Force-click: the lane
   // strip scrolls horizontally past the viewport at this lane count, and the click point is
@@ -117,10 +117,10 @@ try {
   const after = await page.locator('.cc-term').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width));
   console.log('lane widths after closing one:', after.map((w) => w.toFixed(1)));
   const canvasAfter = await page.locator('.cc-term').evaluateAll((els) => els.map((el) => {
-    const c = el.querySelector('canvas.xterm-text-layer') || el.querySelector('canvas');
-    return c ? c.width : null;
+    const s = el.querySelector('.xterm-screen');
+    return s ? s.getBoundingClientRect().width : null;
   }));
-  console.log('canvas pixel widths after:', canvasAfter);
+  console.log('xterm-screen (actual rendered terminal grid) widths after:', canvasAfter);
 
   const remainingBefore = before.filter((_, i) => i !== 1);
   const canvasRemainingBefore = canvasBefore.filter((_, i) => i !== 1);
