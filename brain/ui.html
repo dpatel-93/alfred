@@ -6369,6 +6369,24 @@
     }).catch(function () { ccReattached = false; });
   }
 
+  // Terminal introspection for headless tests — xterm renders its buffer to
+  // a canvas, so there is no DOM text or dimensions to assert against.
+  // Mirrors window.__alfredDebug above, which solves the same problem for
+  // the (also canvas-drawn) org chart.
+  window.__ccDebug = function () {
+    return Object.keys(ccTerms).map(function (id) {
+      var e = ccTerms[id];
+      var buf = e.term.buffer.active;
+      var lines = [];
+      for (var i = 0; i < buf.length; i++) lines.push(buf.getLine(i).translateToString(true));
+      return {
+        id: id, active: e.root.classList.contains('active'), exited: e.exited, unread: !!e.unread,
+        cols: e.term.cols, rows: e.term.rows, rect: e.root.getBoundingClientRect(),
+        text: lines.join('\n'),
+      };
+    });
+  };
+
   // The council section says who is in the room, live with the ticks above it.
   function ccRenderAsking() {
     var ids = ccSelected();

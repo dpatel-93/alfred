@@ -134,6 +134,9 @@ chk('only one pane visible in focus mode', visiblePanes === 1, 'got ' + visibleP
 let activeLabel = await page.evaluate(() => document.querySelector('#cc-tabs .cc-tab.active .cc-tab-label').textContent);
 chk('newest lane is focused after opening', !!activeLabel, activeLabel);
 
+async function ccDebug() { return page.evaluate(() => window.__ccDebug()); }
+async function focusClass(id) { const d = await ccDebug(); const e = d.find((x) => x.id === id); return e && e.active; }
+
 // --- click between tabs: instant switch + preserved scrollback ---
 await inject(ids[0], 'hello-from-lane1\r');
 await sleep(500);
@@ -143,24 +146,20 @@ const tab2Active = await page.evaluate(() => document.querySelectorAll('#cc-tabs
 chk('clicking the 2nd tab focuses it', tab2Active);
 
 await page.locator('#cc-tabs .cc-tab').nth(0).click();
-await sleep(200);
-const lane1Text = await page.evaluate(() => {
-  const term = document.querySelectorAll('.cc-term')[0];
-  return term.querySelector('.xterm-rows') ? term.innerText : '';
-});
-// Read scrollback via xterm's exposed textarea buffer isn't DOM-visible directly;
-// instead assert the pane's rendered rows contain the echoed text.
-const scrollbackVisible = await page.locator('.cc-term.active .cc-term-body').innerText();
-chk('lane 1 scrollback preserved after switching away and back', scrollbackVisible.includes('GOT:hello-from-lane1'), scrollbackVisible.slice(-200));
-
-const pane0VisibleAgain = await page.evaluate(() => getComputedStyle(document.querySelectorAll('.cc-term')[0]).display !== 'none');
-chk('lane 1 pane visible again after refocus', pane0VisibleAgain);
+await sleep(300);
+let dbg = await ccDebug();
+let lane1 = dbg.find((x) => x.id === ids[0]);
+chk('lane 1 scrollback preserved after switching away and back', lane1 && lane1.text.includes('GOT:hello-from-lane1'), lane1 && lane1.text.slice(-200));
+chk('lane 1 pane visible again after refocus (real rect, not 0x0)', lane1 && lane1.active && lane1.rect.width > 50 && lane1.rect.height > 50, JSON.stringify(lane1 && lane1.rect));
 
 // --- unread indicator on a backgrounded tab ---
 await inject(ids[2], 'ping-lane3\r');
 await sleep(600);
 const hasUnread = await page.evaluate(() => document.querySelectorAll('#cc-tabs .cc-tab')[2].classList.contains('has-unread'));
 chk('backgrounded lane 3 shows unread indicator after output', hasUnread);
+dbg = await ccDebug();
+const lane3Unread = dbg.find((x) => x.id === ids[2]);
+chk('lane 3 entry itself is marked unread', lane3Unread && lane3Unread.unread);
 
 await page.locator('#cc-tabs .cc-tab').nth(2).click();
 await sleep(200);
@@ -168,28 +167,25 @@ const unreadCleared = await page.evaluate(() => !document.querySelectorAll('#cc-
 chk('unread indicator clears once lane 3 is focused', unreadCleared);
 
 // --- grid mode via Ctrl+\ ---
+await page.locator('body').click({ position: { x: 5, y: 5 } });
 await page.keyboard.press('Control+\\');
-await sleep(500);
-const gridVisibleCount = await page.evaluate(() => Array.from(document.querySelectorAll('.cc-term')).filter((el) => getComputedStyle(el).display !== 'none').length);
-chk('grid mode makes all 4 panes visible', gridVisibleCount === 4, 'got ' + gridVisibleCount);
+await sleep(600);
+dbg = await ccDebug();
+const gridVisibleCount = dbg.filter((e) => e.rect.width > 5 && e.rect.height > 5).length;
+chk('grid mode makes all 4 panes visible', gridVisibleCount === 4, JSON.stringify(dbg.map((e) => e.rect)));
 
-const rects = await page.evaluate(() => Array.from(document.querySelectorAll('.cc-term')).map((el) => {
-  const r = el.getBoundingClientRect();
-  const rowsEl = el.querySelector('.xterm-rows');
-  const cols = rowsEl && rowsEl.children[0] ? rowsEl.children[0].children.length : 0;
-  return { w: r.width, h: r.height, rows: rowsEl ? rowsEl.children.length : 0, cols };
-}));
-const allSized = rects.every((r) => r.w > 50 && r.h > 50);
-chk('all grid panes have real rendered size (not 0x0/stale)', allSized, JSON.stringify(rects));
-const allFitted = rects.every((r) => r.rows > 3);
-chk('all grid panes have real fitted xterm rows (not collapsed)', allFitted, JSON.stringify(rects));
+const allSized = dbg.every((r) => r.rect.width > 50 && r.rect.height > 50);
+chk('all grid panes have real rendered size (not 0x0/stale)', allSized, JSON.stringify(dbg.map((e) => e.rect)));
+const allFitted = dbg.every((r) => r.cols > 10 && r.rows > 5);
+chk('all grid panes have real fitted xterm dimensions (not stale/collapsed)', allFitted, JSON.stringify(dbg.map((e) => ({ id: e.id, cols: e.cols, rows: e.rows }))));
 
 // --- toggle back to focus mode; last-focused tab (lane 3) remembered ---
 await page.keyboard.press('Control+\\');
 await sleep(500);
-const backToFocusCount = await page.evaluate(() => Array.from(document.querySelectorAll('.cc-term')).filter((el) => getComputedStyle(el).display !== 'none').length);
+dbg = await ccDebug();
+const backToFocusCount = dbg.filter((e) => e.rect.width > 5 && e.rect.height > 5).length;
 chk('toggling back to focus mode shows exactly 1 pane', backToFocusCount === 1, 'got ' + backToFocusCount);
-const activeIsLane3 = await page.evaluate(() => document.querySelectorAll('#cc-tabs .cc-tab')[2].classList.contains('active'));
+const activeIsLane3 = dbg.find((e) => e.id === ids[2]).active;
 chk('focus mode remembers last-focused tab (lane 3)', activeIsLane3);
 
 // --- close a background tab via hide; others unaffected ---
@@ -197,38 +193,36 @@ await page.evaluate(() => document.querySelectorAll('#cc-tabs .cc-tab-close')[1]
 await sleep(400);
 const tabsAfterHide = await page.locator('#cc-tabs .cc-tab').count();
 chk('hiding a background tab removes just that tab', tabsAfterHide === 3, 'got ' + tabsAfterHide);
-const stillLane3Active = await page.evaluate(() => document.querySelectorAll('#cc-tabs .cc-tab')[1].classList.contains('active'));
-// after removal lane3 (was index 2) shifts to index 1
-chk('focused lane unaffected by hiding a different background tab', stillLane3Active);
+dbg = await ccDebug();
+chk('focused lane (3) unaffected by hiding a different background tab', dbg.find((e) => e.id === ids[2]).active);
 const listAfterHide = (await j('/api/terminals', { headers: H })).d.terminals.filter((t) => t.status === 'running');
 chk('hidden lane server session still running (hide != kill)', listAfterHide.length === 4, JSON.stringify(listAfterHide.map((t) => t.id)));
 
 // --- Ctrl+1..9 focus by index ---
+await page.locator('body').click({ position: { x: 5, y: 5 } });
 await page.keyboard.press('Control+1');
 await sleep(300);
-const activeAfterCtrl1 = await page.evaluate(() => Array.from(document.querySelectorAll('#cc-tabs .cc-tab')).findIndex((t) => t.classList.contains('active')));
-chk('Ctrl+1 focuses the 1st tab', activeAfterCtrl1 === 0, 'active index ' + activeAfterCtrl1);
+chk('Ctrl+1 focuses the 1st tab (lane 1)', await focusClass(ids[0]));
 
-// Click INTO the terminal to give xterm's hidden textarea real DOM focus, then
-// confirm Ctrl+2 still switches tabs (not swallowed as terminal input) and
-// leaves no stray "2" in the terminal buffer.
+// Click into the terminal so xterm's hidden textarea holds real DOM focus,
+// then confirm Ctrl+2 still switches tabs (not swallowed as terminal input)
+// and leaves no stray "2" keystroke in that terminal's buffer.
 await page.locator('.cc-term.active .cc-term-body').click();
 await sleep(150);
 await page.keyboard.press('Control+2');
 await sleep(300);
-const activeAfterCtrl2 = await page.evaluate(() => Array.from(document.querySelectorAll('#cc-tabs .cc-tab')).findIndex((t) => t.classList.contains('active')));
-chk('Ctrl+2 switches tabs even while a terminal has real DOM focus', activeAfterCtrl2 === 1, 'active index ' + activeAfterCtrl2);
-const lane1BodyText = await page.locator('.cc-term').nth(0).locator('.cc-term-body').innerText();
-chk('Ctrl+2 did not leak a literal "2" keystroke into the terminal', !/GOT:2/.test(lane1BodyText), lane1BodyText.slice(-100));
+chk('Ctrl+2 switches tabs even while a terminal has real DOM focus', await focusClass(ids[1]));
+dbg = await ccDebug();
+chk('Ctrl+2 did not leak a literal "2" keystroke into lane 1', !/GOT:.*2/.test(dbg.find((e) => e.id === ids[0]).text.slice(-50)), dbg.find((e) => e.id === ids[0]).text.slice(-80));
 
 // --- Ctrl+Shift+C/V unaffected (unchanged behavior sanity check) ---
 await page.locator('.cc-term.active .cc-term-body').click();
 await sleep(100);
-const rowsBefore = await page.locator('.cc-term.active .cc-term-body').innerText();
+const beforeShiftC = (await ccDebug()).find((e) => e.active).text;
 await page.keyboard.down('Control'); await page.keyboard.down('Shift'); await page.keyboard.press('KeyC'); await page.keyboard.up('Shift'); await page.keyboard.up('Control');
-await sleep(200);
-const rowsAfter = await page.locator('.cc-term.active .cc-term-body').innerText();
-chk('Ctrl+Shift+C still bypasses the terminal (no new output line)', rowsAfter === rowsBefore, 'before/after unchanged: ' + (rowsAfter === rowsBefore));
+await sleep(300);
+const afterShiftC = (await ccDebug()).find((e) => e.active).text;
+chk('Ctrl+Shift+C still bypasses the terminal (no new output)', afterShiftC === beforeShiftC, 'unchanged: ' + (afterShiftC === beforeShiftC));
 
 // --- Field Manual documents the new shortcuts ---
 await page.keyboard.press('Escape'); // make sure nothing else is focused/open first
