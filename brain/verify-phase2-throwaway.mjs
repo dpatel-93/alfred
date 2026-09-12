@@ -64,7 +64,11 @@ const consoleErrors = [];
 page.on('pageerror', (e) => consoleErrors.push('pageerror: ' + e.message));
 page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push('console: ' + msg.text()); });
 
-await page.goto(B + '/');
+const resp = await page.goto(B + '/');
+console.log('goto status:', resp && resp.status());
+await sleep(1000);
+console.log('early console errors:', JSON.stringify(consoleErrors));
+console.log('title:', await page.title());
 await page.waitForFunction(() => typeof window.switchView === 'function', { timeout: 15000 });
 
 await page.evaluate(() => window.switchView('command'));
