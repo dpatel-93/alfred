@@ -1,66 +1,79 @@
 <title>Alfred</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23080b10'/%3E%3Ccircle cx='16' cy='16' r='13' fill='%23ffb648'/%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%23ffd591' stroke-width='0.8' opacity='0.7'/%3E%3Cpath d='M9.6 24 L16 8.6 L22.4 24' fill='none' stroke='%23080b10' stroke-width='3.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M12.5 18.9 L19.5 18.9' fill='none' stroke='%23080b10' stroke-width='2.9' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
+  @property --focus {
+    syntax: '<color>'; inherits: true; initial-value: #f0e9dd;
+  }
   :root {
     color-scheme: dark;
 
-    /* ---------- Surfaces (existing names — do not rename) ---------- */
-    --bg:            #080b10;
-    --surface-1:     #0b0f16;
-    --surface-2:     #101620;
-    --surface-3:     #141c27;
-    --surface-4:     #192331;
-    --border:        #202b39;
-    --border-strong: #2c3a4b;
-    --border-focusable: #556d8f; /* the ONLY border for interactive control edges (3:1+) */
+    /* ---------- Surfaces — Atelier's warm graphite room (names unchanged) ---------- */
+    --bg:            #131218;
+    --bg-2:          #17161d;   /* NEW — topbar/sheet ground */
+    --surface-1:     #1c1b23;
+    --surface-2:     #22212b;
+    --surface-3:     #2a2934;
+    --surface-4:     #333240;
+    --border:        #2b2a35;
+    --border-strong: #3a3947;
+    --border-focusable: #56545f;
 
-    /* ---------- Palette (existing names — do not rename) ---------- */
-    --blue:   #5ca8ff;
-    --blue-strong: #2f8cff;
+    /* ---------- Alfred's own identity is NEUTRAL. Alfred is the room, not a vendor. ---------- */
+    --bone:          #f0e9dd;   /* NEW */
 
-    /* ---------- Alfred amber (primary accent; cyan is the secondary trim) ----------
-       Amber carries "powered / live"; cyan carries "instrument / trim". Both are
-       verified against --bg #080b10: amber #ffb648 lands ~10.4:1 and the hot
-       #ffd591 ~13.6:1, so either is safe for small load-bearing type — which the
-       old 0.4-alpha lane labels were not. */
-    --alfred-amber:     #ffb648;
-    --alfred-amber-hot: #ffd591;
-    --alfred-cyan:      #6fe3ff;
+    /* ---------- The bench — the ONLY saturated colour in the product ---------- */
+    --p-claude:    #e0855c;
+    --p-gemini:    #6fa8ff;
+    --p-grok:      #d3d7e0;
+    --p-codex:     #45c8c0;   /* Atelier had #5fd39a; shifted to TEAL — collides with --mint (live/healthy) otherwise */
+    --p-omniroute: #f2c15b;
+    --p-ollama:    #b08cff;
+    --p-dsh:       #4fd6d6;
 
-    /* ---------- Signal gold (dominant interactive accent) ----------
-       New token, not a rename of --blue. Every non-semantic hover/focus/glow
-       across the app now points here so the signal reads gold-on-black;
-       --blue itself is untouched and kept for the few spots where it still
-       carries real meaning (info toasts/badges, the manager-tier org color)
-       so those don't collide visually with the amber "warning" semantic. */
-    --accent-primary:     var(--alfred-amber);
-    --accent-primary-hot: var(--alfred-amber-hot);
-    --mint:   #63e6b5;
-    --amber:  #f0b35a;
-    --red:    #ff6b72;
-    --violet: #ad8cff;
-    --orange: #f18b5b;
-    --gray:   #a8b6c6;   /* raised again from #93a1b2 — CEO reported the greys as hard to read */
+    /* ---------- FOCUS — written onto <body> by setFocusSeat(); cascades everywhere ---------- */
+    --focus:     var(--bone);
+    --focus-rgb: 240, 233, 221;   /* for rgba() where color-mix is awkward (canvas, shadows) */
 
-    /* ---------- Text ---------- */
-    --text:       #d9e2ec;
-    --text-soft:  #b9c6d4;
-    --text-dim:   #aebbc9;  /* raised again from #93a1b2 — CEO reported the greys as hard to read */
-    --text-faint: #94a2b3;  /* decorative only — never load-bearing information */
-    --on-accent:  #06111a;
+    /* ---------- Legacy accent hooks — re-pointed, NOT removed (85+ call sites) ---------- */
+    --accent-primary:     var(--focus);
+    --accent-primary-hot: color-mix(in srgb, var(--focus) 72%, white);
+    --alfred-amber:       var(--focus);      /* landing + reactor legacy */
+    --alfred-amber-hot:   var(--accent-primary-hot);
+    --alfred-cyan:        var(--p-gemini);
 
-    /* ---------- Composed surfaces ---------- */
-    --panel-bg:     color-mix(in srgb, var(--surface-1) 93%, transparent);
-    --panel-bg-2:   color-mix(in srgb, var(--surface-2) 82%, transparent);
-    --panel-bg-3:   color-mix(in srgb, var(--surface-2) 96%, transparent);
-    --well-bg:      rgba(0, 0, 0, 0.32);
-    --scrim-bg:     rgba(2, 5, 8, 0.62);
-    --overlay-bg:   rgba(2, 5, 8, 0.72);
-    --hairline:     color-mix(in srgb, var(--accent-primary) 10%, transparent);
+    /* ---------- Semantic contract — UNCHANGED MEANING, re-toned for the warm ground ---------- */
+    --mint:   #5fd39a;   /* live / healthy / success */
+    --amber:  #f2c15b;   /* warn / stale */
+    --red:    #ff7a80;   /* critical / error */
+    --blue:   #6fa8ff;   /* info / selected */
+    --blue-strong: #4f8ff0;
+    --violet: #b08cff;   /* category: Decisions */
+    --orange: #e0855c;   /* category: Claude-Code */
+    --gray:   #908b9b;   /* idle / disabled / absent — contrast-gated at 4.81:1 on --surface-2, see below */
 
-    /* ---------- Type ---------- */
-    --font-mono: 'JetBrains Mono', 'Cascadia Mono', 'Consolas', monospace;
-    --font-ui:   'Aptos', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+    /* ---------- Text — warm off-white, never blue-white ---------- */
+    --text:       #ece8e3;
+    --text-soft:  #c6c1cc;
+    --text-dim:   #a8a3b0;  /* contrast-gated at 6.93:1 on --surface-1 (needs >=4.5:1) */
+    --text-faint: #726e7c;  /* decorative only — contrast-gated at 3.76:1 on --bg (needs >=3:1) */
+    --on-accent:  #15141a;
+
+    /* ---------- Composed surfaces (names unchanged) ---------- */
+    --panel-bg:     color-mix(in srgb, var(--surface-1) 88%, transparent);
+    --panel-bg-2:   color-mix(in srgb, var(--surface-1) 72%, transparent);
+    --panel-bg-3:   var(--bg-2);
+    --well-bg:      rgba(0, 0, 0, 0.28);
+    --scrim-bg:     rgba(8, 7, 11, 0.62);
+    --overlay-bg:   rgba(8, 7, 11, 0.72);
+    --hairline:     var(--border);          /* was a focus tint — a hairline is structure, not accent */
+
+    /* ---------- Type — Phosphor's pairing, Windows-native, zero external loads ---------- */
+    --font-display: 'Bahnschrift SemiCondensed', 'Bahnschrift', 'Segoe UI Variable Display',
+                    'Aptos Display', system-ui, sans-serif;
+    --font-ui:      'Bahnschrift', 'Segoe UI Variable Text', 'Segoe UI', 'Aptos',
+                    system-ui, sans-serif;
+    --font-mono:    'Cascadia Code', 'Cascadia Mono', 'JetBrains Mono', Consolas, monospace;
+    --font-data:    var(--font-mono);   /* alias: "characters must align" */
 
     --fs-micro: 9px;
     --fs-mini:  10px;
@@ -95,14 +108,15 @@
     --sp-10: 32px;
     --sp-11: 40px;
 
-    /* ---------- Radius ---------- */
+    /* ---------- Radius — UNCHANGED except radius ---------- */
     --r-0:    0;
-    --r-xs:   2px;
-    --r-sm:   3px;
-    --r-md:   6px;
+    --r-xs:   3px;
+    --r-sm:   6px;     /* was 3px — Atelier/Phosphor soft geometry */
+    --r-md:   9px;     /* was 6px */
+    --r-lg:   14px;    /* NEW — sheets */
     --r-pill: 999px;
-    --notch:  12px;
-    --notch-sm: 8px;
+    --notch:    0;     /* .frame's clip-path is neutralised, not deleted (see P2) */
+    --notch-sm: 0;
 
     /* ---------- Elevation / z-layers ---------- */
     --z-starfield:  -1;
@@ -122,8 +136,8 @@
     --z-modal:       110;
     --z-landing:     200;
 
-    /* ---------- Glow ladder ---------- */
-    --glow-color: var(--accent-primary);
+    /* ---------- Glow ladder — now keyed to --focus, so glow follows the seat ---------- */
+    --glow-color: var(--focus);
     --glow-0: none;
     --glow-1: 0 0 8px  color-mix(in srgb, var(--glow-color) 22%, transparent);
     --glow-2: 0 0 14px color-mix(in srgb, var(--glow-color) 35%, transparent);
@@ -132,33 +146,40 @@
     --glow-text-1: 0 0 6px  color-mix(in srgb, var(--glow-color) 50%, transparent);
     --glow-text-2: 0 0 10px color-mix(in srgb, var(--glow-color) 70%, transparent);
 
-    --shadow-panel: 0 20px 70px rgba(0, 0, 0, 0.5);
-    --shadow-modal: 0 0 50px rgba(0, 0, 0, 0.7);
+    --shadow-panel:  0 8px 28px rgba(0, 0, 0, 0.45);
+    --shadow-modal:  0 32px 90px rgba(0, 0, 0, 0.62);
     --shadow-drawer: -20px 0 40px rgba(0, 0, 0, 0.5);
 
-    /* ---------- Motion ---------- */
+    /* ---------- Motion — existing names, Atelier/Phosphor durations folded in ---------- */
     --t-instant: 80ms;
-    --t-fast:    130ms;
+    --t-fast:    120ms;
     --t-base:    200ms;
     --t-slow:    350ms;
+    --t-focus:   420ms;   /* NEW — the room re-tinting. Both concepts chose 420ms */
     --t-reveal:  900ms;
     --ease-out:      cubic-bezier(0.2, 0.8, 0.2, 1);
     --ease-emphasis: cubic-bezier(0.5, 0, 0.25, 1);
     --ease-linear:   linear;
 
     /* ---------- Layout regions ---------- */
-    --rail-w:        250px;
-    --rail-w-narrow: 56px;
+    --topbar-h:      54px;    /* NEW */
+    --bench-w:       244px;   /* NEW — Atelier */
+    --bench-w-tight:  58px;   /* NEW */
+    --flight-w:      292px;   /* NEW — Atelier's activity rail */
+    --sheet-w:      1180px;   /* NEW — Atelier's sheet */
+    --rail-w:        var(--bench-w);        /* legacy alias, kept while P3 lands */
+    --rail-w-narrow: var(--bench-w-tight);
     --drawer-w:      420px;
     --cmdbar-w:      580px;
-    --gutter:        18px;
+    --gutter:        14px;
   }
+  body { --focus: var(--bone); }   /* the cascade root the JS writes to */
   body.rail-collapsed { --rail-w: var(--rail-w-narrow); }
   * { box-sizing: border-box; }
   html, body {
     margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
     background: var(--bg); color: var(--text);
-    font-family: 'JetBrains Mono', 'Consolas', 'Cascadia Mono', monospace;
+    font-family: var(--font-ui);
   }
   body { position: relative; }
 
@@ -767,7 +788,7 @@
     opacity: .75; line-height: 1.5; margin: -2px 0 5px; text-transform: none;
   }
   #status .row:last-of-type { margin-bottom: 0; }
-  #status .val { color: var(--accent-primary); font-weight: 600; }
+  #status .val { color: var(--accent-primary); font-weight: 600; font-family: var(--font-mono); }
   #status .val.stale { color: var(--amber); }
   #status .val.online { color: var(--mint); }
   #status .val.offline { color: var(--red); }
@@ -849,7 +870,7 @@
   }
   .intern-model-name {
     flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-    white-space: nowrap; color: var(--text);
+    white-space: nowrap; color: var(--text); font-family: var(--font-mono);
   }
   .intern-model-meta { flex: 0 0 auto; font-size: 9px; color: var(--text-dim); opacity: .7; }
   .intern-catalog-list {
@@ -875,6 +896,7 @@
     background: color-mix(in srgb, var(--surface-2) 96%, transparent); border: 1px solid var(--accent-primary);
     padding: 6px 10px; border-radius: 3px; font-size: 14px; color: var(--text);
     box-shadow: 0 0 14px color-mix(in srgb, var(--accent-primary) 30%, transparent); display: none; max-width: 260px;
+    font-family: var(--font-mono);
   }
   #tooltip .tt-title { color: var(--accent-primary); }
   #tooltip .tt-folder { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: .1em; }
@@ -1177,8 +1199,8 @@
   }
   .cc-term-head strong { color: var(--text); font-weight: 500; letter-spacing: .04em; text-transform: none; font-size: 12px; }
   .cc-term-head .spacer { flex: 1; }
-  .cc-term-head .meta { font-variant-numeric: tabular-nums; }
-  .cc-term-body { flex: 1; min-height: 0; padding: 6px 2px 6px 8px; background: var(--surface-1); }
+  .cc-term-head .meta { font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+  .cc-term-body { flex: 1; min-height: 0; padding: 6px 2px 6px 8px; background: var(--surface-1); font-family: var(--font-mono); }
   .cc-term-body .xterm { height: 100%; }
   .cc-term-body .xterm-viewport { background: transparent !important; }
   .cc-question {
@@ -1204,7 +1226,7 @@
   .cc-verdict { --accent: var(--amber); }
   .cc-answer-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .cc-answer-head strong { font-size: 12px; font-weight: 500; color: var(--text); }
-  .cc-answer-meta { font-size: 10px; color: var(--text-dim); letter-spacing: .04em; font-variant-numeric: tabular-nums; min-height: 1em; }
+  .cc-answer-meta { font-size: 10px; color: var(--text-dim); letter-spacing: .04em; font-variant-numeric: tabular-nums; font-family: var(--font-mono); min-height: 1em; }
   /* Long-form answers are the one place mono steps aside (DESIGN-UI-SYSTEM §2.11). */
   .cc-answer-body {
     font-family: 'Aptos', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
@@ -1249,7 +1271,7 @@
   .card-title { font-size: 13px; line-height: 1.25; color: var(--text); margin: 0 0 6px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .card-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 10px; color: var(--text-dim); }
   .card-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11px; color: var(--text-soft); margin-top: 6px; }
-  .card-detail { font-size: 10px; color: var(--text-dim); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card-detail { font-size: 10px; color: var(--text-dim); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
   .card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
   /* Workshop cards carry a clone path, which is long and has no natural break
      point. Left to the row layout above it pushes the branch and ahead/behind
@@ -1434,7 +1456,7 @@
   .editor-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11px; color: var(--text-dim); margin-top: 4px; }
   .editor-area {
     width: 100%; min-height: 46vh; resize: vertical;
-    font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 12px; line-height: 1.5;
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.5;
     color: var(--text); background: var(--well-bg);
     border: 1px solid var(--border-focusable); border-radius: 3px; padding: 10px 12px;
     white-space: pre; overflow-wrap: normal; overflow-x: auto; tab-size: 2;
@@ -1450,7 +1472,7 @@
 
   /* Diff preview — shown before any write, never after. */
   .diff {
-    font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 11px; line-height: 1.55;
+    font-family: var(--font-mono); font-size: 11px; line-height: 1.55;
     border: 1px solid var(--border-focusable); border-radius: 3px; background: var(--well-bg);
     max-height: 46vh; overflow: auto; padding: 8px 0;
   }
