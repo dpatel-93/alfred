@@ -195,113 +195,31 @@
   }
   body { position: relative; }
 
-  /* --- background grid (depth layer, behind the graph) --- */
-  #grid {
-    position: fixed; inset: -50%; z-index: 0; pointer-events: none;
-    width: 200%; height: 200%;
-    background-image:
-      repeating-linear-gradient(0deg, color-mix(in srgb, var(--accent-primary) 7%, transparent) 0px, transparent 1px, transparent 64px),
-      repeating-linear-gradient(90deg, color-mix(in srgb, var(--accent-primary) 7%, transparent) 0px, transparent 1px, transparent 64px);
-    animation: griddrift 70s linear infinite;
-  }
-  @keyframes griddrift { from { transform: translate(0, 0); } to { transform: translate(64px, 64px); } }
-
-  /* --- background vignette + scanlines --- */
-  #vignette {
-    position: fixed; inset: 0; pointer-events: none; z-index: 5;
-    background: radial-gradient(ellipse at center, rgba(8,11,16,0) 40%, rgba(8,11,16,0.85) 100%);
-  }
-  #scanlines {
-    position: fixed; inset: 0; pointer-events: none; z-index: 6; opacity: 0.04;
-    background: repeating-linear-gradient(0deg, color-mix(in srgb, var(--accent-primary) 50%, transparent) 0px, transparent 1px, transparent 4px);
-  }
-
   canvas { display: block; position: fixed; inset: 0; z-index: 1; cursor: grab; }
   canvas.dragging { cursor: grabbing; }
 
-  /* --- starfield depth layer (behind the grid; two depth bands drifting at
-         different speeds, drawn from the same rAF loop as the main canvas).
-         Overrides the generic canvas rule's fixed/inset/z-index/cursor —
-         opacity/transition/reveal is inherited from that same rule below. --- */
-  #starfield { z-index: -1; cursor: default; pointer-events: none; }
+  /* --- aura: one breathing gradient wash tinted by --focus, replacing the
+         old grid/vignette/scanlines/starfield/gauge/HUD-corner stack. Sits
+         behind the graph canvas (z-index 0 < canvas's 1). --- */
+  #aura {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background: radial-gradient(ellipse 70% 60% at 50% 42%,
+      color-mix(in srgb, var(--focus) 10%, transparent) 0%,
+      transparent 70%);
+    animation: aurabreathe 9s ease-in-out infinite;
+  }
+  @keyframes aurabreathe {
+    0%, 100% { opacity: 0.6; }
+    50%      { opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #aura { animation: none; opacity: 0.8; }
+  }
 
-  /* --- circular gauge cluster (bottom corners; canvas-drawn real telemetry:
-         index freshness left, cloud token burn + intern% right). Same
-         opacity/reveal inheritance as #starfield. --- */
-  #gauge-left, #gauge-right {
-    /* The generic `canvas` rule above sets `inset: 0`. With an explicit
-       width/height that over-constrains the box, so `top`/`left` win and both
-       gauges silently pile up in the top-left corner behind the rail instead
-       of sitting in the bottom corners. Releasing the insets we don't want is
-       what actually puts them where the spec says they go. */
-    top: auto; right: auto; left: auto;
-    /* 146 -> 118: big enough to read the value at a glance, small enough that
-       the reactor at centre stays the biggest light source on the screen. */
-    width: 118px; height: 118px; bottom: 22px; z-index: 15;
-    /* Clickable now: each opens an explanation of what its number means. A
-       gauge you cannot interrogate is decoration. */
-    cursor: pointer; pointer-events: auto;
-    transition: filter .2s ease;
-  }
-  #gauge-left:hover, #gauge-right:hover { filter: brightness(1.25); }
-  /* Both gauges live bottom-RIGHT, side by side. Split across opposite corners
-     they read as two unrelated instruments; paired, they read as one
-     instrument cluster, which is what they are. */
-  #gauge-right { right: 22px; }
-  #gauge-left { right: 152px; }
-
-  /* --- main HUD reveal (hidden behind the landing screen until entry;
-         staggered per-element via JS-driven delayed class add, not CSS delay,
-         so the sequence can be tied to real load state) --- */
-  #grid, canvas, #vignette, #scanlines, #topleft, #view-toggle {
-    opacity: 0;
-    transition: opacity 0.9s ease;
-  }
-  #grid.revealed, canvas.revealed, #vignette.revealed, #topleft.revealed, #view-toggle.revealed {
-    opacity: 1;
-  }
-  #scanlines.revealed { opacity: 0.04; }
-
-  /* Canvas-persistence rule — the force-directed graph
-     keeps rendering (its rAF loop costs nothing extra) behind the new
-     Workshop/Protocols surfaces, just ghosted so it reads as texture
-     rather than content. Higher specificity than the plain .revealed rule
-     above so it wins without !important. */
-  #graph.canvas-ghost.revealed { opacity: 0.12; pointer-events: none; }
-
-  /* --- viewport corner brackets (fixed HUD frame around the whole screen) --- */
-  #hud-corners {
-    position: fixed; inset: 0; z-index: 7; pointer-events: none;
-    opacity: 0; transition: opacity 1.2s ease;
-  }
-  #hud-corners.revealed { opacity: 1; }
-  .hud-corner {
-    position: absolute; width: 44px; height: 44px;
-    filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent-primary) 40%, transparent));
-  }
-  .hud-corner::before, .hud-corner::after {
-    content: ''; position: absolute; border-style: solid;
-    border-color: color-mix(in srgb, var(--accent-primary) 30%, transparent);
-  }
-  .hud-corner::before { inset: 0; }
-  .hud-corner::after { inset: 8px; border-color: color-mix(in srgb, var(--accent-primary) 16%, transparent); }
-  .corner-tl { top: 14px; left: 14px; }
-  .corner-tl::before, .corner-tl::after { border-width: 1px 0 0 1px; }
-  .corner-tr { top: 14px; right: 14px; }
-  .corner-tr::before, .corner-tr::after { border-width: 1px 1px 0 0; }
-  .corner-bl { bottom: 14px; left: 14px; }
-  .corner-bl::before, .corner-bl::after { border-width: 0 0 1px 1px; }
-  .corner-br { bottom: 14px; right: 14px; }
-  .corner-br::before, .corner-br::after { border-width: 0 1px 1px 0; }
-
-  /* --- edge telemetry: a thin scrolling readout strip, real values cycling
-         through at low opacity — set dressing that happens to be true --- */
-  #edge-telemetry {
-    position: fixed; top: 50%; right: 8px; transform: translateY(-50%); z-index: 8;
-    writing-mode: vertical-rl; font-size: 9px; letter-spacing: .18em; color: var(--text-dim);
-    opacity: 0; transition: opacity 1.2s ease; pointer-events: none; text-transform: uppercase;
-  }
-  #edge-telemetry.revealed { opacity: 0.4; }
+  /* Canvas-persistence rule — the force-directed graph keeps rendering (its
+     rAF loop costs nothing extra) behind the Workshop/Protocols surfaces,
+     just ghosted so it reads as texture rather than content. */
+  #graph.canvas-ghost { opacity: 0.12; pointer-events: none; }
 
   /* --- page title kicker (top-center; "Mission Control" is the whole page's
          name now, this is a label, not a hero) --- */
@@ -311,296 +229,17 @@
     pointer-events: none;
   }
 
-  /* --- notched-corner HUD frame (Arwes-style sci-fi panel cue) --- */
+  /* --- .frame: plain bordered panel. Kept as a class name (30+ call sites)
+         but stripped of the notched-corner HUD cue — a 1px border + --r-md
+         radius is the whole rule now. --- */
   .frame {
     position: relative;
     border: 1px solid var(--border);
-    /* the "lit edge" cue: brighter top border than the other three sides.
-       A lone border-top-color declaration, set after the shorthand in this
-       same rule — nothing else on these elements sets border or
-       border-top-color, so it always wins without an override fight. */
-    border-top-color: color-mix(in srgb, var(--accent-primary) 25%, transparent);
-    clip-path: polygon(0 12px, 12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px));
+    border-radius: var(--r-md);
   }
 
-  /* --- landing screen: dossier-style entry, not a marketing splash ---
-     Layout is a single centered flex column (unchanged mechanism) so the
-     existing #landing.dismissed fade-out still just works — everything
-     added below lives INSIDE #landing and fades with it, no separate
-     transition to wire. */
-  #landing {
-    position: fixed; inset: 0; z-index: 200; background: var(--bg);
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    cursor: pointer; user-select: none;
-    transition: opacity 0.9s ease;
-    /* Explicit top/bottom padding, not just justify-content:center's implicit
-       gap. #landing-classified is position:absolute (out of flow), so it does
-       NOT push this flex column down on its own — without this padding the
-       column can center right through the 48px-tall strip at the top, and on
-       short viewports the AUTHORIZE line lands flush against the bottom edge
-       with zero clearance. 60px clears the strip (48px) with margin to spare
-       even after centering absorbs part of it; 20px keeps AUTHORIZE off the
-       bottom edge regardless of viewport height. Centering then distributes
-       any leftover space evenly above/below, so both clearances only ever
-       get bigger than these floors, never smaller. */
-    padding-top: 60px;
-    padding-bottom: 20px;
-  }
-  #landing.dismissed { opacity: 0; pointer-events: none; }
-
-  /* Classification strip — pinned to the top edge of the screen, not the
-     centered column, so it reads as a document header rather than more
-     hero copy. */
-  #landing-classified {
-    position: absolute; top: 0; left: 0; right: 0;
-    display: flex; align-items: center; justify-content: space-between;
-    flex-wrap: wrap; gap: 6px 18px;
-    padding: 18px 28px;
-    font-family: var(--font-mono); font-size: 10px; letter-spacing: var(--track-label);
-    text-transform: uppercase; color: var(--text-dim);
-    border-bottom: 1px solid color-mix(in srgb, var(--alfred-amber) 14%, transparent);
-  }
-  #landing-classified .lr-tag {
-    color: color-mix(in srgb, var(--alfred-amber) 65%, var(--text-dim));
-  }
-
-  #landing-reactor {
-    position: relative;
-    /* Square by construction, not by luck: width and height use the
-       IDENTICAL min() expression, so whatever pixel value the browser
-       resolves it to, both axes land on that SAME value — an ellipse is now
-       structurally impossible regardless of viewport shape. flex-shrink:0
-       (via the flex shorthand below) is still required on top of that:
-       #landing is a column flex container, so this element's HEIGHT sits on
-       the main axis and gets flex-shrunk by default whenever the column
-       overflows, while its WIDTH (the cross axis) never does. That mismatch
-       — flexbox quietly shrinking only the height — is exactly what squashed
-       this into an ellipse before. Locking flex-shrink to 0 means flexbox
-       can never resize this box again; the min() formula (including its vh
-       term, so short viewports get a genuinely smaller reactor instead of a
-       flex-crushed one) is the only thing allowed to, and since that formula
-       is identical on both axes, it can only ever produce a square. */
-    flex: 0 0 auto;
-    width: min(40vw, 38vh, 420px); height: min(40vw, 38vh, 420px);
-    margin-bottom: 28px;
-    transition: transform 1.15s cubic-bezier(.5,0,.25,1), opacity 1.15s ease;
-    filter: drop-shadow(0 0 46px color-mix(in srgb, var(--alfred-amber) 40%, transparent));
-  }
-  #landing.dismissed #landing-reactor { transform: scale(0.15); opacity: 0; }
-
-  /* Segmented stator: a repeating-conic-gradient painted as short ticks,
-     masked down to a thin annulus with a radial-gradient. That's 48 ticks
-     rendered as ONE background image on ONE element instead of 48 divs —
-     one composited layer the GPU can spin as a whole, instead of 48
-     separately-animated nodes fighting for layout/paint each frame. Insets
-     stay at 0/percent-of-self so this never measures against the viewport
-     and can't clip the way the old .ticks (inset: -4%) did at 900x780. */
-  #landing-reactor .lr-stator {
-    position: absolute; inset: 0; border-radius: 50%;
-    background: repeating-conic-gradient(
-      color-mix(in srgb, var(--alfred-amber) 65%, transparent) 0deg 1.1deg,
-      transparent 1.1deg 7.5deg);
-    -webkit-mask: radial-gradient(circle, transparent 0 47%, #000 48% 50%, transparent 51%);
-            mask: radial-gradient(circle, transparent 0 47%, #000 48% 50%, transparent 51%);
-    animation: lrspin 70s linear infinite;
-    opacity: .85;
-  }
-  /* Coil ring — same conic+mask technique, cyan (trim color, never the hot
-     center), wider segments, counter-rotating and at a different speed so
-     it reads as a distinct mechanical layer rather than a copy of the
-     stator. */
-  #landing-reactor .lr-coils {
-    position: absolute; inset: 9%; border-radius: 50%;
-    background: repeating-conic-gradient(
-      color-mix(in srgb, var(--alfred-cyan) 42%, transparent) 0deg 16deg,
-      transparent 16deg 30deg);
-    -webkit-mask: radial-gradient(circle, transparent 0 40%, #000 43% 50%, transparent 55%);
-            mask: radial-gradient(circle, transparent 0 40%, #000 43% 50%, transparent 55%);
-    animation: lrspin 46s linear infinite reverse;
-  }
-  /* Containment ring — static border marking the reactor's core boundary,
-     plus a pulse ring that ripples outward from it. The landing reactor is
-     always "energized" (there's no idle/active state distinction here like
-     voice mode has), so the ripple just runs continuously as a sign of
-     life. */
-  #landing-reactor .lr-ring {
-    position: absolute; inset: 20%; border-radius: 50%;
-    border: 1.5px solid color-mix(in srgb, var(--alfred-amber) 50%, transparent);
-    box-shadow:
-      0 0 30px color-mix(in srgb, var(--alfred-amber) 28%, transparent),
-      inset 0 0 22px color-mix(in srgb, var(--alfred-cyan) 8%, transparent);
-  }
-  #landing-reactor .lr-pulse {
-    position: absolute; inset: 20%; border-radius: 50%;
-    border: 1.5px solid var(--alfred-amber); opacity: 0;
-    animation: lrripple 3.4s ease-out infinite;
-  }
-  /* Core bloom — white center cooling through amber-hot into amber then
-     transparent. Amber is the hot center, cyan is only ever outer trim;
-     never swap that, it's the color law the whole file uses to mean
-     "powered" vs. "instrument". */
-  #landing-reactor .lr-core {
-    position: absolute; inset: 40%; border-radius: 50%;
-    background: radial-gradient(circle at 35% 35%,
-      #fff 0%,
-      var(--alfred-amber-hot) 32%,
-      color-mix(in srgb, var(--alfred-amber) 62%, transparent) 64%,
-      transparent 100%);
-    box-shadow: 0 0 34px color-mix(in srgb, var(--alfred-amber) 78%, transparent);
-    animation: lrbreathe 3.2s ease-in-out infinite;
-  }
-  #landing-reactor .lr-core-glow {
-    position: absolute; inset: 38%; border-radius: 50%;
-    background: radial-gradient(circle, color-mix(in srgb, var(--alfred-amber-hot) 85%, white) 0%, transparent 70%);
-    opacity: .55; filter: blur(4px);
-    animation: lrbreathe 3.2s ease-in-out infinite;
-  }
-  @keyframes lrspin { to { transform: rotate(360deg); } }
-  @keyframes lrbreathe {
-    0%, 100% { transform: scale(1); opacity: .85; }
-    50%      { transform: scale(1.06); opacity: 1; }
-  }
-  @keyframes lrripple {
-    0%   { transform: scale(1);    opacity: .55; }
-    100% { transform: scale(1.32); opacity: 0; }
-  }
-
-  #landing-wordmark {
-    font-size: clamp(26px, 5vw, 50px); letter-spacing: 14px; color: var(--text);
-    text-shadow: 0 0 20px color-mix(in srgb, var(--alfred-amber) 45%, transparent); font-weight: 600;
-    text-align: center; width: 100%; white-space: nowrap;
-  }
-
-  /* Acronym breakdown — six word-groups, each with its initial pulled out
-     larger/brighter than the rest of the word. flex-wrap means this is one
-     row on wide screens and reflows to two or three on narrow ones without
-     any breakpoint math. */
-  #landing-acronym {
-    display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline;
-    gap: 8px 22px; margin-top: 12px; width: min(640px, 90vw);
-  }
-  #landing-acronym .lr-word {
-    font-family: var(--font-mono); font-size: 12px; letter-spacing: .04em;
-    color: var(--text-dim); text-transform: uppercase;
-  }
-  #landing-acronym .lr-letter {
-    font-size: 16px; font-weight: 700; color: var(--alfred-amber-hot);
-    text-shadow: 0 0 10px color-mix(in srgb, var(--alfred-amber) 55%, transparent);
-  }
-  /* Connective words ("for", "and") carry no acronym letter — sit smaller
-     and dimmer so the six lit letters (A-L-F-R-E-D) stay the visual read. */
-  #landing-acronym .lr-word-glue {
-    font-size: 10px; opacity: .55;
-  }
-
-  #landing-subtitle {
-    margin-top: 10px; font-size: 11px; letter-spacing: .3em; color: var(--text-dim);
-    text-transform: uppercase;
-  }
-
-  /* Dossier field row — same label idiom used everywhere else in this file
-     (11px, uppercase, letter-spaced, --text-dim). auto-fit means the grid
-     decides how many fields fit per row at the current width instead of a
-     fixed column count, so it can never overflow a narrow viewport the way
-     a hard `repeat(5, ...)` would. */
-  #landing-dossier {
-    margin-top: 22px; width: min(720px, 92vw);
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
-    gap: 16px 22px;
-  }
-  #landing-dossier .lr-field {
-    display: flex; flex-direction: column; gap: 4px; text-align: center;
-    padding-top: 8px;
-    border-top: 1px solid color-mix(in srgb, var(--alfred-amber) 18%, transparent);
-  }
-  #landing-dossier .lr-field-label {
-    font-family: var(--font-mono); font-size: 11px; letter-spacing: var(--track-label);
-    text-transform: uppercase; color: var(--text-dim);
-  }
-  #landing-dossier .lr-field-value {
-    font-family: var(--font-mono); font-size: 12px; letter-spacing: .04em; color: var(--text);
-  }
-  #landing-dossier .lr-field-value.lr-accent { color: var(--alfred-amber-hot); }
-  /* Mirrors #landing-telemetry .lr-field-value.warn below — the Status field
-     lives in the dossier grid, not the telemetry grid, but state-dev's JS
-     toggles the same `warn` class on it when Ollama is offline, so both
-     grids need the rule. */
-  #landing-dossier .lr-field-value.warn { color: var(--red); }
-
-  /* Live telemetry row — separate id/grid from #landing-dossier on purpose:
-     the dossier above is the CHARTERED personnel file (hardcoded constants),
-     this row is genuinely live data from /api/status. Same .lr-field label
-     idiom so it doesn't invent a new style, but the border tint switches to
-     cyan (this file's documented "instrument" trim color, vs. amber = hot/
-     powered — see the #landing-reactor .lr-core comment above) so the two
-     rows read as two different kinds of data, not a duplicate section.
-     Kicker uses --track-kicker (tighter tracking than --track-label,
-     previously defined but unused) so it reads as a small section tag
-     rather than another dossier field label. Same auto-fit technique as
-     #landing-dossier — no fixed column count, so it can't overflow at
-     narrower widths either. */
-  #landing-telemetry-kicker {
-    margin-top: 16px; width: min(720px, 92vw);
-    font-family: var(--font-mono); font-size: 10px; letter-spacing: var(--track-kicker);
-    text-transform: uppercase; color: var(--text-dim); text-align: left;
-  }
-  #landing-telemetry {
-    margin-top: 6px; width: min(720px, 92vw);
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
-    gap: 16px 22px;
-  }
-  #landing-telemetry .lr-field {
-    display: flex; flex-direction: column; gap: 4px; text-align: center;
-    padding-top: 8px;
-    border-top: 1px solid color-mix(in srgb, var(--alfred-cyan) 22%, transparent);
-  }
-  #landing-telemetry .lr-field-label {
-    font-family: var(--font-mono); font-size: 11px; letter-spacing: var(--track-label);
-    text-transform: uppercase; color: var(--text-dim);
-  }
-  #landing-telemetry .lr-field-value {
-    font-family: var(--font-mono); font-size: 12px; letter-spacing: .04em; color: var(--text);
-  }
-  /* Optional hook for state-dev: toggle this class red when ollama reports
-     offline, same pattern as #landing-boot .warn below. */
-  #landing-telemetry .lr-field-value.warn { color: var(--red); }
-
-  #landing-boot {
-    margin-top: 18px; min-height: 84px; font-size: 12px; letter-spacing: 1.5px;
-    color: var(--alfred-cyan); text-align: center;
-  }
-  #landing-boot div { margin-bottom: 6px; opacity: 0; animation: bootline 0.4s ease forwards; }
-  #landing-boot .warn { color: var(--red); }
-  @keyframes bootline { to { opacity: 1; } }
-  #landing-enter {
-    margin-top: 16px; font-size: 12px; letter-spacing: 4px; color: var(--alfred-amber-hot);
-    text-shadow: 0 0 10px color-mix(in srgb, var(--alfred-amber) 70%, transparent);
-    opacity: 0; animation: enterpulse 1.8s ease-in-out infinite;
-    animation-delay: 1.6s;
-  }
-  @keyframes enterpulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
-
-  /* Short-viewport trim — the classification-strip clearance above and the
-     AUTHORIZE clearance below (#landing's padding) are fixed costs, so on a
-     short viewport it's this column's own vertical rhythm that has to give,
-     not the reactor's squareness (still locked by flex-shrink:0 above) or
-     either fixed clearance. Threshold catches everything at or under ~850px
-     tall — the 820/780/720/700 rows in the QA matrix — without touching the
-     two viewports that already had headroom (900, 1000). Reactor keeps the
-     same "identical min() on both axes" shape here, just with smaller
-     numbers, so it stays square at every size this query applies to. */
-  @media (max-height: 850px) {
-    #landing-reactor {
-      width: min(36vw, 32vh, 360px); height: min(36vw, 32vh, 360px);
-      margin-bottom: 20px;
-    }
-    #landing-acronym { margin-top: 8px; }
-    #landing-subtitle { margin-top: 8px; }
-    #landing-dossier { margin-top: 16px; }
-    #landing-telemetry-kicker { margin-top: 12px; }
-    #landing-boot { margin-top: 14px; min-height: 56px; }
-    #landing-enter { margin-top: 12px; }
-  }
+  /* --- landing screen removed (P2): the app opens straight into the deck.
+     #landing DOM, dismissLanding() and its stagger were deleted with it. --- */
 
   /* Ask Alfred — compact rail panel (moved from the bottom command bar).
      #topbar, the bottom-center dock that held the Claude Terminal, was
@@ -623,12 +262,6 @@
     color: var(--text-dim); opacity: 0.85; text-transform: uppercase;
   }
 
-
-  @media (prefers-reduced-motion: reduce) {
-    #landing-reactor .lr-stator, #landing-reactor .lr-coils,
-    #landing-reactor .lr-core, #landing-reactor .lr-core-glow,
-    #landing-reactor .lr-pulse { animation: none; }
-  }
 
   /* Ask drawer — DESIGN P0 amendment: results + spoken answer now slide in
      from the LEFT edge, adjacent to the rail, mirroring the existing
@@ -1559,99 +1192,11 @@
      to narrow here at all. */
 </style>
 
-<div id="landing">
-  <div id="landing-classified">
-    <span class="lr-tag">Restricted &middot; Operator Access</span>
-    <span>Case File ALF-01</span>
-  </div>
-
-  <div id="landing-reactor">
-    <div class="lr-stator"></div>
-    <div class="lr-coils"></div>
-    <div class="lr-ring"></div>
-    <div class="lr-pulse"></div>
-    <div class="lr-core-glow"></div>
-    <div class="lr-core"></div>
-  </div>
-
-  <div id="landing-wordmark">A.L.F.R.E.D.</div>
-
-  <div id="landing-acronym">
-    <span class="lr-word"><span class="lr-letter">A</span>gentic</span>
-    <span class="lr-word"><span class="lr-letter">L</span>abor</span>
-    <span class="lr-word"><span class="lr-letter">F</span>orce</span>
-    <span class="lr-word lr-word-glue">for</span>
-    <span class="lr-word"><span class="lr-letter">R</span>esearch</span>
-    <span class="lr-word"><span class="lr-letter">E</span>ngineering</span>
-    <span class="lr-word lr-word-glue">and</span>
-    <span class="lr-word"><span class="lr-letter">D</span>elivery</span>
-  </div>
-
-  <div id="landing-subtitle">Local Operations Interface</div>
-
-  <div id="landing-dossier">
-    <div class="lr-field">
-      <span class="lr-field-label">Designation</span>
-      <span class="lr-field-value lr-accent">A.L.F.R.E.D.</span>
-    </div>
-    <div class="lr-field">
-      <span class="lr-field-label">Classification</span>
-      <span class="lr-field-value">Autonomous / Dual-Use</span>
-    </div>
-    <div class="lr-field">
-      <span class="lr-field-label">Personnel</span>
-      <span class="lr-field-value" id="landing-stat-personnel">&mdash;</span>
-    </div>
-    <div class="lr-field">
-      <span class="lr-field-label">Status</span>
-      <span class="lr-field-value" id="landing-stat-status">&mdash;</span>
-    </div>
-    <div class="lr-field">
-      <span class="lr-field-label">Clearance</span>
-      <span class="lr-field-value">Operator</span>
-    </div>
-  </div>
-
-  <div id="landing-telemetry-kicker">System Telemetry</div>
-  <div id="landing-telemetry">
-    <div class="lr-field">
-      <span class="lr-field-label">Roster</span>
-      <span class="lr-field-value" id="landing-stat-roster">&mdash;</span>
-    </div>
-    <div class="lr-field">
-      <span class="lr-field-label">Case Files</span>
-      <span class="lr-field-value" id="landing-stat-notes">&mdash;</span>
-    </div>
-    <div class="lr-field">
-      <span class="lr-field-label">Active</span>
-      <span class="lr-field-value" id="landing-stat-active">&mdash;</span>
-    </div>
-    <div class="lr-field">
-      <span class="lr-field-label">Ollama</span>
-      <span class="lr-field-value" id="landing-stat-ollama">&mdash;</span>
-    </div>
-  </div>
-
-  <div id="landing-boot"></div>
-  <div id="landing-enter">AUTHORIZE &#9656;</div>
-</div>
-
-<canvas id="starfield"></canvas>
-<div id="grid"></div>
+<!-- Landing/AUTHORIZE screen removed (P2): the app opens straight into the
+     deck. The spoken greeting that used to fire on dismissal now fires once
+     on normal page load — see fireGreeting() below. -->
+<div id="aura"></div>
 <canvas id="graph"></canvas>
-<div id="vignette"></div>
-<div id="scanlines"></div>
-
-<div id="hud-corners">
-  <div class="hud-corner corner-tl"></div>
-  <div class="hud-corner corner-tr"></div>
-  <div class="hud-corner corner-bl"></div>
-  <div class="hud-corner corner-br"></div>
-</div>
-<canvas id="gauge-left" width="118" height="118"></canvas>
-<canvas id="gauge-right" width="118" height="118"></canvas>
-<div id="edge-telemetry"></div>
-
 
 <div id="view-toggle" role="tablist" aria-label="Command views">
     <button class="view-btn active" data-view="brain" role="tab" aria-selected="true" aria-controls="stage-brain">Brain</button>
@@ -1967,18 +1512,8 @@
   function colorFor(folder) { return FOLDER_COLORS[folder] || DEFAULT_COLOR; }
 
   var ACCENT_RGB = '255,182,72';  // --alfred-amber #ffb648 (was --blue)
-  // The reactor's own palette — a hotter cyan core bleeding to violet at the
-  // rim. The single flat --blue read as a smudge at this size.
-  // Alfred amber core with cyan trim. The reactor reads as *hot metal* rather
-  // than *cold plasma*: amber at the core, cyan at the coil's outer edge, so
-  // the radial gradient carries a real temperature falloff instead of a single
-  // hue fading to transparent.
-  var REACTOR_RGB = '255,182,72';
-  var REACTOR_HEX = '#ffb648';
-  var REACTOR_HOT = '#ffd591';
-  var TRIM_RGB = '111,227,255';   // cyan secondary — coil edge, reticles
-  var TRIM_HEX = '#6fe3ff';
-  var VIOLET_RGB = '111,227,255'; // coil outer stop, now cyan (name kept: used below)
+  var REACTOR_HEX = '#ffb648';    // active org-tier lane label
+  var REACTOR_HOT = '#ffd591';    // active org-tier lane label glow
   var MINT_RGB = '99,230,181';    // --mint #63e6b5
 
   // ============================================================
@@ -2145,74 +1680,25 @@
   });
 
   // ============================================================
-  // Landing screen — dismissal is instant on click/keypress regardless of
-  // load state; the graph populates itself as soon as data arrives, whether
-  // that's before or after the user enters. One continuous transition: the
-  // landing reactor shrinks/fades while the HUD (which draws its own small
-  // reactor at the same screen center) fades in underneath it, staggered by
-  // hierarchy — depth layers first, then chrome, then content.
+  // Spoken greeting — used to fire on the landing screen's dismissal (a
+  // real user gesture, so it could never greet an unattended screen). The
+  // landing screen is gone (P2: the app opens straight into the deck), so
+  // this now fires once automatically, shortly after load, in its place.
+  // Speech is the SERVER's job (the OS voice, via the same speaker Claude's
+  // talk-back uses), so no browser audio permission is involved and nothing
+  // here needs to survive an autoplay policy.
   // ============================================================
-  var landing = document.getElementById('landing');
-  var landingBoot = document.getElementById('landing-boot');
-  var landingDismissed = false;
-
-  function dismissLanding() {
-    if (landingDismissed) return;
-    landingDismissed = true;
-    ensureAudioCtx();
-    landing.classList.add('dismissed');
-
-    var stagger = [
-      { id: 'starfield', delay: 0 },   // background depth layer — joins the grid
-      { id: 'grid', delay: 0 },
-      { id: 'graph', delay: 90 },
-      { id: 'vignette', delay: 160 },
-      { id: 'scanlines', delay: 160 },
-      { id: 'topleft', delay: 320 },
-      { id: 'view-toggle', delay: 400 },
-      // galactic HUD dressing joins last — it's set dressing around a HUD
-      // that's already legible without it
-      { id: 'hud-corners', delay: 650 },
-      { id: 'gauge-left', delay: 700 },
-      { id: 'gauge-right', delay: 700 },
-      { id: 'edge-telemetry', delay: 750 },
-    ];
-    stagger.forEach(function (s) {
-      var target = document.getElementById(s.id);
-      if (!target) return;
-      setTimeout(function () { target.classList.add('revealed'); }, s.delay);
-    });
-
-    setTimeout(function () { landing.style.display = 'none'; }, 1000);
-
-    // The spoken briefing. Deliberately fired here rather than on page load:
-    // dismissing the landing page is a real user gesture, so this can never
-    // greet an unattended screen, and it lands as the HUD becomes visible.
-    // Speech is the SERVER's job (the OS voice, via the same speaker Claude's
-    // talk-back uses), so no browser audio permission is involved and nothing
-    // here needs to survive an autoplay policy.
-    setTimeout(function () {
-      if (typeof bridgePost !== 'function') return;
-      bridgePost('/api/greeting', {}).then(function (r) {
-        if (!r || !r.ok || !r.data || !r.data.text) return;
-        // Shown as well as spoken, deliberately: with talk-back off, or the
-        // volume down, or a voice that never got installed, the briefing still
-        // has to arrive. Speech is the nicer channel, not the only one.
-        toast(r.data.text, 'info', { title: 'Alfred', ms: 12000 });
-      }).catch(function () { /* a silent HUD is not a broken HUD */ });
-    }, 600);
+  function fireGreeting() {
+    if (typeof bridgePost !== 'function') return;
+    bridgePost('/api/greeting', {}).then(function (r) {
+      if (!r || !r.ok || !r.data || !r.data.text) return;
+      // Shown as well as spoken, deliberately: with talk-back off, or the
+      // volume down, or a voice that never got installed, the briefing still
+      // has to arrive. Speech is the nicer channel, not the only one.
+      toast(r.data.text, 'info', { title: 'Alfred', ms: 12000 });
+    }).catch(function () { /* a silent HUD is not a broken HUD */ });
   }
-
-  landing.addEventListener('click', dismissLanding);
-  window.addEventListener('keydown', function () { dismissLanding(); });
-
-  function afterDelay(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
-  function addBootLine(text, cls) {
-    var d = document.createElement('div');
-    if (cls) d.className = cls;
-    d.textContent = text;
-    landingBoot.appendChild(d);
-  }
+  setTimeout(fireGreeting, 600);
 
   // ============================================================
   // Canvas + camera
@@ -2226,41 +1712,6 @@
   }
   window.addEventListener('resize', resize);
   resize();
-
-  // --- starfield depth layer: two depth bands of tiny dots drifting slowly
-  // at different speeds, drawn each frame from the same loop as the main
-  // canvas. Pure screen-space decoration — doesn't pan/zoom with the graph. ---
-  var starCanvas = document.getElementById('starfield');
-  var starCtx = starCanvas.getContext('2d');
-  var starW = 0, starH = 0;
-  function resizeStarfield() {
-    starW = starCanvas.width = window.innerWidth;
-    starH = starCanvas.height = window.innerHeight;
-  }
-  window.addEventListener('resize', resizeStarfield);
-  resizeStarfield();
-
-  var STAR_COUNT = 120;
-  var stars = [];
-  for (var si = 0; si < STAR_COUNT; si++) {
-    var band = si % 2; // 0 = far/slow, 1 = near/faster
-    stars.push({
-      x: Math.random(), y: Math.random(),
-      r: band === 0 ? 0.5 + Math.random() * 0.5 : 1.0 + Math.random() * 0.7,
-      band: band,
-      opacity: band === 0 ? 0.15 + Math.random() * 0.1 : 0.22 + Math.random() * 0.13,
-    });
-  }
-  function drawStarfield(t) {
-    starCtx.clearRect(0, 0, starW, starH);
-    stars.forEach(function (s) {
-      var speed = s.band === 0 ? 0.0006 : 0.0018; // far band drifts slower — subtle parallax
-      var x = ((s.x + t * speed / 1000) % 1 + 1) % 1 * starW;
-      var y = s.y * starH;
-      starCtx.fillStyle = 'rgba(217,226,236,' + s.opacity + ')';
-      starCtx.beginPath(); starCtx.arc(x, y, s.r, 0, Math.PI * 2); starCtx.fill();
-    });
-  }
 
   var cam = { x: 0, y: 0, scale: 1 };
   var camAnim = null; // {fromX,fromY,fromScale,toX,toY,toScale,start,dur}
@@ -4139,45 +3590,6 @@
     });
   })();
 
-  document.getElementById('gauge-left').addEventListener('click', function () {
-    var s = lastStatusPayload || {};
-    var fc = s.fileCounts || {};
-    openGaugeModal('Index', [
-      ['Indexed', s.generatedAt ? fmtAge(s.generatedAt) : 'unknown'],
-      ['Notes', (fc.notes != null ? fc.notes : s.notes) + ' markdown files in the brain vault'],
-      ['Status', s.indexStale ? 'STALE — vault changed since the last build' : 'current'],
-      ['Built by', 'nomic-embed-text, locally via Ollama — no cloud tokens'],
-    ], 'The semantic index behind search and recall. Rebuild it with the ↻ button on the Indexed row.');
-  });
-
-  document.getElementById('gauge-right').addEventListener('click', function () {
-    var u = lastUsagePayload;
-    if (!u) return openGaugeModal('Burn', [['Usage', 'not loaded yet — try again in a moment']], null);
-    // Volume AND spend, with the cache split visible. Cache reads are an order of magnitude
-    // cheaper than fresh input, so a row showing only totals hides the single biggest lever
-    // on the bill — and tokens alone do not land with anyone who signs the invoice.
-    function money(n) { return n >= 1 ? '$' + n.toFixed(2) : '$' + n.toFixed(3); }
-    var rows = [];
-    var totalCost = 0;
-    Object.keys(u.cloud || {}).sort(function (a, b) {
-      return (u.cloud[b].costUsd || 0) - (u.cloud[a].costUsd || 0);
-    }).forEach(function (k) {
-      var v = u.cloud[k];
-      if (!v || (!v.out && !v.in)) return;
-      totalCost += v.costUsd || 0;
-      var parts = [fmtTok(v.out) + ' out', fmtTok(v.in) + ' in'];
-      if (v.cacheRead) parts.push(fmtTok(v.cacheRead) + ' cache-read');
-      if (v.cacheCreate) parts.push(fmtTok(v.cacheCreate) + ' cache-write');
-      rows.push([k, parts.join(' · ') + (v.costUsd ? '  —  ' + money(v.costUsd) : '')]);
-    });
-    rows.push(['local', fmtTok(u.localTotal || 0) + ' intern-tier tokens  —  free']);
-    rows.push(['intern share', (u.internPct || 0) + '% of all token volume']);
-    rows.push(['est. API-equivalent', money(totalCost) + ' at list price']);
-    openGaugeModal('Burn — last ' + (u.hours || 24) + 'h', rows,
-      'Read from your own Claude Code transcripts on disk, priced at published list rates — '
-      + 'an API-equivalent estimate, NOT your bill. Subscription usage is not metered this way. '
-      + 'For billed spend, run /usage in Claude Code.');
-  });
   document.getElementById('kb-close').addEventListener('click', closeKbHelp);
   kbScrim.addEventListener('click', closeKbHelp);
 
@@ -4729,105 +4141,6 @@
   // ============================================================
   // Rendering
   // ============================================================
-  // The reactor is the HUD's centerpiece, drawn in world space at the origin
-  // so it pans/zooms with the graph. Three layers: a rotating outer tick
-  // ring, a counter-rotating ring of coil segments (the classic arc-reactor
-  // look), and a glowing core. reactorState drives how it "breathes":
-  //   idle       - slow, calm pulse
-  //   processing - faster spin + brighter (driven by reactorSpeed, set by askAlfred)
-  //   speaking   - pulse locked to a true 2Hz beat, independent of reactorSpeed,
-  //                so it visibly "talks" in time regardless of anything else
-  function drawArcReactor(t) {
-    // The reactor lives at world origin, which is exactly where the middle
-    // tiers of the org chart sit — in OPS it was drawing straight through the
-    // manager row. It is Mission Control's chrome, not org-chart content.
-    // In BRAIN it is superseded by the cortical outline (WS10): two competing
-    // centrepieces at the same origin is one too many, and the CEO's note was
-    // that this one was "not really doing much". It still plays behind the
-    // ghosted stage views, which is where it reads as chrome rather than as
-    // something claiming to be the content.
-    if (currentView === 'ops' || currentView === 'brain') return;
-    var et = t * reactorSpeed;
-    var c = worldToScreen(0, 0);
-    var baseR = 55 * cam.scale; // tick tips land near ~65 — a bit larger than the old reactor's 60px reach
-
-    var pulse = reactorState === 'speaking'
-      ? 0.5 + 0.5 * Math.sin(t * (4 * Math.PI / 1000)) // fixed 2Hz beat (500ms period)
-      : 0.5 + 0.5 * Math.sin(et / 700);
-    var brightness = reactorState === 'idle' ? 1 : 1.3;
-    var glowBlur = reactorState === 'idle' ? 8 : 15;
-
-    ctx.save();
-    ctx.translate(c.x, c.y);
-
-    // --- outer tick ring: fine radial ticks, slow rotation ---
-    ctx.save();
-    ctx.rotate(et / 9000);
-    var tickCount = 36;
-    ctx.strokeStyle = 'rgba(' + REACTOR_RGB + ',' + Math.min(1, 0.42 * brightness) + ')';
-    ctx.shadowColor = REACTOR_HEX;
-    ctx.shadowBlur = 4;
-    ctx.lineWidth = 1.2;
-    for (var i = 0; i < tickCount; i++) {
-      ctx.save();
-      ctx.rotate((i / tickCount) * Math.PI * 2);
-      ctx.beginPath();
-      ctx.moveTo(0, -baseR * 1.05);
-      ctx.lineTo(0, -baseR * 1.18);
-      ctx.stroke();
-      ctx.restore();
-    }
-    ctx.restore();
-
-    // --- coil ring: ~10 trapezoidal segments, counter-rotating ---
-    ctx.save();
-    ctx.rotate(-et / 5200);
-    var segCount = 10;
-    var gap = 0.11;
-    var rOuter = baseR * 0.88;
-    var rInner = baseR * 0.6;
-    // Coil segments get a radial ramp so each one reads as lit from the core
-    // outward instead of a flat fill.
-    var coil = ctx.createRadialGradient(0, 0, rInner, 0, 0, rOuter);
-    coil.addColorStop(0, 'rgba(' + REACTOR_RGB + ',' + Math.min(1, (0.55 + 0.3 * pulse) * brightness) + ')');
-    coil.addColorStop(1, 'rgba(' + VIOLET_RGB + ',' + Math.min(1, (0.3 + 0.2 * pulse) * brightness) + ')');
-    ctx.fillStyle = coil;
-    ctx.shadowColor = REACTOR_HEX;
-    ctx.shadowBlur = glowBlur * 1.3;
-    for (var s = 0; s < segCount; s++) {
-      var a0 = (s / segCount) * Math.PI * 2 + gap / 2;
-      var a1 = ((s + 1) / segCount) * Math.PI * 2 - gap / 2;
-      ctx.beginPath();
-      ctx.arc(0, 0, rOuter, a0, a1, false);
-      ctx.arc(0, 0, rInner, a1, a0, true);
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.restore();
-
-    // --- core: bright glow + ring stroke ---
-    var coreR = baseR * 0.42;
-    var grad = ctx.createRadialGradient(0, 0, 2, 0, 0, coreR);
-    grad.addColorStop(0, 'rgba(240,250,255,' + Math.min(1, (0.9 + 0.1 * pulse) * brightness) + ')');
-    grad.addColorStop(0.35, 'rgba(' + REACTOR_RGB + ',' + Math.min(1, (0.85 + 0.15 * pulse) * brightness) + ')');
-    grad.addColorStop(0.7, 'rgba(' + ACCENT_RGB + ',' + Math.min(1, 0.6 * brightness) + ')');
-    grad.addColorStop(1, 'rgba(' + VIOLET_RGB + ',0)');
-    ctx.fillStyle = grad;
-    ctx.shadowColor = REACTOR_HEX;
-    ctx.shadowBlur = glowBlur * 2.2;
-    ctx.beginPath(); ctx.arc(0, 0, coreR, 0, Math.PI * 2); ctx.fill();
-
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = 'rgba(' + REACTOR_RGB + ',' + Math.min(1, 0.85 + 0.15 * pulse) + ')';
-    ctx.shadowColor = REACTOR_HEX;
-    ctx.shadowBlur = 10;
-    ctx.lineWidth = 2.2;
-    ctx.beginPath(); ctx.arc(0, 0, coreR * 0.5, 0, Math.PI * 2); ctx.stroke();
-    ctx.shadowBlur = 0;
-
-    ctx.restore();
-  }
-
   // Swimlane bands + a faint default CEO->C-suite->...->Interns spine, drawn
   // behind everything else in OPS view. Lane labels glow mint when anything
   // in that lane is currently active — a cheap one-pass scan over `nodes`,
@@ -4911,32 +4224,6 @@
     });
   }
 
-  // Faint elliptical orbital arcs sweeping around the reactor at different
-  // radii/speeds — Mission Control only, "they belong to the brain reactor,"
-  // not the org chart. World-space, so they pan/zoom with the graph.
-  var ORBITAL_ARCS = [
-    { r: 140, speed: 1, dash: [2, 16], opacity: 0.09, squash: 0.42 },
-    { r: 215, speed: -0.62, dash: [3, 22], opacity: 0.065, squash: 0.34 },
-    { r: 305, speed: 0.38, dash: [2, 28], opacity: 0.045, squash: 0.52 },
-  ];
-  function drawOrbitalArcs(t) {
-    if (currentView !== 'brain') return;
-    var c = worldToScreen(0, 0);
-    ORBITAL_ARCS.forEach(function (a) {
-      ctx.save();
-      ctx.translate(c.x, c.y);
-      ctx.rotate((t / 22000) * a.speed);
-      ctx.scale(1, a.squash);
-      ctx.strokeStyle = 'rgba(' + ACCENT_RGB + ',' + a.opacity + ')';
-      ctx.lineWidth = 1;
-      ctx.setLineDash(a.dash);
-      ctx.beginPath();
-      ctx.arc(0, 0, a.r * cam.scale, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-    });
-  }
-
   // Walks a pulse along the three segments of an elbow at constant speed, so
   // the dot tracks the line it is supposed to be travelling down.
   function pointOnElbow(s, e, t) {
@@ -4964,10 +4251,8 @@
       });
     }
 
-    drawOrbitalArcs(t);
     drawOrgLanes();
     drawBrainWireframe(t);
-    drawArcReactor(t);
 
     // links — in OPS view, `links` holds only live delegation edges, drawn
     // mint with a stronger glow than the brain graph's default blue lines
@@ -5196,7 +4481,6 @@
       if (prog >= 1) camAnim = null;
     }
     physicsTick();
-    drawStarfield(t);
     draw(t);
     requestAnimationFrame(frame);
   }
@@ -6988,8 +6272,6 @@
          .map(function (p) { return p[0] + ' ' + p[1]; });
         bd.textContent = parts.join(' · ');
       }
-      drawGauges();
-      refreshTelemetry();
     }).catch(function () {
       var ollamaEl = document.getElementById('stat-ollama');
       ollamaEl.textContent = 'OFFLINE';
@@ -7018,200 +6300,8 @@
       });
       if (cloudParts.length) rows.appendChild(el('div', 'u-cloud', [cloudParts.join(' · ')]));
       rows.appendChild(el('div', 'u-intern', ['INTERNS ' + fmtTok(u.localTotal) + ' (' + (u.internPct || 0) + '%)']));
-      drawGauges();
     }).catch(function () {});
   }
-
-  // --- circular gauge cluster: canvas-drawn ring dials, real data. Persist
-  // across BRAIN/OPS tabs (they're not part of the swapped node dataset) —
-  // redrawn on data refresh rather than every animation frame. ---
-  var gaugeLeftCanvas = document.getElementById('gauge-left');
-  var gaugeRightCanvas = document.getElementById('gauge-right');
-
-  // DESIGN-UI-SYSTEM §2.7 — DPR retrofit. The plain width="78" attribute rendered
-  // at 1x regardless of the OS scale factor, so on the CEO's 150% display every
-  // gauge line was drawn at 2/3 the real pixel density. fitCanvas() backs the
-  // canvas with devicePixelRatio-scaled pixels and remaps the drawing context so
-  // every existing cx/cy/r call below keeps working in CSS-pixel coordinates.
-  function fitCanvas(cv) {
-    var dpr = window.devicePixelRatio || 1;
-    var rect = cv.getBoundingClientRect();
-    var w = rect.width || parseFloat(cv.style.width) || cv.width || 78;
-    var h = rect.height || parseFloat(cv.style.height) || cv.height || 78;
-    var needW = Math.round(w * dpr), needH = Math.round(h * dpr);
-    if (cv.width !== needW || cv.height !== needH) { cv.width = needW; cv.height = needH; }
-    var c = cv.getContext('2d');
-    c.setTransform(dpr, 0, 0, dpr, 0, 0);
-    return { c: c, w: w, h: h };
-  }
-
-  // The gauges are miniature versions of the Mission Control reactor, not
-  // generic donut charts: same stator/coil/core construction at 1/3 scale, so
-  // the three of them read as one instrument family. Everything scales off r.
-  function drawGaugeTicks(c, cx, cy, r) {
-    var k = r / 28;
-    c.save();
-    c.translate(cx, cy);
-
-    // Stator: 36 fine radial ticks, every 3rd one longer + hotter (the index
-    // marks). Slow counter-drift keeps it alive without pulling the eye.
-    var drift = (Date.now() / 14000) % (Math.PI * 2);
-    for (var i = 0; i < 36; i++) {
-      var major = i % 3 === 0;
-      c.save();
-      c.rotate(drift + (i / 36) * Math.PI * 2);
-      c.strokeStyle = 'rgba(' + ACCENT_RGB + ',' + (major ? 0.5 : 0.22) + ')';
-      c.lineWidth = major ? 1.4 : 1;
-      c.beginPath();
-      c.moveTo(0, -r - (major ? 5 : 3) * k);
-      c.lineTo(0, -r + 2 * k);
-      c.stroke();
-      c.restore();
-    }
-
-    // Coil: 10 trapezoidal segments between the stator and the core, amber at
-    // the inside edge ramping to cyan at the outside — the temperature falloff
-    // that makes it read as a reactor rather than a ring.
-    c.save();
-    c.rotate(-drift * 1.6);
-    var segs = 10, gap = 0.13, rO = r * 0.62, rI = r * 0.40;
-    var coil = c.createRadialGradient(0, 0, rI, 0, 0, rO);
-    coil.addColorStop(0, 'rgba(' + ACCENT_RGB + ',0.38)');
-    coil.addColorStop(1, 'rgba(' + TRIM_RGB + ',0.16)');
-    c.fillStyle = coil;
-    for (var s = 0; s < segs; s++) {
-      var a0 = (s / segs) * Math.PI * 2 + gap / 2;
-      var a1 = ((s + 1) / segs) * Math.PI * 2 - gap / 2;
-      c.beginPath();
-      c.arc(0, 0, rO, a0, a1);
-      c.arc(0, 0, rI, a1, a0, true);
-      c.closePath();
-      c.fill();
-    }
-    c.restore();
-
-    // Core bloom behind the readout, so the type sits on light instead of void.
-    var bloom = c.createRadialGradient(0, 0, 0, 0, 0, r * 0.46);
-    bloom.addColorStop(0, 'rgba(' + ACCENT_RGB + ',0.20)');
-    bloom.addColorStop(1, 'rgba(' + ACCENT_RGB + ',0)');
-    c.fillStyle = bloom;
-    c.beginPath(); c.arc(0, 0, r * 0.46, 0, Math.PI * 2); c.fill();
-
-    c.restore();
-  }
-
-  function drawGaugeRing(c, cx, cy, r, pct, color, lineWidth) {
-    pct = Math.max(0, Math.min(1, pct));
-    c.save();
-    c.strokeStyle = color;
-    c.lineWidth = lineWidth || 3;
-    c.lineCap = 'round';
-    c.shadowColor = color; c.shadowBlur = 5;
-    c.beginPath();
-    c.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * pct);
-    c.stroke();
-    c.restore();
-  }
-
-  function drawGaugeLeft() {
-    if (!gaugeLeftCanvas) return;
-    var fit = fitCanvas(gaugeLeftCanvas);
-    var c = fit.c, w = fit.w, h = fit.h, cx = w / 2, cy = h / 2;
-    // Derived, not hardcoded: resizing the canvas in CSS now rescales the
-    // rings, tick ring and type together instead of leaving a 28px dial
-    // marooned in the middle of a bigger box.
-    var r = Math.min(w, h) / 2 - 11, k = r / 28;
-    c.clearRect(0, 0, w, h);
-    drawGaugeTicks(c, cx, cy, r);
-    c.strokeStyle = 'rgba(' + ACCENT_RGB + ',0.14)';
-    c.lineWidth = 3 * k;
-    c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.stroke();
-
-    var genAt = lastStatusPayload && lastStatusPayload.generatedAt;
-    var ageMs = genAt ? Date.now() - new Date(genAt).getTime() : 0;
-    var pct = genAt ? ageMs / (24 * 3600 * 1000) : 0;
-    var stale = ageMs > 24 * 3600 * 1000;
-    // Amber is the resting state now, so "stale" can no longer be amber — it
-    // would be indistinguishable from healthy. Red carries the exception.
-    drawGaugeRing(c, cx, cy, r, pct, stale ? '#ff6b72' : REACTOR_HEX, 3 * k);
-
-    c.textAlign = 'center';
-    c.fillStyle = 'rgba(226,233,242,0.82)';
-    c.font = '600 ' + Math.round(7 * k) + 'px "JetBrains Mono", Consolas, monospace';
-    c.fillText('INDEX', cx, cy - 5 * k);
-    c.font = '600 ' + Math.round(9 * k) + 'px "JetBrains Mono", Consolas, monospace';
-    c.fillStyle = stale ? '#ff6b72' : '#ffffff';
-    c.fillText(genAt ? fmtAge(genAt) : '--', cx, cy + 9 * k);
-  }
-
-  function drawGaugeRight() {
-    if (!gaugeRightCanvas) return;
-    var fit = fitCanvas(gaugeRightCanvas);
-    var c = fit.c, w = fit.w, h = fit.h, cx = w / 2, cy = h / 2;
-    // Derived, not hardcoded: resizing the canvas in CSS now rescales the
-    // rings, tick ring and type together instead of leaving a 28px dial
-    // marooned in the middle of a bigger box.
-    var r = Math.min(w, h) / 2 - 11, k = r / 28;
-    c.clearRect(0, 0, w, h);
-    drawGaugeTicks(c, cx, cy, r);
-    c.strokeStyle = 'rgba(' + ACCENT_RGB + ',0.14)';
-    c.lineWidth = 3 * k;
-    c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.stroke();
-
-    var cloudTotal = lastUsagePayload ? (lastUsagePayload.cloudTotal || 0) : 0;
-    var burnPct = cloudTotal / 1e6; // scaled to 1M per spec
-    // Cloud burn on the outer ring (amber, the house colour); the intern share
-    // stays mint on the inner ring — it's a different quantity, so it keeps a
-    // different hue rather than a different radius alone.
-    drawGaugeRing(c, cx, cy, r, burnPct, REACTOR_HEX, 3 * k);
-    var internPct = lastUsagePayload ? (lastUsagePayload.internPct || 0) / 100 : 0;
-    drawGaugeRing(c, cx, cy, r - 7 * k, internPct, '#63e6b5', 2 * k);
-
-    c.textAlign = 'center';
-    c.fillStyle = 'rgba(226,233,242,0.82)';
-    c.font = '600 ' + Math.round(7 * k) + 'px "JetBrains Mono", Consolas, monospace';
-    c.fillText('BURN', cx, cy - 5 * k);
-    c.font = '600 ' + Math.round(9 * k) + 'px "JetBrains Mono", Consolas, monospace';
-    c.fillStyle = '#ffffff';
-    c.fillText(lastUsagePayload ? fmtTok(cloudTotal) : '--', cx, cy + 9 * k);
-  }
-
-  function drawGauges() { drawGaugeLeft(); drawGaugeRight(); }
-
-  // The stator drift and coil rotation are time-based, but the two data polls
-  // that used to be the only repaint triggers run at 60s — the gauges would sit
-  // frozen between them. A 10fps tick is plenty for a slow drift and costs far
-  // less than folding two more canvases into the 60fps graph loop. Paused when
-  // the tab is hidden or Mission Control isn't the visible view, so a
-  // background HUD isn't burning cycles animating something nobody can see.
-  setInterval(function () {
-    if (document.hidden) return;
-    // Gate on the gauge actually being on screen, not on currentView — that
-    // flag tracks which DATASET is loaded ('brain' | 'ops', and null while
-    // swapping), so testing it would freeze the gauges on the org chart and
-    // after every reset, even though they're plainly visible in both.
-    if (!gaugeLeftCanvas || !gaugeLeftCanvas.classList.contains('revealed')) return;
-    drawGauges();
-  }, 100);
-
-  // --- edge telemetry: cycles through real status values, one line at a time ---
-  var telemetryEl = document.getElementById('edge-telemetry');
-  var telemetryIndex = 0;
-  function refreshTelemetry() {
-    if (!telemetryEl || !lastStatusPayload) return;
-    var s = lastStatusPayload;
-    var agents = (s.activeSessions || 0) + (s.activeSubagents || 0);
-    var lines = [
-      'NOTES ' + s.notes,
-      'AGENTS ' + agents,
-      'TTS ' + (s.ttsEngine || '--').toUpperCase(),
-      'OLLAMA ' + (s.ollama || '--').toUpperCase(),
-      'INDEXED ' + fmtAge(s.generatedAt),
-    ];
-    telemetryEl.textContent = lines[telemetryIndex % lines.length];
-    telemetryIndex++;
-  }
-  setInterval(refreshTelemetry, 3500);
 
   function buildLegend() {
     var legend = document.getElementById('legend');
@@ -7226,14 +6316,13 @@
   }
 
   // ============================================================
-  // Data loading + landing boot sequence
+  // Data loading
   // ============================================================
   buildLegend();
 
-  // The render loop starts immediately and is never gated on data or on the
-  // landing screen — draw() and physicsTick() are no-ops on empty arrays, so
-  // the graph just pops in and starts springing to life the moment
-  // buildGraphState() runs, whether that's before or after the user enters.
+  // The render loop starts immediately and is never gated on data — draw()
+  // and physicsTick() are no-ops on empty arrays, so the graph just pops in
+  // and starts springing to life the moment buildGraphState() runs.
   requestAnimationFrame(frame);
   // Recurring status/usage polling now lives in the view-scoped POLLS
   // scheduler (started by the initial switchView() call above, which fires
@@ -7264,52 +6353,5 @@
     return { nodes: [], links: [] };
   });
 
-  var statusPromise = fetch('/api/status').then(function (r) { return r.json(); }).catch(function () { return null; });
-
-  // Guarded dossier-stat writer: a single missing element (shouldn't happen,
-  // but this async boot sequence must never let one bad lookup throw and
-  // silently kill every line after it) is skipped rather than aborting.
-  function setLandingStat(id, value, warn) {
-    var el = document.getElementById(id);
-    if (!el) return;
-    el.textContent = value;
-    el.classList.toggle('warn', !!warn);
-  }
-
-  // Chartered roster only (vp+manager+employee agent files on disk under
-  // ~/.claude/agents) — no endpoint distinguishes this from the full 91-agent
-  // rosterAgents count below, which also includes shared/third-party
-  // specialists. Hardcoded until an endpoint exists to derive it live.
-  setLandingStat('landing-stat-personnel', '51');
-
-  (async function bootSequence() {
-    addBootLine('> INITIALIZING ALFRED...');
-    await afterDelay(350);
-
-    var results = await Promise.all([graphPromise, statusPromise]);
-    var graphData = results[0], status = results[1];
-    var noteCount = graphData.nodes.length;
-    var online = !!status && status.ollama === 'online';
-    var rosterCount = (status && status.rosterAgents != null) ? status.rosterAgents : null;
-    var activeCount = (status && status.activeSubagents != null) ? status.activeSubagents : null;
-
-    // Live dossier stats, wired from the same statusPromise/graphPromise
-    // results the boot lines below narrate from — one fetch each, no
-    // duplicate calls, so the panel and the boot log never disagree.
-    setLandingStat('landing-stat-roster', rosterCount != null ? String(rosterCount) : '—');
-    setLandingStat('landing-stat-notes', String(noteCount));
-    setLandingStat('landing-stat-active', activeCount != null ? String(activeCount) : '—');
-    setLandingStat('landing-stat-ollama', online ? 'ONLINE' : 'OFFLINE', !online);
-    setLandingStat('landing-stat-status', online ? 'NOMINAL' : 'DEGRADED', !online);
-
-    await afterDelay(300);
-    addBootLine('> CASE FILE SYNC: ' + noteCount + ' FILES CATALOGUED');
-    await afterDelay(300);
-    addBootLine('> ROSTER: ' + (rosterCount != null ? rosterCount : '?') + ' OPERATIVES ONLINE');
-    await afterDelay(300);
-    addBootLine('> OLLAMA LINK: ' + (online ? 'ONLINE' : 'OFFLINE'), online ? null : 'warn');
-    await afterDelay(300);
-    addBootLine(online ? '> ALL SYSTEMS NOMINAL' : '> DEGRADED - OLLAMA OFFLINE', online ? null : 'warn');
-  })();
 })();
 </script>
