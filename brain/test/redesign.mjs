@@ -209,6 +209,16 @@ if (!(await up())) {
     }
 
     // --- 4. Interns catalog search ---------------------------------------
+    if (process.env.ALFRED_REDESIGN_DEBUG) {
+      const dbg4 = await page.evaluate(() => {
+        const el = document.getElementById('intern-pull-input');
+        const rect = el.getBoundingClientRect();
+        const topleft = document.getElementById('topleft');
+        return { rect, scrollTop: topleft.scrollTop, scrollHeight: topleft.scrollHeight, clientHeight: topleft.clientHeight,
+          bodyClass: document.body.className, elVisible: rect.width > 0 && rect.height > 0 };
+      });
+      console.error('DEBUG intern-pull-input state: ' + JSON.stringify(dbg4));
+    }
     await page.fill('#intern-pull-input', '');
     await page.fill('#intern-pull-input', 'qwen');
     await page.dispatchEvent('#intern-pull-input', 'input');
