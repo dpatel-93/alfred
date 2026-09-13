@@ -484,10 +484,17 @@
      comment already documented; #pane-command just needed its own rule. */
   #pane-command[hidden], #pane-brain[hidden] { display: none; }
   /* Room for the composer + its results surface, which overlay the foot of
-     whichever pane is showing (plan §3.4 P6) — set from JS via a
-     ResizeObserver on #composer, so scrollable pane content never ends up
-     hidden underneath it. */
-  #pane-command, #pane-brain { padding-bottom: var(--composer-h, 96px); }
+     whichever pane is showing (plan §3.4 P6). A fixed reserve, not one kept
+     live via a ResizeObserver on #composer: the Bench's async seat fetch
+     changes the composer's height once (route chips wrapping to a 2nd line)
+     shortly after load, and feeding that into #pane-brain's own box would
+     shrink .brain-canvas a second time AFTER P4's own ResizeObserver and the
+     test/camera math had already settled on the first size — a race that
+     intermittently misplaced node click targets (caught by redesign.mjs's
+     coordinate-offset assertions). A static value large enough for the
+     composer's worst case (◎ Council armed, chips wrapped) costs a little
+     unused scroll space and buys back the determinism P4 depends on. */
+  #pane-command, #pane-brain { padding-bottom: 190px; }
 
   /* --- collapsible rail: `[` toggles body.rail-collapsed, persisted in
        localStorage. Each rail panel keeps a compact glyph visible and hides
@@ -5827,17 +5834,6 @@
       closeComposerPicker();
     }
   });
-
-  // Reserves room at the foot of whichever pane is showing so its scrollable
-  // content never ends up hidden underneath the composer (CSS var read by
-  // #pane-command/#pane-brain's padding-bottom, plan §3.4/§4 P4 idiom).
-  var composerEl = document.getElementById('composer');
-  if (window.ResizeObserver) {
-    new ResizeObserver(function (entries) {
-      var h = entries[0].contentRect.height;
-      document.documentElement.style.setProperty('--composer-h', Math.ceil(h + 32) + 'px');
-    }).observe(composerEl);
-  }
 
   // ============================================================
   // Execution bridge — Claude session, agents, interns
