@@ -149,9 +149,17 @@ if (!(await up())) {
       body: JSON.stringify({ results: ['qwen3.5:9b'], tags: [] }),
     }));
 
+    try {
     await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
     await page.click('#landing').catch(() => {});
     await sleep(1000);
+    // Force the full Bench open even below the 1180px auto-narrow threshold
+    // (plan §3.3) so the grid-mode/seat-popover exercise below can reach
+    // .seat-more at 1024px too — same override redesign.mjs uses.
+    await page.evaluate(() => {
+      try { localStorage.setItem('alfred-rail-collapsed', '0'); } catch (e) {}
+      document.body.classList.remove('bench-tight', 'rail-collapsed');
+    });
 
     // Command place
     await page.click('[data-view="command"]');
@@ -223,7 +231,7 @@ if (!(await up())) {
     let openedCount = 0;
     const openedIds = [];
     for (let i = 0; i < seatRowCount && openedCount < 2; i++) {
-      await seatMoreBtns.nth(i).click();
+      await seatMoreBtns.nth(i).click({ timeout: 5000 }).catch(() => {});
       const openBtn = page.locator('#seat-popover button:has-text("Open terminal")');
       if (await openBtn.count()) { await openBtn.first().click(); openedCount++; }
     }
@@ -251,6 +259,9 @@ if (!(await up())) {
     }
 
     chk(tag('no uncaught JS errors across the whole exercise'), errs.length === 0, errs.slice(0, 5).join(' | '));
+    } catch (e) {
+      chk(tag('width sweep completed without throwing'), false, String(e && e.message || e));
+    }
     await ctx.close();
   }
 
