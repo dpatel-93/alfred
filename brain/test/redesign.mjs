@@ -238,30 +238,45 @@ if (!(await up())) {
         label.includes('Open panel') && label.toLowerCase().includes('external'), JSON.stringify(label));
     }
 
-    // --- 6. Brain: click a node opens the panel ---------------------------
+    // --- 6. Brain: click a node opens the panel ----------------------------
+    // P4 contained #graph inside .brain-canvas — worldToScreen/__alfredDebug's
+    // `screen` coordinates are canvas-LOCAL now (relative to the canvas's own
+    // box), not page-absolute, because the canvas no longer sits at (0,0)
+    // filling the viewport. A real click reports clientX/Y in PAGE space, so
+    // this is the coordinate-space offset test itself (plan §2.4/§4 P4): it
+    // adds the canvas's own getBoundingClientRect() to worldToScreen's output
+    // and drives a REAL page.mouse.click() there — a plausible-but-offset
+    // graph (the exact silent failure mode P4 risks) would land on the wrong
+    // node or nothing, not just fail a synthetic dispatchEvent that skipped
+    // the coordinate translation entirely. Checked against 3 distinct nodes,
+    // not 1, so an off-by-a-constant error can't coincidentally cancel out.
     await page.click('[data-view="brain"]');
     await sleep(1500); // let the force layout settle before reading node positions
-    const click = await page.evaluate(() => {
-      var g = document.getElementById('graph');
-      var dbg = window.__alfredDebug ? window.__alfredDebug() : null;
-      if (!dbg || !dbg.nodes.length) return { ok: false, count: dbg ? dbg.nodes.length : -1 };
-      var pt = dbg.screen[0];
-      var opts = { clientX: pt.x, clientY: pt.y, bubbles: true, cancelable: true, view: window };
-      g.dispatchEvent(new MouseEvent('mousedown', opts));
-      g.dispatchEvent(new MouseEvent('mouseup', opts));
-      g.dispatchEvent(new MouseEvent('click', opts));
-      return { ok: true, title: dbg.nodes[0].title };
-    });
-    chk(tag('the brain graph has at least one node to click'), click.ok, JSON.stringify(click));
-    if (click.ok) {
-      await page.waitForFunction(
-        () => document.getElementById('panel').classList.contains('open'),
-        null, { timeout: 5000 },
-      ).catch(() => {});
-      const open = await page.evaluate(() => document.getElementById('panel').classList.contains('open'));
-      const title = await page.evaluate(() => (document.getElementById('panel-title').textContent || '').trim());
-      chk(tag('clicking a brain node opens #panel'), open, `expected title ~ ${click.title}`);
-      chk(tag('the opened panel carries a non-empty title'), title.length > 0, `title="${title}"`);
+    const dbg = await page.evaluate(() => window.__alfredDebug ? window.__alfredDebug() : null);
+    const canvasRect = await page.evaluate(() => document.getElementById('graph').getBoundingClientRect().toJSON());
+    const nodeCount = dbg && dbg.nodes ? dbg.nodes.length : 0;
+    chk(tag('the brain graph has at least one node to click'), nodeCount > 0, `count=${nodeCount}`);
+    if (nodeCount > 0) {
+      const sampleIdx = [0, Math.floor(nodeCount / 2), nodeCount - 1]
+        .filter((v, i, a) => a.indexOf(v) === i); // de-dupe when nodeCount < 3
+      for (const i of sampleIdx) {
+        const node = dbg.nodes[i];
+        const local = dbg.screen[i];
+        const pageX = canvasRect.x + local.x;
+        const pageY = canvasRect.y + local.y;
+        await page.evaluate(() => { document.getElementById('panel').classList.remove('open'); });
+        await page.mouse.click(pageX, pageY);
+        await page.waitForFunction(
+          () => document.getElementById('panel').classList.contains('open'),
+          null, { timeout: 5000 },
+        ).catch(() => {});
+        const open = await page.evaluate(() => document.getElementById('panel').classList.contains('open'));
+        const title = await page.evaluate(() => (document.getElementById('panel-title').textContent || '').trim());
+        chk(tag(`clicking node "${node.title}" at its computed screen position opens #panel`), open,
+          `node=${node.title} local=(${local.x.toFixed(1)},${local.y.toFixed(1)}) page=(${pageX.toFixed(1)},${pageY.toFixed(1)})`);
+        chk(tag(`the opened panel title matches node "${node.title}" exactly`), title === node.title,
+          `expected="${node.title}" actual="${title}"`);
+      }
     }
 
     // --- 7/8. no uncaught JS errors, at this width -------------------------
