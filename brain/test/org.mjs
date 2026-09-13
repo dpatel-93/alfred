@@ -33,7 +33,11 @@ const payload = fleet();
 await page.route('**/api/org*', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payload) }));
 await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(900);
-await page.click('[data-view="ops"]'); await page.waitForTimeout(2500);
+// The #top nav is down to 2 tabs (Command/Brain) as of the P3 frame — Enterprise
+// has no tab of its own until P7 gives it a sheet, so it's reached the same way
+// search-nav.mjs already reaches it: by hash, exactly like a deep link would.
+await page.evaluate(() => { location.hash = 'ops'; });
+await page.waitForTimeout(2500);
 
 T('no JS errors rendering 51 agents', errs.length === 0, errs.slice(0, 3).join(' | '));
 
