@@ -261,10 +261,23 @@
      P6). #search-input keeps its id (runSearch/renderInstantResults/the `/`
      hotkey all read it directly) but is now the composer's own auto-growing
      textarea rather than the old Bench rail's single-line input. */
+  /* position:fixed, not absolute-within-#deck: a .legacy-pane (Roster/
+     Library/Workshop/Protocols, not yet sheeted — plan §2.2/P7) sits at
+     z-index 11, ABOVE #frame's own z-index 10, specifically so it can cover
+     #deck+#flight while active. An absolutely-positioned child of #deck is
+     capped inside #frame's stacking context regardless of its own z-index,
+     so it would render BELOW an active legacy pane no matter what number was
+     used here — this is the same class of bug search-nav.mjs already exists
+     to catch (a stale overlay eating a click), just discovered for the
+     composer instead of the old #panel. Escaping to position:fixed (with
+     left/right tracking #frame's own grid so it still reads as "inside the
+     deck") lets the composer sit in the root stacking context, where a
+     z-index above 11 actually means something. */
   #composer-dock {
-    position: absolute; left: 0; right: 0; bottom: 0; z-index: 6;
+    position: fixed; left: var(--rail-w); right: var(--flight-w); bottom: 0; z-index: 20;
     display: flex; flex-direction: column; pointer-events: none;
   }
+  body.no-flight #composer-dock, body.ops-canvas #composer-dock { right: 0; }
   #composer-dock > * { pointer-events: auto; }
   /* #panel (the note drawer, z-index 25) overlays the deck's own rightmost
      420px whenever it is open, regardless of the flight rail's state — its
@@ -274,6 +287,8 @@
      bug search-nav.mjs exists to catch, just for the composer instead of
      the old fixed left-edge drawer. */
   body:has(#panel.open) #composer-dock { right: var(--drawer-w); }
+  body.no-flight:has(#panel.open) #composer-dock,
+  body.ops-canvas:has(#panel.open) #composer-dock { right: var(--drawer-w); }
   #composer {
     margin: 0 14px 14px 14px; padding: 8px 10px;
     background: var(--panel-bg-2, var(--surface-1)); border: 1px solid var(--border-strong, var(--border));
