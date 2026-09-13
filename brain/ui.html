@@ -932,7 +932,7 @@
     transition: transform 0.35s cubic-bezier(.2,.8,.2,1), right 0.35s cubic-bezier(.2,.8,.2,1);
     display: flex; flex-direction: column; backdrop-filter: blur(6px);
   }
-  body:not(.no-flight):not(.ops-canvas):not(.flight-collapsed):not(.grid-hide-flight) #panel { right: var(--flight-w); }
+  body:not(.no-flight):not(.ops-canvas):not(.flight-collapsed):not(.grid-hide-flight):not(.flight-idle) #panel { right: var(--flight-w); }
   #panel.open { transform: translateX(0); }
   #panel-header {
     padding: 20px 22px 14px; border-bottom: 1px solid color-mix(in srgb, var(--accent-primary) 15%, transparent);
