@@ -1616,48 +1616,6 @@
     <div id="cc-terms" class="cc-terms"></div>
   </div>
     </section>
-
-    <!-- Composer + results surface (plan §3.4, P6): the Council's input
-         collapses into one persistent box at the foot of the Deck, used for
-         both single-seat and whole-Bench sends. #cc-answers/#cc-verdict and
-         the old Ask/Search drawer move here verbatim — renderCouncil(),
-         pollCouncilRun(), askAlfred() and runSearch() are untouched, only
-         their markup's parent and trigger wiring changed. -->
-    <div id="composer-dock">
-      <div id="ask-drawer">
-        <div id="answer-panel" class="frame">
-          <div id="answer-header">
-            <span id="answer-state">READY</span>
-          </div>
-          <div id="answer-text"></div>
-          <div id="answer-sources"></div>
-        </div>
-        <div id="search-results" class="frame"></div>
-        <div class="stage-section" id="cc-council" hidden>
-          <div class="section-title">Council</div>
-          <div class="panel-help" id="cc-asking"></div>
-          <span id="cc-run-status" class="panel-help"></span>
-          <div id="cc-answers" class="cc-answers"></div>
-          <div id="cc-verdict" class="cc-verdict" hidden></div>
-        </div>
-      </div>
-
-      <div id="composer">
-        <div id="route-chips" class="route-chips"></div>
-        <div class="composer-row">
-          <span class="prompt" aria-hidden="true">&gt;</span>
-          <textarea id="search-input" class="composer-input" rows="1" placeholder="Ask, or / skills  @ seats  ? search" autocomplete="off" spellcheck="true"></textarea>
-          <button class="btn primary" id="cc-ask-btn" title="Send to the focused seat, or every ticked seat when &#9678; Council is armed (Enter to send, Shift+Enter for a new line)">&#9673; Send</button>
-        </div>
-        <div id="composer-picker" class="composer-picker" hidden></div>
-        <div id="composer-foot" class="composer-foot" hidden>
-          <label class="cc-check"><input type="checkbox" id="cc-synth" checked> Claude chairs a verdict as</label>
-          <input id="cc-synth-model" class="cc-model-input" list="cc-synth-models" placeholder="sonnet" title="Which Claude model chairs the council (blank = sonnet)" autocomplete="off">
-          <datalist id="cc-synth-models"><option value="sonnet"><option value="opus"><option value="haiku"><option value="fable"></datalist>
-        </div>
-        <div class="composer-hint">Enter &mdash; send &middot; Shift+Enter &mdash; new line &middot; / skill &middot; @ seat &middot; ? search (Enter asks Alfred)</div>
-      </div>
-    </div>
   </main>
 
   <!-- In Flight: real activity feed is P8 (moves pollOrg into GLOBAL_POLLS).
@@ -1666,6 +1624,56 @@
     <div class="flight-placeholder">In Flight</div>
     <div class="flight-placeholder">Nothing running</div>
   </aside>
+</div>
+
+<!-- Composer + results surface (plan §3.4, P6): the Council's input collapses
+     into one persistent box at the foot of the Deck, used for both
+     single-seat and whole-Bench sends. #cc-answers/#cc-verdict and the old
+     Ask/Search drawer move here verbatim — renderCouncil(), pollCouncilRun(),
+     askAlfred() and runSearch() are untouched, only their markup's parent and
+     trigger wiring changed.
+     A sibling of #frame (like .legacy-pane and #panel below), not a child of
+     #deck as the plan's own diagram first sketched it: #frame establishes its
+     own stacking context (position:fixed + z-index:10), so a descendant's
+     z-index — however high — can never outrank a body-level sibling like
+     .legacy-pane (z-index 11). Composer must outrank it to stay usable while
+     a legacy view (Roster/Library/Workshop/Protocols) is open, which is
+     exactly the class of bug search-nav.mjs exists to catch — found here by
+     that same suite when the composer first landed as #deck's child. -->
+<div id="composer-dock">
+  <div id="ask-drawer">
+    <div id="answer-panel" class="frame">
+      <div id="answer-header">
+        <span id="answer-state">READY</span>
+      </div>
+      <div id="answer-text"></div>
+      <div id="answer-sources"></div>
+    </div>
+    <div id="search-results" class="frame"></div>
+    <div class="stage-section" id="cc-council" hidden>
+      <div class="section-title">Council</div>
+      <div class="panel-help" id="cc-asking"></div>
+      <span id="cc-run-status" class="panel-help"></span>
+      <div id="cc-answers" class="cc-answers"></div>
+      <div id="cc-verdict" class="cc-verdict" hidden></div>
+    </div>
+  </div>
+
+  <div id="composer">
+    <div id="route-chips" class="route-chips"></div>
+    <div class="composer-row">
+      <span class="prompt" aria-hidden="true">&gt;</span>
+      <textarea id="search-input" class="composer-input" rows="1" placeholder="Ask, or / skills  @ seats  ? search" autocomplete="off" spellcheck="true"></textarea>
+      <button class="btn primary" id="cc-ask-btn" title="Send to the focused seat, or every ticked seat when &#9678; Council is armed (Enter to send, Shift+Enter for a new line)">&#9673; Send</button>
+    </div>
+    <div id="composer-picker" class="composer-picker" hidden></div>
+    <div id="composer-foot" class="composer-foot" hidden>
+      <label class="cc-check"><input type="checkbox" id="cc-synth" checked> Claude chairs a verdict as</label>
+      <input id="cc-synth-model" class="cc-model-input" list="cc-synth-models" placeholder="sonnet" title="Which Claude model chairs the council (blank = sonnet)" autocomplete="off">
+      <datalist id="cc-synth-models"><option value="sonnet"><option value="opus"><option value="haiku"><option value="fable"></datalist>
+    </div>
+    <div class="composer-hint">Enter &mdash; send &middot; Shift+Enter &mdash; new line &middot; / skill &middot; @ seat &middot; ? search (Enter asks Alfred)</div>
+  </div>
 </div>
 
 <!-- Legacy places, not yet sheeted (P7's job — plan §2.2). Each is a
