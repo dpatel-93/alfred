@@ -385,18 +385,25 @@
     color: var(--text-dim); opacity: .7; padding: 4px 2px;
   }
 
-  #deck { position: relative; min-width: 0; overflow: hidden; }
+  /* pointer-events: none on #deck itself, not just on #pane-brain — an empty
+     (or fully-hidden-children) box still captures clicks meant for the fixed
+     canvas underneath purely by occupying the region, regardless of whether
+     anything inside it is visible. This matters for 'ops': neither pane is
+     shown while the org chart draws straight onto the canvas, so #deck must
+     let every click fall through, not just look transparent. */
+  #deck { position: relative; min-width: 0; overflow: hidden; pointer-events: none; }
   .pane { position: absolute; inset: 0; }
   .pane[hidden] { display: none; }
   #pane-command {
     background: var(--bg); overflow-y: auto; overscroll-behavior: contain;
     display: flex; flex-direction: column; gap: 16px; padding: 16px;
+    pointer-events: auto;
   }
   /* The Brain canvas stays position:fixed behind everything this phase
      (P4 moves it into .brain-canvas and fixes its coordinate math) — this
      pane is a transparent pass-through so the canvas shows through the deck
      column, with only its own children (the filter strip) clickable. */
-  #pane-brain { background: transparent; pointer-events: none; }
+  #pane-brain { background: transparent; }
   #pane-brain > * { pointer-events: auto; }
 
   /* --- collapsible rail: `[` toggles body.rail-collapsed, persisted in
