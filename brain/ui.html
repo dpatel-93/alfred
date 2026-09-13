@@ -296,7 +296,7 @@
     display: flex; flex-direction: column; pointer-events: none;
   }
   body.no-flight #composer-dock, body.ops-canvas #composer-dock, body.flight-collapsed #composer-dock,
-  body.grid-hide-flight #composer-dock, body.flight-idle #composer-dock { right: 0; }
+  body.grid-hide-flight #composer-dock, body.flight-idle #composer-dock, body.sheet-open #composer-dock { right: 0; }
   #composer-dock > * { pointer-events: auto; }
   /* #panel (the note drawer, z-index 25) overlays the deck's own rightmost
      420px whenever it is open, regardless of the flight rail's state — its
@@ -310,7 +310,8 @@
   body.ops-canvas:has(#panel.open) #composer-dock,
   body.flight-collapsed:has(#panel.open) #composer-dock,
   body.grid-hide-flight:has(#panel.open) #composer-dock,
-  body.flight-idle:has(#panel.open) #composer-dock { right: var(--drawer-w); }
+  body.flight-idle:has(#panel.open) #composer-dock,
+  body.sheet-open:has(#panel.open) #composer-dock { right: var(--drawer-w); }
   #composer {
     margin: 0 14px 14px 14px; padding: 8px 10px;
     background: var(--panel-bg-2, var(--surface-1)); border: 1px solid var(--border-strong, var(--border));
@@ -503,6 +504,12 @@
      costs 292px of screen. */
   body.flight-idle #frame { grid-template-columns: minmax(0, 1fr) 0; }
   body.flight-idle #flight { display: none; }
+  /* A sheet (Protocols/Roster/Library/Workshop) sits under a full-viewport
+     scrim (#sheet-scrim, z-index 12, above #frame's 10) — #flight is still
+     technically on screen but dimmed and click-dead, worse than "sits mostly
+     empty" and not worth the 292px either. */
+  body.sheet-open #frame { grid-template-columns: minmax(0, 1fr) 0; }
+  body.sheet-open #flight { display: none; }
 
   #flight {
     min-width: 0; overflow-y: auto; overflow-x: hidden;
@@ -932,7 +939,7 @@
     transition: transform 0.35s cubic-bezier(.2,.8,.2,1), right 0.35s cubic-bezier(.2,.8,.2,1);
     display: flex; flex-direction: column; backdrop-filter: blur(6px);
   }
-  body:not(.no-flight):not(.ops-canvas):not(.flight-collapsed):not(.grid-hide-flight):not(.flight-idle) #panel { right: var(--flight-w); }
+  body:not(.no-flight):not(.ops-canvas):not(.flight-collapsed):not(.grid-hide-flight):not(.flight-idle):not(.sheet-open) #panel { right: var(--flight-w); }
   #panel.open { transform: translateX(0); }
   #panel-header {
     padding: 20px 22px 14px; border-bottom: 1px solid color-mix(in srgb, var(--accent-primary) 15%, transparent);
@@ -2957,6 +2964,13 @@
     });
     var sheetScrim = document.getElementById('sheet-scrim');
     if (sheetScrim) sheetScrim.classList.toggle('open', anySheetOpen);
+    // A sheet (Protocols/Roster/Library/Workshop) sits under its own scrim,
+    // which dims and eats clicks for the whole viewport including #flight —
+    // visible but dead the moment any sheet is open, worse than the "sits
+    // mostly empty" case ops-canvas/no-flight/flight-idle already collapse
+    // for. Same treatment here: reclaim the 292px while a sheet has it dimmed
+    // anyway, same as everywhere else that rail auto-hides.
+    document.body.classList.toggle('sheet-open', anySheetOpen);
     var paneCommand = document.getElementById('pane-command');
     var paneBrain = document.getElementById('pane-brain');
     if (paneCommand) paneCommand.hidden = (view !== 'command');
