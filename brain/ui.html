@@ -5753,12 +5753,19 @@
   }
 
   function positionSeatPopover(anchor) {
+    // Floats just outside the Bench, to its right, rather than below the row
+    // within the Bench's own 244px column — a popover tall enough to hold a
+    // model input and open/sign-in controls would otherwise cover several
+    // sibling rows below it, intercepting clicks meant for THEIR "..." (a
+    // narrow, densely-packed list has no clear vertical space to grow into).
     var r = anchor.getBoundingClientRect();
+    var benchRect = document.getElementById('bench').getBoundingClientRect();
     var width = seatPopoverEl.offsetWidth || 236;
-    var top = Math.min(r.bottom + 6, window.innerHeight - 12);
-    var left = Math.min(r.right - width, window.innerWidth - width - 8);
-    seatPopoverEl.style.top = Math.max(8, top) + 'px';
+    var height = seatPopoverEl.offsetHeight || 160;
+    var left = Math.min(benchRect.right + 8, window.innerWidth - width - 8);
+    var top = Math.min(Math.max(8, r.top - 4), window.innerHeight - height - 8);
     seatPopoverEl.style.left = Math.max(8, left) + 'px';
+    seatPopoverEl.style.top = Math.max(8, top) + 'px';
   }
 
   function openSeatPopover(s, anchorBtn) {
