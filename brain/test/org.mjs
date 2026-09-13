@@ -134,7 +134,12 @@ const laneToggle = await page.evaluate(async () => {
   const press = async () => {
     const r = dbg().lanes.employee.toggle;
     if (!r) return false;
-    const o = { clientX: r.x + r.w / 2, clientY: r.y + r.h / 2, bubbles: true, cancelable: true, view: window };
+    // r.x/r.y are canvas-LOCAL (relative to the canvas's own box) since P4
+    // contained #graph in .brain-canvas — add the canvas's own page offset so
+    // this lands where a real click would, exactly as localXY() in ui.html
+    // reverses for a real pointer event.
+    const cr = g.getBoundingClientRect();
+    const o = { clientX: cr.left + r.x + r.w / 2, clientY: cr.top + r.y + r.h / 2, bubbles: true, cancelable: true, view: window };
     g.dispatchEvent(new MouseEvent('mousemove', o));
     g.dispatchEvent(new MouseEvent('click', o));
     await sleep(700);

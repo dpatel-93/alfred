@@ -58,7 +58,14 @@ async function clickNode(id) {
   const pt = await page.evaluate((wanted) => {
     const g = window.__alfredDebug();
     const i = g.nodes.findIndex((n) => n.id === wanted);
-    return i < 0 ? null : g.screen[i];
+    if (i < 0) return null;
+    // g.screen[i] is canvas-LOCAL (relative to #graph's own box) since P4
+    // contained the canvas in .brain-canvas — translate to page coordinates
+    // (what page.mouse.click needs) via the canvas's own bounding rect,
+    // exactly as a real click's clientX/Y would already carry that offset.
+    const r = document.getElementById('graph').getBoundingClientRect();
+    const s = g.screen[i];
+    return { x: r.left + s.x, y: r.top + s.y };
   }, id);
   if (!pt) return false;
   await page.mouse.click(pt.x, pt.y);
