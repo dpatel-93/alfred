@@ -131,7 +131,17 @@ if (!(await up())) {
   await page.waitForTimeout(150);
 
   // --- Council-armed send: exact provider ids -----------------------------
-  await page.click('#route-chips .route-chip:has-text("Council")');
+  // The Council chip is always rendered last in #route-chips (renderRouteChips
+  // appends it after every seat chip) — select by position, not text, since
+  // the chip's label carries a ◎ glyph that :has-text matching can be brittle
+  // against depending on how Playwright normalizes it.
+  async function clickCouncilChip() {
+    await page.evaluate(() => {
+      const chips = document.querySelectorAll('#route-chips .route-chip');
+      chips[chips.length - 1].click();
+    });
+  }
+  await clickCouncilChip();
   await page.waitForTimeout(150);
   const footVisible = await page.evaluate(() => !document.getElementById('composer-foot').hidden);
   chk('arming Council reveals the synth checkbox/model foot', footVisible);
@@ -147,18 +157,25 @@ if (!(await up())) {
     JSON.stringify({ sent: lastCouncilReq && lastCouncilReq.providers, ticked: tickedIds }));
   const answerCols = await page.locator('#cc-answers .cc-answer').count();
   chk('#cc-answers renders one column per ticked seat', answerCols === tickedIds.length, `cols=${answerCols} ticked=${tickedIds.length}`);
-  await page.waitForFunction(() => !document.getElementById('cc-verdict').hidden, null, { timeout: 15000 }).catch(() => {});
+  await page.waitForFunction(() => !document.getElementById('cc-verdict').hidden, null, { timeout: 20000 }).catch(() => {});
   const verdictShown = await page.evaluate(() => !document.getElementById('cc-verdict').hidden);
-  chk('verdict renders when synth is on', verdictShown);
+  chk('verdict renders when synth is on', verdictShown, JSON.stringify(await page.evaluate(() => document.getElementById('cc-run-status').textContent)));
 
   const councilArmedShot = path.join(OUT_DIR, 'p6-1440-council-armed.png');
   await page.screenshot({ path: councilArmedShot });
 
   // --- Single-seat mode: request carries ONLY the focused seat -----------
-  await page.click('#route-chips .route-chip:has-text("Council")'); // disarm
+  await clickCouncilChip(); // disarm
   await page.waitForTimeout(150);
+  const armedAfterDisarm = await page.evaluate(() => document.getElementById('composer-foot').hidden === false);
+  chk('Council chip actually disarmed', armedAfterDisarm === false, `footHidden=${!armedAfterDisarm}`);
+  // Explicitly focus one specific seat by clicking its Bench row body —
+  // ticking a checkbox (done above) is a different action from focusing.
+  const focusTargetId = await page.evaluate(() => document.querySelector('#cc-seats .seat:not(.idle)').dataset.seatId);
+  await page.click(`#cc-seats .seat[data-seat-id="${focusTargetId}"] .seat-main`);
+  await page.waitForTimeout(600); // past the 420ms --focus transition
   const focusSeatId = await page.evaluate(() => document.body.dataset.focusSeat || '');
-  chk('a seat is focused from earlier Bench interaction', !!focusSeatId, `focusSeatId="${focusSeatId}"`);
+  chk('a seat is focused via its Bench row', focusSeatId === focusTargetId, `focusSeatId="${focusSeatId}" target="${focusTargetId}"`);
   await page.fill('#search-input', 'Second question, single seat.');
   await page.click('#cc-ask-btn');
   await page.waitForTimeout(1500);
@@ -198,7 +215,7 @@ if (!(await up())) {
   const val = await page.inputValue('#search-input');
   chk('Shift+Enter inserts a literal newline', val === 'line one\nline two', JSON.stringify(val));
   const reqCountBeforeEnter = councilRequests.length;
-  await page.click('#route-chips .route-chip:has-text("Council")'); // arm council for a clean single Enter-send test
+  await clickCouncilChip(); // arm council for a clean single Enter-send test
   await page.waitForTimeout(100);
   await page.fill('#search-input', 'plain enter send test');
   await page.keyboard.press('Enter');
@@ -214,7 +231,7 @@ if (!(await up())) {
     await page.waitForTimeout(200);
     await page.screenshot({ path: path.join(OUT_DIR, `p6-${width}-council-armed.png`) });
   }
-  await page.click('#route-chips .route-chip:has-text("Council")'); // disarm -> single-seat view
+  await clickCouncilChip(); // disarm -> single-seat view
   await page.waitForTimeout(150);
   for (const width of [1024, 1440, 1920]) {
     await page.setViewportSize({ width, height: 900 });
