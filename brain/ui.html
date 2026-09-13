@@ -460,13 +460,27 @@
   body.rail-collapsed #ask-panel .body,
   body.rail-collapsed #interns-panel .body { display: none; }
   /* Collapsed bench: seats shrink to just their identity bulb — the one
-     thing worth keeping legible at 58px (plan §3.2/§3.3). */
+     thing worth keeping legible at 58px (plan §3.2/§3.3). Applies under
+     BOTH the manual `[` toggle and the automatic bench-tight rule — the
+     Bench column narrows to the same --rail-w-narrow either way, and
+     #bench's own overflow-x:hidden means unhidden row content (tick, name,
+     model, "...") doesn't wrap, it clips and becomes unreachable. */
+  body.rail-collapsed .rail-glyph,
+  body.bench-tight .rail-glyph { display: block; }
   body.rail-collapsed #bench-head .bench-sect-title span:last-child,
   body.rail-collapsed #bench-head .bench-sect-actions,
   body.rail-collapsed #bench-head > .panel-help,
   body.rail-collapsed .seat-name, body.rail-collapsed .seat-model,
-  body.rail-collapsed .seat-tick, body.rail-collapsed .seat-more { display: none; }
-  body.rail-collapsed .seat { justify-content: center; padding: 6px 0; }
+  body.rail-collapsed .seat-tick, body.rail-collapsed .seat-more,
+  body.bench-tight #bench-head .bench-sect-title span:last-child,
+  body.bench-tight #bench-head .bench-sect-actions,
+  body.bench-tight #bench-head > .panel-help,
+  body.bench-tight .seat-name, body.bench-tight .seat-model,
+  body.bench-tight .seat-tick, body.bench-tight .seat-more { display: none; }
+  body.rail-collapsed .seat, body.bench-tight .seat { justify-content: center; padding: 6px 0; }
+  body.bench-tight #status .body,
+  body.bench-tight #ask-panel .body,
+  body.bench-tight #interns-panel .body { display: none; }
 
   /* --- Bench sections (plan §2.1/§3.1/§3.2): a shared card shell for the
        seat list, search, interns and status blocks that stack in #bench.

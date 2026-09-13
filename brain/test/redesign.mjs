@@ -108,6 +108,19 @@ if (!(await up())) {
     await page.click('#landing').catch(() => {});
     await page.waitForTimeout(1200);
 
+    // At <=1180px the Bench auto-narrows to an icon-only rail (plan §3.3) —
+    // exactly what an operator gets by default at 1024px. The suite below
+    // exercises the seat popover and Interns detail, which need the full
+    // Bench, so it stands in for the operator's own explicit override: set
+    // the SAME 'alfred-rail-collapsed' key `[` writes (to a real value, not
+    // absent) so the automatic rule yields, precisely as plan §3.3 specifies
+    // it must. The auto-narrow rule itself is exercised separately, manually,
+    // against a live dev server — this suite's job is the interaction paths.
+    await page.evaluate(() => {
+      try { localStorage.setItem('alfred-rail-collapsed', '0'); } catch (e) { /* localStorage unavailable */ }
+      document.body.classList.remove('bench-tight', 'rail-collapsed');
+    });
+
     // --- the Command place: tab strip, grid mode, unread dot, seats -------
     // Seats now render on the Bench (#cc-seats), visible on every place —
     // P5 moved them out of the Command pane's old "Lanes" section and moved
