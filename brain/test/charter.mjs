@@ -48,7 +48,11 @@ await page.route('**/api/org*', (r) => {
 
 await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(900);
-await page.click('[data-view="ops"]'); await page.waitForTimeout(2500);
+// The #top nav is down to 2 tabs (Command/Brain) as of the P3 frame — Enterprise
+// has no tab of its own until P7 gives it a sheet, so it's reached the same way
+// search-nav.mjs already reaches it: by hash, exactly like a deep link would.
+await page.evaluate(() => { location.hash = 'ops'; });
+await page.waitForTimeout(2500);
 
 async function clickNode(id) {
   const pt = await page.evaluate((wanted) => {
