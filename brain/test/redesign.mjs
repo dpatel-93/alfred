@@ -108,14 +108,12 @@ if (!(await up())) {
     await page.click('#landing').catch(() => {});
     await page.waitForTimeout(1200);
 
-    // At <=1180px the Bench auto-narrows to an icon-only rail (plan §3.3) —
-    // exactly what an operator gets by default at 1024px. The suite below
-    // exercises the seat popover and Interns detail, which need the full
-    // Bench, so it stands in for the operator's own explicit override: set
-    // the SAME 'alfred-rail-collapsed' key `[` writes (to a real value, not
-    // absent) so the automatic rule yields, precisely as plan §3.3 specifies
-    // it must. The auto-narrow rule itself is exercised separately, manually,
-    // against a live dev server — this suite's job is the interaction paths.
+    // The Bench (and its <=1180px auto-narrow rail) was retired in the
+    // everything-bar redesign — seats, Local GPU and status all live in the
+    // composer now, at every width. rail-collapsed/bench-tight still exist
+    // as inert body classes (nothing reads them anymore); this clears them
+    // defensively in case a stale localStorage value from an older build is
+    // present in the test profile.
     await page.evaluate(() => {
       try { localStorage.setItem('alfred-rail-collapsed', '0'); } catch (e) { /* localStorage unavailable */ }
       document.body.classList.remove('bench-tight', 'rail-collapsed');
@@ -247,13 +245,14 @@ if (!(await up())) {
     }
 
     // --- 4. Interns catalog search ---------------------------------------
-    // P5 wrapped the Installed/Cloud/Available markup behind a glanceable
-    // summary strip (plan §3.1) — #intern-detail is collapsed by default,
-    // so #intern-toggle has to open it before the "Available" <details>
-    // (itself still closed by default, only "Installed" starts open) can
-    // be reached at all.
+    // Local GPU moved off the retired Bench into the composer's tools row
+    // (everything-bar redesign) as a native <details id="composer-tool-
+    // interns">; #intern-toggle is gone (the outer <details> itself is the
+    // open/close control now) — open it, then the "Available" <details>
+    // nested inside it (itself still closed by default, only "Installed"
+    // starts open) to reach the pull input at all.
     await page.evaluate(() => {
-      var t = document.getElementById('intern-toggle'); if (t) t.click();
+      document.getElementById('composer-tool-interns').open = true;
       document.getElementById('intern-section-available').open = true;
     });
     await page.fill('#intern-pull-input', '');
