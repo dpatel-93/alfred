@@ -330,23 +330,74 @@
     align-self: center; text-transform: lowercase;
   }
 
-  /* --- top-left cluster: tabs + status + filters + terminal, stacked as one
-         system-readout column so the right side stays free for content panels.
-         Width lives here once so every panel in the stack matches. --- */
-  /* max-height + overflow-y: fixed positioning takes #topleft out of flow, so
-     nothing ever pushed back when its stacked panels (status/filters/interns)
-     exceeded the viewport height — confirmed via Playwright: at 1440x900 the
-     Interns "Available" header rendered below row 900, and at 1024x768 the
-     whole Interns panel was outside the viewport and unclickable. Scrolling
-     the rail itself, capped to the viewport minus its own top/bottom margin,
-     guarantees every panel stays reachable regardless of how much is open. */
-  #topleft {
-    position: fixed; top: 18px; left: 18px; z-index: 20; width: var(--rail-w);
-    max-height: calc(100vh - 36px); overflow-y: auto; overflow-x: hidden;
-    display: flex; flex-direction: column; gap: 10px;
-    transition: width var(--t-base) var(--ease-out);
+  /* --- P3 frame: #top header + #frame grid (#bench | #deck | #flight) -----
+     replaces the old fixed #view-toggle pill and fixed #topleft rail. See
+     the blend implementation plan §2.1/§2.2. --- */
+  #top {
+    position: fixed; top: 0; left: 0; right: 0; height: var(--topbar-h); z-index: 30;
+    display: flex; align-items: center; gap: 16px; padding: 0 16px;
+    background: var(--bg-2); border-bottom: 1px solid var(--border);
   }
-  #topleft > * { width: 100%; flex: none; }
+  #mark {
+    display: flex; align-items: center; gap: 8px; flex: none;
+    font-family: var(--font-display); font-size: 13px; letter-spacing: .18em;
+    text-transform: uppercase; color: var(--focus); white-space: nowrap;
+  }
+  #views { display: flex; gap: 2px; flex: none; }
+  #dock { flex: 1 1 auto; display: flex; align-items: center; gap: 8px; min-width: 0; }
+  #utils { display: flex; align-items: center; gap: 6px; flex: none; overflow-x: auto; max-width: 46vw; }
+  /* The utility buttons were sized for a 244px vertical rail (width:100%,
+     stacked). Reused verbatim in a horizontal topbar strip (§2.2), so their
+     sizing rule is overridden here rather than duplicated under a new name. */
+  #utils button { width: auto; margin-top: 0; padding: 4px 8px; white-space: nowrap; font-size: 10px; }
+  #utils .panel-help { display: none; } /* status text ("Reindexing...") — no room in the strip; the button's own state still updates */
+
+  /* --- #frame: the CSS grid that replaced the fixed rail + full-bleed canvas.
+     minmax(0, 1fr) on the deck column, not 1fr — without the 0 floor a grid
+     item's automatic minimum size is its content, which would push #bench
+     off screen at 1024px the same way .cc-term-stage did before that fix. */
+  #frame {
+    position: fixed; inset: var(--topbar-h) 0 0 0; z-index: 10;
+    display: grid;
+    grid-template-columns: var(--bench-w) minmax(0, 1fr) var(--flight-w);
+  }
+  /* 'ops' (Enterprise) draws straight onto the shared #graph canvas with
+     neither #pane-command nor #pane-brain shown — it has no sheet of its own
+     until P7 threads a second canvas (plan §2.6). The canvas used the full
+     viewport width before this phase; hide #flight so its new 292px column
+     doesn't clip the chart's right edge until Enterprise gets a real home. */
+  body.ops-canvas #frame { grid-template-columns: var(--bench-w) minmax(0, 1fr) 0; }
+  body.ops-canvas #flight { display: none; }
+
+  #bench, #flight {
+    min-width: 0; overflow-y: auto; overflow-x: hidden;
+    padding: 14px; display: flex; flex-direction: column; gap: 10px;
+    background: var(--surface-1);
+  }
+  #bench { border-right: 1px solid var(--border); }
+  #flight { border-left: 1px solid var(--border); }
+  /* #topleft (status) is pinned to the foot of the Bench column via the
+     flexbox auto-margin trick — everything above it (search, interns) packs
+     to the top, the status readout always sits at the bottom (plan §2.2). */
+  #topleft { display: flex; flex-direction: column; gap: 10px; margin-top: auto; }
+  .flight-placeholder {
+    font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--text-dim); opacity: .7; padding: 4px 2px;
+  }
+
+  #deck { position: relative; min-width: 0; overflow: hidden; }
+  .pane { position: absolute; inset: 0; }
+  .pane[hidden] { display: none; }
+  #pane-command {
+    background: var(--bg); overflow-y: auto; overscroll-behavior: contain;
+    display: flex; flex-direction: column; gap: 16px; padding: 16px;
+  }
+  /* The Brain canvas stays position:fixed behind everything this phase
+     (P4 moves it into .brain-canvas and fixes its coordinate math) — this
+     pane is a transparent pass-through so the canvas shows through the deck
+     column, with only its own children (the filter strip) clickable. */
+  #pane-brain { background: transparent; pointer-events: none; }
+  #pane-brain > * { pointer-events: auto; }
 
   /* --- collapsible rail: `[` toggles body.rail-collapsed, persisted in
        localStorage. Each rail panel keeps a compact glyph visible and hides
@@ -379,18 +430,11 @@
     box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 55%, transparent);
   }
 
-  /* --- view switcher: the primary navigation, so it sits centred at the top
-         of the HUD rather than squeezed into the rail at 8.5px. It replaces
-         the old #page-title, which only ever repeated the active tab's name. */
-  #view-toggle {
-    position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 30;
-    display: flex; gap: 2px;
-    background: color-mix(in srgb, var(--surface-2) 88%, transparent);
-    backdrop-filter: blur(6px);
-    border: 1px solid var(--border);
-    border-radius: 22px; padding: 4px;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
-  }
+  /* --- view switcher: now the 2-tab #views nav inside the #top header
+         (§2.1/§2.3 — 5 retired names redirect through LEGACY_VIEW rather
+         than getting their own tab). .view-btn keeps its class/data-view
+         contract; only the pill-bar positioning it used to own moved to
+         #top's own flex layout. --- */
   .view-btn {
     background: none; border: none; color: var(--text-soft); cursor: pointer;
     font-family: inherit; font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
@@ -684,29 +728,24 @@
      actually render this wave.
      ========================================================================== */
 
-  /* top: 66px, not 18px — #view-toggle is fixed, centred, and measures
-     y:14-54px (40px tall) regardless of viewport width. Since the toggle is
-     horizontally centred while .stage's left edge is pinned at 286px, any
-     stage content sharing the toggle's 14-54px vertical band WILL collide
-     with it at some width (confirmed via Playwright getBoundingClientRect
-     at 1024/1440/1920: h1 and .stage-search both overlapped the toggle at
-     every width tested before this fix). Clearing the toggle's bottom edge
-     (54px) with a 12px gap removes the collision at every width, because it
-     kills the vertical overlap rather than chasing a horizontal one that
-     moves with viewport size. */
-  .stage {
-    position: fixed; top: 66px; bottom: 140px;
-    left: calc(var(--rail-w) + var(--gutter) * 2); right: var(--gutter); z-index: 20;
+  /* --- .legacy-pane: Workshop/Protocols/Roster/Library, not yet sheeted
+     (P7's job — plan §2.2). Positioned clear of #bench (left: var(--bench-w))
+     so the status/search/interns column stays reachable underneath, same as
+     the old rail staying visible beside .stage. Above #frame's z-index so it
+     covers #deck + #flight while a legacy view is active. */
+  .legacy-pane {
+    position: fixed; top: var(--topbar-h); bottom: 0;
+    left: var(--bench-w); right: 0; z-index: 11;
     overflow-y: auto; overscroll-behavior: contain;
-    display: flex; flex-direction: column; gap: 16px;
-    transition: left var(--t-base) var(--ease-out);
+    display: flex; flex-direction: column; gap: 16px; padding: 16px;
+    background: var(--bg);
   }
-  /* The plain [hidden] UA rule and .stage's own `display: flex` are equal
-     specificity, so without this the stage's display would win the cascade
-     (author origin beats user-agent origin at equal specificity) and every
-     inactive stage would render on top of whichever view is actually
-     active. This is the fix — caught live, not assumed. */
-  .stage[hidden] { display: none; }
+  /* The plain [hidden] UA rule and .legacy-pane's own `display: flex` are
+     equal specificity, so without this the flex display would win the
+     cascade (author origin beats user-agent origin at equal specificity) and
+     every inactive legacy pane would render on top of whichever place is
+     actually active. Carried over from the .stage rule this replaces. */
+  .legacy-pane[hidden] { display: none; }
   .stage-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
   .stage-head h1 {
     margin: 0; font-size: 18px; color: var(--text); letter-spacing: .12em; text-transform: uppercase;
@@ -1198,36 +1237,16 @@
 <div id="aura"></div>
 <canvas id="graph"></canvas>
 
-<div id="view-toggle" role="tablist" aria-label="Command views">
-    <button class="view-btn active" data-view="brain" role="tab" aria-selected="true" aria-controls="stage-brain">Brain</button>
-    <button class="view-btn" data-view="dev" role="tab" aria-selected="false" aria-controls="stage-dev">Workshop</button>
-    <button class="view-btn" data-view="auto" role="tab" aria-selected="false" aria-controls="stage-auto">Protocols</button>
-  <button class="view-btn" data-view="ops" role="tab" aria-selected="false" aria-controls="stage-ops">Enterprise</button>
-  <button class="view-btn" data-view="directory" role="tab" aria-selected="false" aria-controls="stage-directory">Operative Roster</button>
-  <button class="view-btn" data-view="library" role="tab" aria-selected="false" aria-controls="stage-library">Library</button>
-  <button class="view-btn" data-view="command" role="tab" aria-selected="false" aria-controls="stage-command">Command Center</button>
-</div>
-
-<div id="topleft">
-  <div id="status" class="frame">
-    <div class="rail-glyph" aria-hidden="true" title="Status">&#9673;</div>
-    <div class="body">
-    <div class="row" id="stat-files-row" title="Everything Alfred can see: vault notes, agent charters, and every Library artifact"><span>Files</span><span class="val" id="stat-notes">--</span></div>
-    <div id="stat-files-breakdown"></div>
-    <div class="row"><span>Leads</span><span class="val" id="stat-links">--</span></div>
-    <div class="row">
-      <span>Indexed</span>
-      <span class="row-right">
-        <span class="val" id="stat-fresh">--</span>
-        <button id="stat-reindex-btn" class="icon-btn compact" title="Re-index the vault now" aria-label="Re-index the vault now">&#10227;</button>
-      </span>
-    </div>
-    <div class="row" id="stat-brain-row" title="Files in your brain vault with uncommitted git changes"><span>Vault Edits</span><span class="val" id="stat-brain">--</span></div>
-    <div class="row"><span>Ollama</span><span class="val" id="stat-ollama">--</span></div>
-    <div class="row"><span>Intern</span><span class="val" id="stat-tokens">--</span></div>
-    <div class="row" id="stat-build-row" title="ui.html fingerprint the running server is serving, and how long it has been up"><span>Build</span><span class="val" id="stat-build">--</span></div>
-    <div id="usage-rows"></div>
-    <div id="legend"></div>
+<header id="top">
+  <div id="mark" aria-hidden="true">&#9670; ALFRED</div>
+  <nav id="views" role="tablist" aria-label="Command views">
+    <button class="view-btn active" data-view="brain" role="tab" aria-selected="true" aria-controls="pane-brain">Brain</button>
+    <button class="view-btn" data-view="command" role="tab" aria-selected="false" aria-controls="pane-command">Command</button>
+  </nav>
+  <!-- Reserved for P7's sheet-launcher icons (Library/Roster/Protocols/
+       Enterprise/Workshop) — slot only, no icons yet. -->
+  <div id="dock" aria-label="Sheets (coming soon)"></div>
+  <div id="utils">
     <button id="mute-toggle">&#128266; FX Sound: On</button>
     <!-- On demand instead of only at startup: Alfred's own status plus the dp
          brief (a separate project's GitHub Action output), read aloud through
@@ -1246,87 +1265,107 @@
          a faked chain would make this button lie in the one place people photograph. -->
     <button id="org-selftest-btn" title="Run a real VP → manager → employee delegation and watch the lineage light up">&#9671; Org Self-Test</button>
     <div id="org-selftest-status" class="panel-help" hidden></div>
-    </div>
   </div>
-  <div id="radial-menu" class="frame">
-    <div class="rail-glyph" aria-hidden="true" title="Filters">&#9638;</div>
-    <div class="body">
-    <div class="cat-btn" data-folder="Projects" style="--accent:#5ca8ff;">PRJ</div>
-    <div class="cat-btn" data-folder="Patterns" style="--accent:#f0b35a;">PAT</div>
-    <div class="cat-btn" data-folder="Decisions" style="--accent:#ad8cff;">DEC</div>
-    <div class="cat-btn" data-folder="Learning" style="--accent:#63e6b5;">LRN</div>
-    <div class="cat-btn" data-folder="Claude-Code" style="--accent:#f18b5b;">CLD</div>
-    </div>
-  </div>
-  <!-- Ask Alfred — moved into the rail per the P0 layout amendment. Results
-       and the spoken-answer view now live in #ask-drawer, a left-edge
-       slide-in panel, rather than growing upward from the bottom. -->
-  <div id="ask-panel" class="frame">
-    <div class="rail-glyph" aria-hidden="true" title="Ask">&#8981;</div>
-    <div class="body">
-    <div class="ask-inputline">
-      <span class="prompt">&gt;</span>
-      <input id="search-input" placeholder="SEARCH OR ASK..." autocomplete="off" />
-    </div>
-    <div id="search-hint">Type &mdash; instant search &middot; Enter &mdash; semantic &middot; Shift+Enter &mdash; ask</div>
-    </div>
-  </div>
+</header>
 
-  <!-- Observe, don't do: the "prompt the intern" box was removed with the
-       terminal, for the same reason. Alfred watches how models are used in
-       real sessions elsewhere; it is not a chat surface of its own. -->
-  <div id="interns-panel" class="frame">
-    <div class="rail-glyph" aria-hidden="true" title="Interns">&#9881;</div>
-    <div class="body">
-    <div class="panel-title">Interns</div>
-    <details class="intern-section" id="intern-section-installed" open>
-      <summary>Installed</summary>
-      <div id="intern-installed-list"></div>
-    </details>
-    <details class="intern-section" id="intern-section-cloud">
-      <summary>Cloud &middot; Ollama</summary>
-      <div id="intern-cloud-body"></div>
-    </details>
-    <details class="intern-section" id="intern-section-available">
-      <summary>Available</summary>
-      <div class="intern-add">
-        <input id="intern-pull-input" placeholder="search or type a model&hellip;" autocomplete="off" spellcheck="false" />
-        <button id="intern-pull-btn" class="icon-btn compact" title="Pull this model with ollama" aria-label="Pull model">&#43;</button>
+<div id="frame">
+  <!-- Bench: search + interns (temporary home this phase — their real Bench
+       design is P6/P5) with the status readout pinned to the foot via
+       #topleft's auto-margin. #topleft's id is kept: org.mjs's regression
+       test queries `#topleft .row` directly for the status rows. -->
+  <aside id="bench">
+    <!-- Ask Alfred — results and the spoken-answer view live in #ask-drawer,
+         a left-edge slide-in panel. Folded into the composer proper in P6;
+         this is a verbatim relocation, not the final design. -->
+    <div id="ask-panel" class="frame">
+      <div class="rail-glyph" aria-hidden="true" title="Ask">&#8981;</div>
+      <div class="body">
+      <div class="ask-inputline">
+        <span class="prompt">&gt;</span>
+        <input id="search-input" placeholder="SEARCH OR ASK..." autocomplete="off" />
       </div>
-      <div id="intern-catalog-results"></div>
-      <div id="intern-pull-status" class="panel-help"></div>
-    </details>
+      <div id="search-hint">Type &mdash; instant search &middot; Enter &mdash; semantic &middot; Shift+Enter &mdash; ask</div>
+      </div>
     </div>
-  </div>
-</div>
 
-<!-- The Claude Terminal panel and its #topbar dock lived here. Removed: the
-     HUD is an observe surface now — you run `claude` in your own terminal and
-     watch the org chart / Operative Roster here. "Open Terminal" moved into
-     the status rail above; /api/claude/state observability is unaffected. -->
-
-<!-- Search results + answer drawer — slides in from the left edge,
-     adjacent to the rail, rather than growing up from the bottom. -->
-<div id="ask-drawer">
-  <div id="answer-panel" class="frame">
-    <div id="answer-header">
-      <span id="answer-state">READY</span>
+    <!-- Observe, don't do: the "prompt the intern" box was removed with the
+         terminal, for the same reason. Alfred watches how models are used in
+         real sessions elsewhere; it is not a chat surface of its own.
+         Bench "Local GPU" collapse (two-meter summary + expand) is P5. -->
+    <div id="interns-panel" class="frame">
+      <div class="rail-glyph" aria-hidden="true" title="Interns">&#9881;</div>
+      <div class="body">
+      <div class="panel-title">Interns</div>
+      <details class="intern-section" id="intern-section-installed" open>
+        <summary>Installed</summary>
+        <div id="intern-installed-list"></div>
+      </details>
+      <details class="intern-section" id="intern-section-cloud">
+        <summary>Cloud &middot; Ollama</summary>
+        <div id="intern-cloud-body"></div>
+      </details>
+      <details class="intern-section" id="intern-section-available">
+        <summary>Available</summary>
+        <div class="intern-add">
+          <input id="intern-pull-input" placeholder="search or type a model&hellip;" autocomplete="off" spellcheck="false" />
+          <button id="intern-pull-btn" class="icon-btn compact" title="Pull this model with ollama" aria-label="Pull model">&#43;</button>
+        </div>
+        <div id="intern-catalog-results"></div>
+        <div id="intern-pull-status" class="panel-help"></div>
+      </details>
+      </div>
     </div>
-    <div id="answer-text"></div>
-    <div id="answer-sources"></div>
-  </div>
-  <div id="search-results" class="frame"></div>
-</div>
 
-<!-- Stage scaffolding for the non-brain surfaces. Each is a
-     scrollable content region inset clear of the rail and command bar;
-     hidden (not unmounted) so switchView() can toggle without losing
-     scroll position or re-fetching on every visit. -->
-<!-- Command Center: every AI seat in one window, and the council. Both actions
-     leave the HUD an observe surface — the terminals are real consoles opened
-     beside it, and the council runs through council-run.mjs exactly as it
-     would from a shell. -->
-<div id="stage-command" class="stage" hidden>
+    <div id="topleft">
+      <div id="status" class="frame">
+        <div class="rail-glyph" aria-hidden="true" title="Status">&#9673;</div>
+        <div class="body">
+        <div class="row" id="stat-files-row" title="Everything Alfred can see: vault notes, agent charters, and every Library artifact"><span>Files</span><span class="val" id="stat-notes">--</span></div>
+        <div id="stat-files-breakdown"></div>
+        <div class="row"><span>Leads</span><span class="val" id="stat-links">--</span></div>
+        <div class="row">
+          <span>Indexed</span>
+          <span class="row-right">
+            <span class="val" id="stat-fresh">--</span>
+            <button id="stat-reindex-btn" class="icon-btn compact" title="Re-index the vault now" aria-label="Re-index the vault now">&#10227;</button>
+          </span>
+        </div>
+        <div class="row" id="stat-brain-row" title="Files in your brain vault with uncommitted git changes"><span>Vault Edits</span><span class="val" id="stat-brain">--</span></div>
+        <div class="row"><span>Ollama</span><span class="val" id="stat-ollama">--</span></div>
+        <div class="row"><span>Intern</span><span class="val" id="stat-tokens">--</span></div>
+        <div class="row" id="stat-build-row" title="ui.html fingerprint the running server is serving, and how long it has been up"><span>Build</span><span class="val" id="stat-build">--</span></div>
+        <div id="usage-rows"></div>
+        <div id="legend"></div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <main id="deck">
+    <!-- Brain pane: #graph stays position:fixed behind this transparent
+         pass-through container until P4 moves it into .brain-canvas. The
+         category filter strip (formerly the rail's #radial-menu) is the one
+         interactive child. -->
+    <section id="pane-brain" class="pane">
+      <div id="radial-menu" class="frame">
+        <div class="rail-glyph" aria-hidden="true" title="Filters">&#9638;</div>
+        <div class="body">
+        <div class="cat-btn" data-folder="Projects" style="--accent:#5ca8ff;">PRJ</div>
+        <div class="cat-btn" data-folder="Patterns" style="--accent:#f0b35a;">PAT</div>
+        <div class="cat-btn" data-folder="Decisions" style="--accent:#ad8cff;">DEC</div>
+        <div class="cat-btn" data-folder="Learning" style="--accent:#63e6b5;">LRN</div>
+        <div class="cat-btn" data-folder="Claude-Code" style="--accent:#f18b5b;">CLD</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Command Center: every AI seat in one window, and the council. Both actions
+         leave the HUD an observe surface — the terminals are real consoles opened
+         beside it, and the council runs through council-run.mjs exactly as it
+         would from a shell. The #cc-term-stage subtree below (tabs + xterm
+         mounts) is relocated here as one static block — every WebSocket,
+         ResizeObserver and ccFitTerm path is untouched (plan §2.2/§4 P3). -->
+    <section id="pane-command" class="pane" hidden>
   <div class="stage-head">
     <h1>Command Center</h1>
     <div class="stage-head-controls">
@@ -1369,9 +1408,37 @@
     <div id="cc-answers" class="cc-answers"></div>
     <div id="cc-verdict" class="cc-verdict" hidden></div>
   </div>
+    </section>
+  </main>
+
+  <!-- In Flight: real activity feed is P8 (moves pollOrg into GLOBAL_POLLS).
+       Placeholder only this phase, per the plan's P3 scope. -->
+  <aside id="flight">
+    <div class="flight-placeholder">In Flight</div>
+    <div class="flight-placeholder">Nothing running</div>
+  </aside>
 </div>
 
-<div id="stage-dev" class="stage" hidden>
+<!-- Search results + answer drawer — slides in from the left edge, adjacent
+     to the Bench, rather than growing up from the bottom. Relocated here
+     (still outside #frame — it's an independent overlay, not a pane) so it
+     no longer sits between the Bench markup and the Command pane; contents
+     and ids are untouched. Folded into the composer proper in P6. -->
+<div id="ask-drawer">
+  <div id="answer-panel" class="frame">
+    <div id="answer-header">
+      <span id="answer-state">READY</span>
+    </div>
+    <div id="answer-text"></div>
+    <div id="answer-sources"></div>
+  </div>
+  <div id="search-results" class="frame"></div>
+</div>
+
+<!-- Legacy places, not yet sheeted (P7's job — plan §2.2). Each is a
+     scrollable content region, hidden (not unmounted) so switchView() can
+     toggle without losing scroll position or re-fetching on every visit. -->
+<div id="stage-dev" class="legacy-pane" hidden>
   <div class="stage-head">
     <h1>Workshop</h1>
     <div class="filter-chips" data-filter-group="dev">
@@ -1388,14 +1455,14 @@
   <div class="stage-grid" id="dev-grid"></div>
 </div>
 
-<div id="stage-auto" class="stage" hidden>
+<div id="stage-auto" class="legacy-pane" hidden>
   <div class="stage-head">
     <h1>Protocols</h1>
   </div>
   <div id="auto-body"></div>
 </div>
 
-<div id="stage-directory" class="stage" hidden>
+<div id="stage-directory" class="legacy-pane" hidden>
   <div class="stage-head">
     <h1>Operative Roster</h1>
     <div class="stage-head-controls">
@@ -1414,7 +1481,7 @@
   </div>
 </div>
 
-<div id="stage-library" class="stage" hidden>
+<div id="stage-library" class="legacy-pane" hidden>
   <div class="stage-head">
     <h1>Library</h1>
     <div class="stage-head-controls">
@@ -2166,7 +2233,14 @@
   // document.hidden freezes every poller in this table without needing to
   // touch the Claude-session poller's own always-on loop elsewhere in the file.
   // ============================================================
-  var VALID_VIEWS = ['brain', 'dev', 'auto', 'ops', 'directory', 'library', 'command'];
+  // The 5 retired names still resolve internally exactly as before — their
+  // content (Workshop/Protocols/Roster/Library/Enterprise) has no sheet of
+  // its own until P7, so their render/poll/hash behavior is left untouched
+  // rather than half-migrated. LEGACY_VIEW exists so the #top nav highlights
+  // "Command" for all of them (switchView's navActive computation below) —
+  // the redirect this phase is a nav-highlight, not a real sheet-open (P7).
+  var LEGACY_VIEW = { dev: 'workshop', auto: 'protocols', ops: 'enterprise', directory: 'roster', library: 'library' };
+  var VALID_VIEWS = ['brain', 'command'].concat(Object.keys(LEGACY_VIEW));
   var viewGeneration = 0;
   var activePollTimers = [];
 
@@ -2242,11 +2316,22 @@
     canvas.classList.toggle('canvas-ghost', view === 'dev' || view === 'auto' || view === 'directory' || view === 'library' || view === 'command');
   }
 
+  // dev/auto/directory/library still show their own full content (a
+  // .legacy-pane, not a sheet — P7's job); 'command'/'brain' show the new
+  // #pane-command/#pane-brain instead of a '#stage-command' lookup. 'ops' has
+  // neither — it draws straight onto the shared canvas, framed by #bench and
+  // (per body.ops-canvas in CSS) with #flight hidden so it doesn't clip the
+  // chart's right edge.
   function showStage(view) {
-    ['dev', 'auto', 'directory', 'library', 'command'].forEach(function (v) {
+    ['dev', 'auto', 'directory', 'library'].forEach(function (v) {
       var stageEl = document.getElementById('stage-' + v);
       if (stageEl) stageEl.hidden = (v !== view);
     });
+    var paneCommand = document.getElementById('pane-command');
+    var paneBrain = document.getElementById('pane-brain');
+    if (paneCommand) paneCommand.hidden = (view !== 'command');
+    if (paneBrain) paneBrain.hidden = (view !== 'brain');
+    document.body.classList.toggle('ops-canvas', view === 'ops');
   }
 
   function switchView(view, opts) {
@@ -2257,8 +2342,12 @@
     currentView = view;
     folderFilter = null; // a BRAIN-view folder filter has no meaning against org tiers or the new stages
     hoveredNode = null;
+    // The #top nav has only 2 tabs now (Command/Brain — plan §2.1/§2.3); the
+    // 5 retired names have no tab of their own, so they light up "Command"
+    // rather than leaving the nav with nothing active.
+    var navActive = LEGACY_VIEW.hasOwnProperty(view) ? 'command' : view;
     document.querySelectorAll('.view-btn').forEach(function (b) {
-      var active = b.dataset.view === view;
+      var active = b.dataset.view === navActive;
       b.classList.toggle('active', active);
       b.setAttribute('aria-selected', active ? 'true' : 'false');
     });
@@ -3654,7 +3743,7 @@
       return;
     }
     if (e.key === 'f' || e.key === 'F') {
-      var firstChip = document.querySelector('.stage:not([hidden]) .filter-chip');
+      var firstChip = document.querySelector('.legacy-pane:not([hidden]) .filter-chip, .pane:not([hidden]) .filter-chip');
       if (firstChip) firstChip.focus();
       return;
     }
