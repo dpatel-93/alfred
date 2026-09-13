@@ -4442,10 +4442,20 @@
           say(msg);
           return toast(msg, 'critical', { title: 'Morning Brief' });
         }
-        say(r.data.spoke ? 'speaking…' : '');
-        // ms: 0 — a full daily digest read aloud runs well past any fixed
-        // toast window; manual close only, same as a critical alert.
-        toast(r.data.text, 'info', { title: 'Morning Brief', ms: 0 });
+        say('');
+        // A full daily digest is too long for a toast (no scrolling, fixed
+        // size) — show it in the answer panel instead, which already has a
+        // scrollable body, a close button, and Esc-to-dismiss.
+        cancelAnswerFade();
+        setAnswerState('MORNING BRIEF');
+        answerSources.textContent = '';
+        answerText.textContent = r.data.text;
+        answerPanel.classList.add('show');
+        // No auto-fade timer here (unlike a normal Q&A answer) — a brief
+        // read aloud can run well past the usual 12s window, and the panel
+        // disappearing mid-speech would be worse than just leaving it open
+        // until the close button/Esc is used.
+        speakAloud(r.data.text);
       }).catch(function () { btn.disabled = false; say('could not reach the server'); });
     });
   })();
@@ -5997,6 +6007,17 @@
   function dismissAnswer() {
     cancelAnswerFade();
     answerPanel.classList.remove('show', 'fading');
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+  }
+
+  // Server-side TTS (Kokoro/edge-tts) was removed years ago to cut an 80MB
+  // ONNX dependency (see server.mjs's history note) — this uses the
+  // browser's own built-in voice instead. Zero dependencies, but voice
+  // quality/availability depends on what the OS/browser has installed.
+  function speakAloud(text) {
+    if (!text || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel(); // a new brief always replaces whatever was mid-sentence
+    window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
   }
 
   answerPanel.addEventListener('mouseenter', cancelAnswerFade);
