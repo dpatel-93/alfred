@@ -291,6 +291,10 @@ if (!(await up())) {
       const before = await page.evaluate(() => getComputedStyle(document.body).getPropertyValue('--accent-primary').trim());
       await page.locator('#cc-seats .seat-main').first().click();
       const seatIdAfter = await page.evaluate(() => document.body.dataset.focusSeat || '');
+      // --focus is registered via @property and transitions over --t-focus
+      // (420ms) — reading the computed value in the same tick as the click
+      // would still show the pre-transition value. Wait past the transition.
+      await sleep(500);
       const after = await page.evaluate(() => getComputedStyle(document.body).getPropertyValue('--accent-primary').trim());
       chk(tag('clicking a seat sets body[data-focus-seat]'), seatIdAfter.length > 0, `focusSeat="${seatIdAfter}"`);
       chk(tag('focusing a seat changes --accent-primary'), before !== after, `before="${before}" after="${after}"`);
