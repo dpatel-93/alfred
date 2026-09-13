@@ -2886,13 +2886,10 @@
   function renderPaletteResults(q) {
     var items = getPaletteItems().filter(function (it) { return fuzzyMatch(q, it.label); });
     paletteSelIndex = 0;
-    if (!items.length) { paletteResults.innerHTML = '<div class="palette-empty">No matches</div>'; return; }
-    paletteResults.innerHTML = '';
+    paletteResults.textContent = ''; // clears without a raw-markup sink (charter.mjs's XSS posture check)
+    if (!items.length) { paletteResults.appendChild(el('div', 'palette-empty', ['No matches'])); paletteResults._items = []; return; }
     items.forEach(function (it, i) {
-      var row = document.createElement('div');
-      row.className = 'palette-item' + (i === 0 ? ' sel' : '');
-      row.textContent = it.label;
-      if (it.hint) { var hint = document.createElement('span'); hint.className = 'pi-hint'; hint.textContent = it.hint; row.appendChild(hint); }
+      var row = el('div', 'palette-item' + (i === 0 ? ' sel' : ''), [it.label, it.hint ? el('span', 'pi-hint', [it.hint]) : null]);
       row.addEventListener('click', function () { closePalette(); it.run(); });
       row.dataset.idx = i;
       paletteResults.appendChild(row);
