@@ -75,6 +75,10 @@ if (!(await up())) {
 
   await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(1500);
+  await page.evaluate(() => {
+    try { localStorage.setItem('alfred-rail-collapsed', '0'); } catch (e) {}
+    document.body.classList.remove('bench-tight', 'rail-collapsed');
+  });
 
   const view = () => page.evaluate(() => location.hash.replace('#', '') || 'brain');
 
