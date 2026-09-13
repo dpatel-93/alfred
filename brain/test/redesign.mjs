@@ -109,21 +109,40 @@ if (!(await up())) {
     await page.waitForTimeout(1200);
 
     // --- the Command place: tab strip, grid mode, unread dot, seats -------
+    // Seats now render on the Bench (#cc-seats), visible on every place —
+    // P5 moved them out of the Command pane's old "Lanes" section and moved
+    // pollCommandCenter into GLOBAL_POLLS to match. Every control that used
+    // to sit directly on a seat card (model, open/native/sign-in, the
+    // DeepSeek-style external-panel button) now lives behind that row's own
+    // "..." popover (#seat-popover) — plan §3.2.
     await page.click('[data-view="command"]');
     await page.waitForFunction(
-      () => document.querySelectorAll('#cc-seats .cc-seat').length > 0,
+      () => document.querySelectorAll('#cc-seats .seat').length > 0,
       null, { timeout: 10000 },
     ).catch(() => {});
 
-    const openBtns = page.locator('.cc-seat button:has-text("Open terminal")');
-    const openCount = await openBtns.count();
-    chk(tag('at least 2 ready tty seats to open a console on'), openCount >= 2, `found ${openCount}`);
+    const seatMoreBtns = page.locator('#cc-seats .seat-more');
+    const seatRowCount = await seatMoreBtns.count();
 
+    // Opening a seat's popover replaces whatever popover was already open,
+    // so consoles are opened one at a time: open a row's "...", check for
+    // an "Open terminal" button inside the shared popover, click it if
+    // present, then move to the next row.
     let openedIds = [];
-    if (openCount >= 2) {
+    let openedCount = 0;
+    for (let i = 0; i < seatRowCount && openedCount < 2; i++) {
+      await seatMoreBtns.nth(i).click();
+      const openBtn = page.locator('#seat-popover button:has-text("Open terminal")');
+      if (await openBtn.count()) {
+        await openBtn.first().click();
+        openedCount++;
+      }
+    }
+    await page.keyboard.press('Escape').catch(() => {});
+    chk(tag('at least 2 ready tty seats to open a console on'), openedCount >= 2, `opened=${openedCount} of ${seatRowCount} seats`);
+
+    if (openedCount >= 2) {
       // --- 1. terminal tab strip -----------------------------------------
-      await openBtns.nth(0).click();
-      await openBtns.nth(1).click();
       await page.waitForFunction(
         () => document.querySelectorAll('#cc-tabs .cc-tab').length === 2,
         null, { timeout: 10000 },
@@ -215,9 +234,15 @@ if (!(await up())) {
     }
 
     // --- 4. Interns catalog search ---------------------------------------
-    // The pull input lives inside the "Available" <details>, closed by
-    // default (only "Installed" starts open) — open it before typing.
-    await page.evaluate(() => { document.getElementById('intern-section-available').open = true; });
+    // P5 wrapped the Installed/Cloud/Available markup behind a glanceable
+    // summary strip (plan §3.1) — #intern-detail is collapsed by default,
+    // so #intern-toggle has to open it before the "Available" <details>
+    // (itself still closed by default, only "Installed" starts open) can
+    // be reached at all.
+    await page.evaluate(() => {
+      var t = document.getElementById('intern-toggle'); if (t) t.click();
+      document.getElementById('intern-section-available').open = true;
+    });
     await page.fill('#intern-pull-input', '');
     await page.fill('#intern-pull-input', 'qwen');
     await page.dispatchEvent('#intern-pull-input', 'input');
@@ -229,13 +254,33 @@ if (!(await up())) {
     chk(tag('typing a model name searches the Interns catalog'), catalogCount > 0, `count=${catalogCount}`);
 
     // --- 5. DeepSeek external-panel label ---------------------------------
-    const webBtns = page.locator('.cc-seat button:has-text("Open panel")');
-    const webBtnCount = await webBtns.count();
+    // The control now lives in the seat popover (plan §3.2) — open each
+    // seat's "..." in turn and look inside the shared #seat-popover.
+    let webBtnCount = 0;
+    let webLabel = '';
+    for (let i = 0; i < seatRowCount; i++) {
+      await seatMoreBtns.nth(i).click();
+      const btn = page.locator('#seat-popover button:has-text("Open panel")');
+      const c = await btn.count();
+      if (c) { webBtnCount += c; webLabel = (await btn.first().textContent()) || ''; }
+    }
+    await page.keyboard.press('Escape').catch(() => {});
     chk(tag('a web-surface seat (DeepSeek) renders the external-panel control'), webBtnCount >= 1, `count=${webBtnCount}`);
     if (webBtnCount >= 1) {
-      const label = (await webBtns.first().textContent()) || '';
       chk(tag('the external-panel label reads "Open panel" and "external", verbatim'),
-        label.includes('Open panel') && label.toLowerCase().includes('external'), JSON.stringify(label));
+        webLabel.includes('Open panel') && webLabel.toLowerCase().includes('external'), JSON.stringify(webLabel));
+    }
+
+    // --- 5b. Focus mechanism (plan §3.2/§4 P5) -----------------------------
+    // Clicking a seat's row body sets body[data-focus-seat] and re-tints
+    // --accent-primary — the one CSS variable 85+ call sites already read.
+    if (seatRowCount > 0) {
+      const before = await page.evaluate(() => getComputedStyle(document.body).getPropertyValue('--accent-primary').trim());
+      await page.locator('#cc-seats .seat-main').first().click();
+      const seatIdAfter = await page.evaluate(() => document.body.dataset.focusSeat || '');
+      const after = await page.evaluate(() => getComputedStyle(document.body).getPropertyValue('--accent-primary').trim());
+      chk(tag('clicking a seat sets body[data-focus-seat]'), seatIdAfter.length > 0, `focusSeat="${seatIdAfter}"`);
+      chk(tag('focusing a seat changes --accent-primary'), before !== after, `before="${before}" after="${after}"`);
     }
 
     // --- 6. Brain: click a node opens the panel ----------------------------

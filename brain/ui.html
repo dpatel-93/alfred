@@ -170,6 +170,10 @@
   }
   body {
     --focus: var(--bone);   /* the cascade root the JS writes to */
+    /* Registered as <color> by @property above, so this is a real animatable
+       transition, not a snap — every one of the 85+ var(--focus) call sites
+       re-tints over 420ms whenever setFocusSeat() writes a new value here. */
+    transition: --focus var(--t-focus) var(--ease-out);
 
     /* Re-pointed legacy accent hooks + glow ladder — MUST live here, not in :root,
        so they recompute against this element's own --focus on every write. See the
@@ -187,6 +191,12 @@
     --glow-text-2: 0 0 10px color-mix(in srgb, var(--glow-color) 70%, transparent);
   }
   body.rail-collapsed { --rail-w: var(--rail-w-narrow); }
+  /* Auto-narrow at <=1180px (plan §3.3) — only while the operator has never
+     made an explicit `[` choice. applyBenchTight() (JS) checks localStorage
+     for 'alfred-rail-collapsed' and refuses to add this class once that key
+     exists at all, so a manual choice always wins over the responsive rule,
+     in either direction. */
+  body.bench-tight { --rail-w: var(--rail-w-narrow); }
   * { box-sizing: border-box; }
   html, body {
     margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
@@ -449,6 +459,103 @@
   body.rail-collapsed #status .body,
   body.rail-collapsed #ask-panel .body,
   body.rail-collapsed #interns-panel .body { display: none; }
+  /* Collapsed bench: seats shrink to just their identity bulb — the one
+     thing worth keeping legible at 58px (plan §3.2/§3.3). */
+  body.rail-collapsed #bench-head .bench-sect-title span:last-child,
+  body.rail-collapsed #bench-head .bench-sect-actions,
+  body.rail-collapsed #bench-head > .panel-help,
+  body.rail-collapsed .seat-name, body.rail-collapsed .seat-model,
+  body.rail-collapsed .seat-tick, body.rail-collapsed .seat-more { display: none; }
+  body.rail-collapsed .seat { justify-content: center; padding: 6px 0; }
+
+  /* --- Bench sections (plan §2.1/§3.1/§3.2): a shared card shell for the
+       seat list, search, interns and status blocks that stack in #bench.
+       `.frame` still supplies the border/radius (kept for the 30+ other call
+       sites); `.bench-sect` adds the Bench-specific chrome on top. --- */
+  .bench-sect {
+    background: color-mix(in srgb, var(--surface-2) 78%, transparent);
+    padding: 10px 12px; backdrop-filter: blur(4px);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .bench-sect-title {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-dim);
+  }
+  .bench-sect-title span:first-child { color: var(--text-soft); }
+  .bench-sect-actions { display: flex; align-items: center; gap: 6px; }
+  .bench-sect-actions .btn.small, .bench-sect-actions .filter-chip { font-size: 9px; padding: 3px 7px; }
+
+  /* --- Bench seat rows (plan §3.2) — bulb, name, model, tick; everything
+       actionable lives behind the row's own "..." popover so a 244px column
+       never has to fit five controls on one line. --- */
+  .bench-seats { display: flex; flex-direction: column; gap: 2px; }
+  .seat {
+    --accent: var(--gray);
+    position: relative; display: flex; align-items: center; gap: 8px;
+    padding: 5px 4px 5px 8px; border-radius: var(--r-sm);
+    box-shadow: inset 3px 0 0 var(--accent);
+    transition: background .13s ease;
+  }
+  .seat:hover, .seat:focus-within { background: color-mix(in srgb, var(--surface-3) 70%, transparent); }
+  /* Idle/unauthenticated seats stay in the Bench, dimmed — "the bench is the
+     org; absence is information" (plan §3.2), never hidden outright. */
+  .seat.idle { opacity: .5; }
+  .seat.idle:hover, .seat.idle:focus-within { opacity: .8; }
+  .seat-tick { flex: none; display: flex; align-items: center; cursor: pointer; }
+  .seat-tick input { margin: 0; accent-color: var(--mint); }
+  .seat-bulb { width: 7px; height: 7px; border-radius: 50%; flex: none; box-shadow: 0 0 5px currentColor; }
+  .seat-bulb.on { background: var(--mint); box-shadow: 0 0 5px var(--mint); }
+  .seat-bulb.off { background: var(--gray); opacity: .6; box-shadow: none; }
+  .seat-bulb.warn { background: var(--amber); box-shadow: 0 0 5px var(--amber); }
+  .seat-bulb.err { background: var(--red); box-shadow: 0 0 5px var(--red); }
+  .seat-main {
+    flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; gap: 6px;
+    background: none; border: none; padding: 0; margin: 0; cursor: pointer; text-align: left; color: inherit;
+  }
+  .seat-name { font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .seat-model {
+    flex: 1 1 auto; min-width: 0; font-size: 10px; color: var(--text-dim); font-family: var(--font-mono);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left;
+  }
+  .seat-more {
+    flex: none; width: 20px; height: 20px; border-radius: 4px; border: none; background: none;
+    color: var(--text-dim); font-size: 13px; line-height: 1; cursor: pointer; opacity: 0;
+    transition: opacity .13s ease, color .13s ease, background .13s ease;
+  }
+  .seat:hover .seat-more, .seat:focus-within .seat-more, .seat-more:focus { opacity: 1; }
+  .seat-more:hover { color: var(--text); background: color-mix(in srgb, var(--surface-4) 70%, transparent); }
+  .seat-more[aria-expanded="true"] { opacity: 1; color: var(--accent-primary); }
+
+  /* --- Seat popover: one shared, positioned panel (no library — plan §3.2)
+       carrying everything a seat card used to show inline: model, open/native/
+       sign-in, and the web-surface external-panel affordance verbatim. --- */
+  #seat-popover {
+    position: fixed; z-index: 45; width: 236px;
+    background: var(--surface-2); border: 1px solid var(--border-strong, var(--border));
+    border-radius: var(--r-md); box-shadow: var(--shadow-panel);
+    padding: 10px 12px; display: none; flex-direction: column; gap: 8px;
+  }
+  #seat-popover.open { display: flex; }
+  #seat-popover .cc-seat-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  #seat-popover .cc-lane-foot { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  #seat-popover .cc-lane-foot .btn.big { flex: 1 1 100%; min-height: 34px; }
+
+  /* --- Interns: glanceable summary strip (VRAM/resident proxy + counts),
+       expanding in place to the real Installed/Cloud/Available markup —
+       moved verbatim, not reimplemented (plan §3.1). --- */
+  .intern-panel-title-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  #intern-toggle {
+    flex: none; width: 20px; height: 20px; border: none; background: none; color: var(--text-dim);
+    cursor: pointer; font-size: 11px; transition: transform .18s ease, color .18s ease;
+  }
+  #intern-toggle:hover { color: var(--text); }
+  #intern-toggle[aria-expanded="true"] { transform: rotate(180deg); color: var(--accent-primary); }
+  .intern-summary { display: flex; flex-direction: column; gap: 4px; }
+  .vram-bar { height: 5px; border-radius: 3px; background: var(--well-bg); overflow: hidden; }
+  .vram-bar > i { display: block; height: 100%; background: var(--mint); box-shadow: 0 0 6px var(--mint); transition: width .3s var(--ease-out); }
+  .intern-summary-line { font-size: 10px; letter-spacing: .04em; color: var(--text-dim); }
+  #intern-detail { display: flex; flex-direction: column; gap: 4px; }
+  #intern-detail[hidden] { display: none; }
 
   /* --- category filter menu (filters the graph by folder) — the Brain
        pane's own head bar (P4). No longer part of the collapsible Bench
@@ -890,8 +997,13 @@
   .cc-tabstrip { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--hairline); }
   .cc-tabs { display: flex; align-items: flex-end; gap: 3px; overflow-x: auto; flex: 1 1 auto; min-width: 0; }
   .cc-tab {
+    /* Provider identity tint (plan §3.3/P5) — a distinct property from
+       .cc-term's own --accent (which means live/exited status on that
+       element), so setting one inline here never fights the other. */
+    --accent: var(--gray);
     display: flex; align-items: center; gap: 6px; padding: 6px 8px 6px 10px; max-width: 220px;
     background: var(--surface-2); border: 1px solid var(--hairline); border-bottom: none; border-radius: 5px 5px 0 0;
+    border-top: 2px solid var(--accent);
     color: var(--text-dim); font-size: 11px; letter-spacing: .03em; white-space: nowrap; cursor: pointer;
   }
   .cc-tab .cc-tab-label { overflow: hidden; text-overflow: ellipsis; }
@@ -928,7 +1040,12 @@
   }
   .cc-terms.cc-grid .cc-term { display: flex !important; min-width: 0; }
   .cc-term-head {
+    /* Provider identity tint, set inline per-terminal from info.provider
+       (plan §3.3/P5) — a child of .cc-term, so it never collides with that
+       element's own --accent (live/exited status). */
+    --accent: var(--gray);
     display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+    box-shadow: inset 3px 0 0 var(--accent);
     border-bottom: 1px solid var(--hairline); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-dim);
   }
   .cc-term-head strong { color: var(--text); font-weight: 500; letter-spacing: .04em; text-transform: none; font-size: 12px; }
@@ -1318,15 +1435,34 @@
 </header>
 
 <div id="frame">
-  <!-- Bench: search + interns (temporary home this phase — their real Bench
-       design is P6/P5) with the status readout pinned to the foot via
-       #topleft's auto-margin. #topleft's id is kept: org.mjs's regression
-       test queries `#topleft .row` directly for the status rows. -->
+  <!-- Bench (plan §2.1/§3.1/§3.2): every seat, always visible, in identity
+       colour; the search box; the intern bench; the status readout pinned to
+       the foot via #topleft's auto-margin. #topleft's id is kept: org.mjs's
+       regression test queries `#topleft .row` directly for the status rows. -->
   <aside id="bench">
+    <!-- Seat rows — moved out of the Command pane's old "Lanes" section
+         (plan §2.2 disposition table, P5 row) since every seat belongs on
+         the Bench regardless of which place is open. renderCcSeats() owns
+         #cc-seats; the popover it opens is #seat-popover, appended once
+         below (outside #bench, so it is never clipped by the Bench's own
+         overflow-y: auto). -->
+    <div id="bench-head" class="bench-sect">
+      <div class="bench-sect-title">
+        <span>Bench</span>
+        <span id="cc-summary" class="panel-help"></span>
+      </div>
+      <div class="bench-sect-actions">
+        <button class="btn small" id="cc-open-btn" title="Open every ticked seat at once in a fresh Windows Terminal window, equal columns">&#9002; Open all</button>
+        <button class="filter-chip" id="cc-refresh" title="Re-check which seats are installed and signed in">&#8635; Refresh</button>
+      </div>
+      <div id="cc-seats" class="bench-seats"></div>
+      <div class="panel-help">Click a seat to focus it — the app re-tints to that provider's colour. Tick the box to include it in the council. The &#8943; opens model, open and sign-in controls.</div>
+    </div>
+
     <!-- Ask Alfred — results and the spoken-answer view live in #ask-drawer,
          a left-edge slide-in panel. Folded into the composer proper in P6;
          this is a verbatim relocation, not the final design. -->
-    <div id="ask-panel" class="frame">
+    <div id="ask-panel" class="frame bench-sect">
       <div class="rail-glyph" aria-hidden="true" title="Ask">&#8981;</div>
       <div class="body">
       <div class="ask-inputline">
@@ -1340,11 +1476,23 @@
     <!-- Observe, don't do: the "prompt the intern" box was removed with the
          terminal, for the same reason. Alfred watches how models are used in
          real sessions elsewhere; it is not a chat surface of its own.
-         Bench "Local GPU" collapse (two-meter summary + expand) is P5. -->
-    <div id="interns-panel" class="frame">
+         Local GPU: a glanceable resident/installed strip up top (plan §3.1),
+         expanding via #intern-toggle to the exact Installed/Cloud/Available
+         markup that shipped — renderInstalledModels/renderCloudSection/
+         runCatalogSearch/pickCatalogModel/startPull/followPull are untouched;
+         only this parent structure and its CSS changed. -->
+    <div id="interns-panel" class="frame bench-sect">
       <div class="rail-glyph" aria-hidden="true" title="Interns">&#9881;</div>
       <div class="body">
-      <div class="panel-title">Interns</div>
+      <div class="intern-panel-title-row">
+        <div class="panel-title">Local GPU</div>
+        <button id="intern-toggle" type="button" aria-expanded="false" aria-controls="intern-detail" title="Show installed, cloud and available models">&#9662;</button>
+      </div>
+      <div class="intern-summary">
+        <div class="vram-bar"><i id="intern-vram-fill" style="width:0%"></i></div>
+        <div class="intern-summary-line" id="intern-summary-line">-- installed</div>
+      </div>
+      <div id="intern-detail" hidden>
       <details class="intern-section" id="intern-section-installed" open>
         <summary>Installed</summary>
         <div id="intern-installed-list"></div>
@@ -1363,10 +1511,11 @@
         <div id="intern-pull-status" class="panel-help"></div>
       </details>
       </div>
+      </div>
     </div>
 
     <div id="topleft">
-      <div id="status" class="frame">
+      <div id="status" class="frame bench-sect">
         <div class="rail-glyph" aria-hidden="true" title="Status">&#9673;</div>
         <div class="body">
         <div class="row" id="stat-files-row" title="Everything Alfred can see: vault notes, agent charters, and every Library artifact"><span>Files</span><span class="val" id="stat-notes">--</span></div>
@@ -1417,20 +1566,9 @@
     <section id="pane-command" class="pane" hidden>
   <div class="stage-head">
     <h1>Command Center</h1>
-    <div class="stage-head-controls">
-      <span id="cc-summary" class="panel-help"></span>
-      <button class="btn" id="cc-open-btn" title="Open every ticked seat at once in a fresh Windows Terminal window, equal columns">&#9002; Open all lanes</button>
-      <button class="filter-chip" id="cc-refresh" title="Re-check which seats are installed and signed in">&#8635; Refresh</button>
-    </div>
   </div>
-  <!-- One card per seat. Each card's Open drops that seat's console pane into
-       the shared Command Center window, so the cards here and the panes there
-       line up one to one. The council sits beneath, on the same stage. -->
-  <div class="stage-section">
-    <div class="section-title">Lanes</div>
-    <div id="cc-seats" class="cc-lanes"></div>
-    <div class="panel-help">Tick a lane to include it in the council and in "Open all lanes". Open drops that seat's console pane into the Command Center window. Sign in opens the provider's own login in a real console. The model box sets what that seat runs — blank is the registry's cheap default; the expensive tiers are a choice, never a default.</div>
-  </div>
+  <!-- The seat list itself now lives on the Bench (#cc-seats, plan §2.2 P5
+       row) — every seat is visible on every place, not just Command. -->
   <!-- Live consoles, one per opened lane. Real Windows consoles on the server
        (node-pty); xterm.js here is their screen and keyboard. A tab strip
        shows one focused console at a time; the Grid button (or Ctrl+\) pops
@@ -1557,6 +1695,11 @@
 </div>
 
 <div id="tooltip"><div class="tt-title"></div><div class="tt-folder"></div></div>
+
+<!-- Seat popover (plan §3.2): one shared, positioned panel that opens beside
+     whichever Bench seat row's "..." was clicked. Kept outside #bench so
+     Bench's own overflow-y:auto never clips it. -->
+<div id="seat-popover" role="dialog" aria-label="Seat controls"></div>
 
 <div id="toast-stack" class="toast-stack" role="status" aria-live="polite"></div>
 
@@ -1751,6 +1894,22 @@
   try { audioEnabled = localStorage.getItem('alfred-muted') !== '1'; } catch (e) { /* localStorage unavailable */ }
 
   try { if (localStorage.getItem('alfred-rail-collapsed') === '1') document.body.classList.add('rail-collapsed'); } catch (e) { /* localStorage unavailable */ }
+
+  // --- Bench-tight responsive rule (plan §3.3) ---------------------------
+  // Auto-narrows the Bench at <=1180px, but only while the operator has never
+  // made an explicit `[` choice — the presence of the 'alfred-rail-collapsed'
+  // key at all (not its value) marks that a choice was made, so it always
+  // wins over the responsive rule, in either direction.
+  var BENCH_TIGHT_MQ = window.matchMedia('(max-width: 1180px)');
+  function hasExplicitRailChoice() {
+    try { return localStorage.getItem('alfred-rail-collapsed') !== null; } catch (e) { return false; }
+  }
+  function applyBenchTight() {
+    document.body.classList.toggle('bench-tight', !hasExplicitRailChoice() && BENCH_TIGHT_MQ.matches);
+  }
+  if (BENCH_TIGHT_MQ.addEventListener) BENCH_TIGHT_MQ.addEventListener('change', applyBenchTight);
+  else if (BENCH_TIGHT_MQ.addListener) BENCH_TIGHT_MQ.addListener(applyBenchTight); // older WebKit
+  applyBenchTight();
 
   function ensureAudioCtx() {
     if (!audioCtx) {
@@ -2328,7 +2487,10 @@
   // straight to #ops (which is what a reload does — the view writes itself into
   // location.hash) and pollStatus never fired at all, leaving every row on "--".
   // Anything drawn outside the view's own surface belongs here, not in POLLS.
-  var GLOBAL_POLLS = [{ fn: pollStatus, ms: 10000 }];
+  // pollCommandCenter joined this list in P5: the seat list now renders on
+  // the Bench (#cc-seats), which — like the status rail — is on screen in
+  // every place, not just Command.
+  var GLOBAL_POLLS = [{ fn: pollStatus, ms: 10000 }, { fn: pollCommandCenter, ms: 60000 }];
 
   var POLLS = {
     brain: [],
@@ -2337,7 +2499,7 @@
     ops:   [{ fn: pollOrg, ms: 5000 }, { fn: pollUsage, ms: 60000 }],
     directory: [{ fn: pollDirectory, ms: 60000 }],
     library: [{ fn: pollLibrary, ms: 60000 }],
-    command: [{ fn: pollCommandCenter, ms: 60000 }],
+    command: [],
   };
 
   // Skipping ticks while hidden is right — a background tab should not poll —
@@ -3825,6 +3987,7 @@
       e.preventDefault();
       document.body.classList.toggle('rail-collapsed');
       try { localStorage.setItem('alfred-rail-collapsed', document.body.classList.contains('rail-collapsed') ? '1' : '0'); } catch (e) { /* localStorage unavailable */ }
+      applyBenchTight(); // an explicit choice just landed — the auto rule must yield to it now
       return;
     }
     if (e.key === 'r' || e.key === 'R') {
@@ -5543,6 +5706,80 @@
     return { cls: 'idle', text: 'not installed' };
   }
 
+  // --- Focus mechanism (plan §3.2/§4 P5) --------------------------------
+  // Every provider's identity colour, keyed by seat id (~/.claude/helpers/
+  // providers.json). Used two ways: permanently, as each seat row's/tab's/
+  // console head's own --accent (its identity, always visible); and
+  // transiently, as the whole app's --focus when a seat is clicked (what the
+  // app is "about" right now — cascades through --accent-primary to the 85+
+  // call sites that already read it).
+  var SEAT_COLOR = { claude: '--p-claude', gemini: '--p-gemini', grok: '--p-grok',
+                     codex: '--p-codex', omniroute: '--p-omniroute',
+                     ollama: '--p-ollama', dsh: '--p-dsh' };
+  function seatAccentVar(id) {
+    var tok = SEAT_COLOR[id];
+    return tok ? 'var(' + tok + ')' : 'var(--gray)';
+  }
+  function setFocusSeat(id) {
+    var tok = SEAT_COLOR[id];
+    document.body.style.setProperty('--focus', tok ? 'var(' + tok + ')' : 'var(--bone)');
+    document.body.dataset.focusSeat = id || '';
+    try { localStorage.setItem('alfred-focus-seat', id || ''); } catch (e) {}
+    renderCcSeats();
+    // renderRouteChips is P6's (the composer's route chips read the same
+    // ccChecked/focus state) — guarded so P5 never throws if it lands first.
+    if (typeof renderRouteChips === 'function') renderRouteChips();
+  }
+  (function restoreFocusSeat() {
+    var saved = null;
+    try { saved = localStorage.getItem('alfred-focus-seat'); } catch (e) {}
+    if (saved) setFocusSeat(saved);
+  })();
+
+  // --- Seat popover (plan §3.2) ------------------------------------------
+  // One shared, positioned panel rather than one per row — simpler than a
+  // library, and there is never more than one open at a time. Everything a
+  // seat card used to show inline (model, open/native/sign-in, and the
+  // web-surface external-panel affordance) is built here, verbatim.
+  var seatPopoverEl = document.getElementById('seat-popover');
+  var seatPopoverId = null;
+
+  function closeSeatPopover() {
+    if (seatPopoverId == null) return;
+    seatPopoverId = null;
+    seatPopoverEl.classList.remove('open');
+    seatPopoverEl.textContent = '';
+    document.querySelectorAll('.seat-more[aria-expanded="true"]').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+  }
+
+  function positionSeatPopover(anchor) {
+    var r = anchor.getBoundingClientRect();
+    var width = seatPopoverEl.offsetWidth || 236;
+    var top = Math.min(r.bottom + 6, window.innerHeight - 12);
+    var left = Math.min(r.right - width, window.innerWidth - width - 8);
+    seatPopoverEl.style.top = Math.max(8, top) + 'px';
+    seatPopoverEl.style.left = Math.max(8, left) + 'px';
+  }
+
+  function openSeatPopover(s, anchorBtn) {
+    closeSeatPopover();
+    seatPopoverEl.appendChild(buildSeatPopoverBody(s));
+    seatPopoverEl.classList.add('open');
+    seatPopoverId = s.id;
+    anchorBtn.setAttribute('aria-expanded', 'true');
+    positionSeatPopover(anchorBtn);
+  }
+
+  document.addEventListener('click', function (e) {
+    if (seatPopoverId == null) return;
+    if (seatPopoverEl.contains(e.target)) return;
+    closeSeatPopover();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && seatPopoverId != null) closeSeatPopover();
+  });
+  window.addEventListener('resize', function () { closeSeatPopover(); });
+
   function renderCcSeats() {
     var wrap = document.getElementById('cc-seats');
     wrap.textContent = '';
@@ -5552,40 +5789,88 @@
     }
     ccSeats.forEach(function (s) {
       var state = ccSeatState(s);
-      var card = el('div', 'cc-seat' + (s.ready ? '' : ' is-off'), []);
-      var copy = el('div', 'cc-seat-copy', []);
+      var bulbCls = state.cls === 'live' ? 'on' : state.cls === 'warn' ? 'warn' : 'off';
+      // Idle/unauthenticated seats stay in the Bench, dimmed — never hidden
+      // ("the bench is the org; absence is information", plan section 3.2).
+      var row = el('div', 'seat' + (s.ready ? '' : ' idle'), []);
+      row.dataset.seatId = s.id;
+      row.style.setProperty('--accent', seatAccentVar(s.id));
 
-      // The tick lives on its own label so the model box and buttons beside it
-      // do not toggle it — a <label> card would forward every click to the box.
-      var title = el('label', 'cc-seat-title', []);
+      var tick = el('label', 'seat-tick', []);
       var box = document.createElement('input');
       box.type = 'checkbox'; box.disabled = !s.ready; box.checked = !!ccChecked[s.id];
+      box.title = 'Include ' + s.label + ' in the council and in "Open all"';
       box.addEventListener('change', function () { ccChecked[s.id] = box.checked; ccRenderAsking(); });
-      title.appendChild(box);
-      title.appendChild(el('strong', null, [s.label]));
-      var head = el('div', 'cc-seat-head', [title]);
-      head.appendChild(el('span', 'badge pill ' + state.cls, [state.text]));
-      copy.appendChild(head);
+      tick.appendChild(box);
+      row.appendChild(tick);
 
-      var meta = [s.cost, s.approval === 'ask-per-use' ? 'ask first' : 'no gate'];
-      if (s.specialism) meta.push(s.specialism);
-      copy.appendChild(el('small', null, [meta.join(' · ')]));
+      var bulb = el('span', 'seat-bulb ' + bulbCls, []);
+      bulb.title = state.text;
+      row.appendChild(bulb);
 
-      // A "web" surface seat's real interface is its own browser tab, not this
-      // card's terminal pane — say so plainly, and show whether that tab's
-      // backing process (the PTY, once opened) is still alive.
-      var panel = s.surface === 'web' ? ccWebPanels[s.id] : null;
-      if (s.surface === 'web') {
-        var panelRow = el('div', 'cc-seat-row', []);
-        var panelDotState = panel ? (panel.status === 'running' ? 'on' : 'err') : 'off';
-        panelRow.appendChild(el('span', 'dot ' + panelDotState, []));
-        panelRow.appendChild(el('small', null, [panel ? (panel.status === 'running' ? 'panel live' : 'panel exited') : 'panel not running']));
-        copy.appendChild(panelRow);
-        copy.appendChild(el('small', 'panel-help', ['This provider’s interface is a web app opened externally, not an in-page terminal.']));
-      }
+      var main = el('button', 'seat-main', [el('span', 'seat-name', [s.label])]);
+      main.type = 'button';
+      main.title = 'Focus ' + s.label + ' - re-tint the app to its colour';
+      main.appendChild(el('span', 'seat-model', [s.model || s.defaultModel || '']));
+      main.addEventListener('click', function () { setFocusSeat(s.id); });
+      row.appendChild(main);
 
-      // Model: what this seat runs, in council and in its pane. Blank = registry default.
-      var modelRow = el('div', 'cc-seat-row', [el('span', 'k', ['model'])]);
+      var moreBtn = el('button', 'seat-more', ['⋯']);
+      moreBtn.type = 'button';
+      moreBtn.setAttribute('aria-expanded', 'false');
+      moreBtn.setAttribute('aria-label', 'More controls for ' + s.label);
+      moreBtn.title = 'Model, open and sign-in controls for ' + s.label;
+      moreBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var wasOpen = seatPopoverId === s.id;
+        closeSeatPopover();
+        if (!wasOpen) openSeatPopover(s, moreBtn);
+      });
+      row.appendChild(moreBtn);
+      wrap.appendChild(row);
+    });
+
+    // A poll (every 60s) rebuilds every row from scratch -- if the popover
+    // was open for a seat that is still here, rebuild it against the fresh
+    // anchor rather than leaving it pointed at a now-detached button.
+    if (seatPopoverId != null) {
+      var stillThere = ccSeats.filter(function (s2) { return s2.id === seatPopoverId; })[0];
+      var newAnchor = wrap.querySelector('.seat[data-seat-id="' + seatPopoverId + '"] .seat-more');
+      if (stillThere && newAnchor) openSeatPopover(stillThere, newAnchor);
+      else closeSeatPopover();
+    }
+  }
+
+  // Builds the popover's content for one seat: model input, and the
+  // open/native/sign-in/web-panel controls a seat card used to show inline.
+  // Verbatim behaviour and labels (including the DeepSeek-style external
+  // panel text) from the pre-Bench seat card.
+  function buildSeatPopoverBody(s) {
+    var frag = document.createDocumentFragment();
+    var state = ccSeatState(s);
+    var head = el('div', 'cc-seat-row', [el('strong', null, [s.label])]);
+    head.appendChild(el('span', 'badge pill ' + state.cls, [state.text]));
+    frag.appendChild(head);
+
+    var meta = [s.cost, s.approval === 'ask-per-use' ? 'ask first' : 'no gate'];
+    if (s.specialism) meta.push(s.specialism);
+    frag.appendChild(el('small', null, [meta.join(' · ')]));
+
+    // A "web" surface seat's real interface is its own browser tab, not this
+    // card's terminal pane -- say so plainly, and show whether that tab's
+    // backing process (the PTY, once opened) is still alive.
+    var panel = s.surface === 'web' ? ccWebPanels[s.id] : null;
+    if (s.surface === 'web') {
+      var panelRow = el('div', 'cc-seat-row', []);
+      var panelDotState = panel ? (panel.status === 'running' ? 'on' : 'err') : 'off';
+      panelRow.appendChild(el('span', 'dot ' + panelDotState, []));
+      panelRow.appendChild(el('small', null, [panel ? (panel.status === 'running' ? 'panel live' : 'panel exited') : 'panel not running']));
+      frag.appendChild(panelRow);
+      frag.appendChild(el('small', 'panel-help', ['This provider’s interface is a web app opened externally, not an in-page terminal.']));
+    }
+
+    // Model: what this seat runs, in council and in its pane. Blank = registry default.
+    var modelRow = el('div', 'cc-seat-row', [el('span', 'k', ['model'])]);
       var modelInput = document.createElement('input');
       modelInput.type = 'text'; modelInput.className = 'cc-model-input'; modelInput.autocomplete = 'off';
       modelInput.value = s.model || '';
@@ -5600,7 +5885,7 @@
       }
       modelInput.addEventListener('change', function () { ccSetModel(s, modelInput.value.trim()); });
       modelRow.appendChild(modelInput);
-      copy.appendChild(modelRow);
+      frag.appendChild(modelRow);
 
       var foot = el('div', 'cc-lane-foot', []);
       if (s.ready && s.surface === 'web') {
@@ -5623,10 +5908,8 @@
           foot.appendChild(openWebBtn);
         }
       } else if (s.ready) {
-        var openBtn = el('button', 'btn big', ['〉 Open']);
+        var openBtn = el('button', 'btn big', ['〉 Open terminal']);
         openBtn.type = 'button';
-        openBtn.textContent = '〉 Open terminal';
-        openBtn.title = 'Open this seat in its own pane of the Command Center window';
         openBtn.title = 'Open this seat as a live console in the lane below';
         openBtn.addEventListener('click', function () { ccOpenBrowserTerminal(s, openBtn); });
         foot.appendChild(openBtn);
@@ -5644,10 +5927,8 @@
         }
         if (s.loginCmd) foot.appendChild(el('small', 'cc-login', [(s.installed ? '' : 'not installed · ') + s.loginCmd]));
       }
-      copy.appendChild(foot);
-      card.appendChild(copy);
-      wrap.appendChild(card);
-    });
+    frag.appendChild(foot);
+    return frag;
   }
 
   function ccOpenLane(seat, btn) {
@@ -5748,6 +6029,9 @@
     tab.type = 'button';
     tab.setAttribute('role', 'tab');
     tab.title = info.label;
+    // Provider identity tint (plan §3.3/P5) — permanent, distinct from the
+    // tab's own live/unread state.
+    tab.style.setProperty('--accent', seatAccentVar(info.provider));
     var dot = el('span', 'dot on', []);
     tab.appendChild(dot);
     tab.appendChild(el('span', 'cc-tab-label', [info.label]));
@@ -5834,6 +6118,9 @@
     if (!ccXtermReady()) { toast('The terminal library did not load — is the server serving /vendor/xterm?', 'critical'); return null; }
     var root = el('div', 'cc-term', []);
     var head = el('div', 'cc-term-head', [el('strong', null, [info.label])]);
+    // Provider identity tint (plan §3.3/P5) — a child of .cc-term, so it
+    // never collides with that element's own --accent (live/exited status).
+    head.style.setProperty('--accent', seatAccentVar(info.provider));
     var badge = el('span', 'badge pill live', ['live']);
     head.appendChild(badge);
     var metaEl = el('span', 'meta', []);
@@ -6264,12 +6551,38 @@
     else if (p.hint) wrap.appendChild(el('div', 'panel-help', [p.hint]));
   }
 
+  // Atelier's glanceable strip (plan §3.1): a resident/installed proxy bar
+  // plus the "N installed · M resident" line, built entirely from the same
+  // /api/interns/models payload renderInstalledModels already reads — no
+  // server change, no new endpoint. The bar reads "share of installed
+  // weights currently resident in VRAM", not a hardware VRAM total (this
+  // app has no source for that number without a server change).
+  function renderInternSummary(models) {
+    var line = document.getElementById('intern-summary-line');
+    var fill = document.getElementById('intern-vram-fill');
+    var list = models || [];
+    if (!list.length) {
+      line.textContent = 'no local models';
+      fill.style.width = '0%';
+      fill.parentNode.title = '';
+      return;
+    }
+    var resident = list.filter(function (m) { return m.resident; });
+    var totalBytes = list.reduce(function (a, m) { return a + (m.size || 0); }, 0);
+    var residentBytes = resident.reduce(function (a, m) { return a + (m.size || 0); }, 0);
+    var pct = totalBytes ? Math.round((residentBytes / totalBytes) * 100) : (resident.length ? 100 : 0);
+    fill.style.width = pct + '%';
+    fill.parentNode.title = (residentBytes ? formatModelBytes(residentBytes) : '0 GB') + ' resident of ' + (totalBytes ? formatModelBytes(totalBytes) : '0 GB') + ' installed';
+    line.textContent = list.length + ' installed · ' + resident.length + ' resident';
+  }
+
   function renderInternBench(d) {
     var providers = d.providers || [];
     var local = providers.filter(function (p) { return p.id === 'local'; })[0];
     var cloud = providers.filter(function (p) { return p.id === 'ollama-cloud'; })[0];
     renderInstalledModels(local ? local.models : []);
     renderCloudSection(cloud);
+    renderInternSummary(local ? local.models : []);
   }
 
   function refreshInternBench() {
@@ -6279,6 +6592,18 @@
       .catch(function () {});
   }
   refreshInternBench();
+
+  // The summary strip is always visible; `intern-toggle` reveals the exact
+  // Installed/Cloud/Available markup beneath it, unchanged (plan §3.1).
+  (function () {
+    var toggleBtn = document.getElementById('intern-toggle');
+    var detailEl = document.getElementById('intern-detail');
+    toggleBtn.addEventListener('click', function () {
+      var opening = detailEl.hidden;
+      detailEl.hidden = !opening;
+      toggleBtn.setAttribute('aria-expanded', opening ? 'true' : 'false');
+    });
+  })();
 
   // --- adding a local model -------------------------------------------
   var pullInput = document.getElementById('intern-pull-input');
