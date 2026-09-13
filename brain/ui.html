@@ -277,7 +277,8 @@
     position: fixed; left: var(--rail-w); right: var(--flight-w); bottom: 0; z-index: 20;
     display: flex; flex-direction: column; pointer-events: none;
   }
-  body.no-flight #composer-dock, body.ops-canvas #composer-dock, body.flight-collapsed #composer-dock { right: 0; }
+  body.no-flight #composer-dock, body.ops-canvas #composer-dock, body.flight-collapsed #composer-dock,
+  body.grid-hide-flight #composer-dock { right: 0; }
   #composer-dock > * { pointer-events: auto; }
   /* #panel (the note drawer, z-index 25) overlays the deck's own rightmost
      420px whenever it is open, regardless of the flight rail's state — its
@@ -289,7 +290,8 @@
   body:has(#panel.open) #composer-dock { right: var(--drawer-w); }
   body.no-flight:has(#panel.open) #composer-dock,
   body.ops-canvas:has(#panel.open) #composer-dock,
-  body.flight-collapsed:has(#panel.open) #composer-dock { right: var(--drawer-w); }
+  body.flight-collapsed:has(#panel.open) #composer-dock,
+  body.grid-hide-flight:has(#panel.open) #composer-dock { right: var(--drawer-w); }
   #composer {
     margin: 0 14px 14px 14px; padding: 8px 10px;
     background: var(--panel-bg-2, var(--surface-1)); border: 1px solid var(--border-strong, var(--border));
@@ -470,6 +472,10 @@
      for the Bench. Real In Flight content is P8's job; the toggle exists now. */
   body.flight-collapsed #frame { grid-template-columns: var(--rail-w) minmax(0, 1fr) 0; }
   body.flight-collapsed #flight { display: none; }
+  /* Grid mode's own auto-hide (plan §3.3/§4 P8) — set/cleared by
+     ccSetGridMode(), independent of the persisted flight-collapsed choice. */
+  body.grid-hide-flight #frame { grid-template-columns: var(--rail-w) minmax(0, 1fr) 0; }
+  body.grid-hide-flight #flight { display: none; }
 
   #bench, #flight {
     min-width: 0; overflow-y: auto; overflow-x: hidden;
@@ -485,6 +491,35 @@
   .flight-placeholder {
     font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
     color: var(--text-dim); opacity: .7; padding: 4px 2px;
+  }
+  .flight-head {
+    font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--text-dim); flex: none; padding: 2px 2px 0;
+  }
+  .flight-jobs { display: flex; flex-direction: column; gap: 8px; }
+  /* One row per active agent (plan §4 P8) — same --accent-stripe + .badge
+     language as .seat/.bench-sect, tier-coloured via ORG_TIER_COLOR (the
+     same map the org chart canvas already uses for these agents, so a name
+     reads the same colour whether you're looking at the rail or the chart). */
+  .job {
+    --accent: var(--gray);
+    border-radius: var(--r-sm); padding: 8px 10px;
+    background: color-mix(in srgb, var(--surface-2) 78%, transparent);
+    box-shadow: inset 3px 0 0 var(--accent);
+    display: flex; flex-direction: column; gap: 5px;
+  }
+  .job-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .job-name {
+    font-size: 12px; color: var(--text); flex: 1 1 auto; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .job-desc {
+    font-size: 11px; color: var(--text-dim); overflow: hidden;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  .job-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 10px; color: var(--text-faint); font-family: var(--font-mono);
   }
 
   /* pointer-events: none on #deck itself, not just on #pane-brain — an empty
@@ -847,7 +882,7 @@
     transition: transform 0.35s cubic-bezier(.2,.8,.2,1), right 0.35s cubic-bezier(.2,.8,.2,1);
     display: flex; flex-direction: column; backdrop-filter: blur(6px);
   }
-  body:not(.no-flight):not(.ops-canvas):not(.flight-collapsed) #panel { right: var(--flight-w); }
+  body:not(.no-flight):not(.ops-canvas):not(.flight-collapsed):not(.grid-hide-flight) #panel { right: var(--flight-w); }
   #panel.open { transform: translateX(0); }
   #panel-header {
     padding: 20px 22px 14px; border-bottom: 1px solid color-mix(in srgb, var(--accent-primary) 15%, transparent);
@@ -1717,11 +1752,15 @@
     </section>
   </main>
 
-  <!-- In Flight: real activity feed is P8 (moves pollOrg into GLOBAL_POLLS).
-       Placeholder only this phase, per the plan's P3 scope. -->
+  <!-- In Flight (plan §4 P8): a live feed of every active agent from
+       /api/org, rendered by renderFlight() and kept fresh by pollOrg in
+       GLOBAL_POLLS. #flight-jobs always holds either .job rows or the
+       "Nothing running" placeholder — never neither. -->
   <aside id="flight">
-    <div class="flight-placeholder">In Flight</div>
-    <div class="flight-placeholder">Nothing running</div>
+    <div class="flight-head">In Flight</div>
+    <div id="flight-jobs" class="flight-jobs">
+      <div class="flight-placeholder">Nothing running</div>
+    </div>
   </aside>
 </div>
 
@@ -2590,7 +2629,20 @@
     // Before buildOrgNodes: it stamps each node's `folder` from ORG_TIER_LABEL, so the
     // labels have to be current by the time nodes are built, not after.
     applyOrgTierLabels(payload && payload.tiers);
+    // In Flight (plan §4 P8) needs a fresh agent list on every place, not just
+    // Enterprise — this runs on every payload regardless of currentView.
+    renderFlight(payload);
     if (window.__onOrgSelfTest) window.__onOrgSelfTest(payload && payload.selfTest);
+    // Everything below rebuilds the SHARED nodes/links/nodeById buffer the
+    // Brain graph also draws from (plan §2.6's fallback: Enterprise reuses
+    // that one canvas rather than getting its own). Rebuilding it into org
+    // shape while Brain/Command is the visible place would silently swap the
+    // graph out from under the operator between polls — P8 moved pollOrg
+    // into GLOBAL_POLLS so it now fires on every place, so this guard is
+    // what keeps that move from corrupting the Brain graph. switchView()
+    // already calls applyOrgPayload() directly on entering 'ops', so
+    // Enterprise still gets an immediate rebuild the moment it becomes current.
+    if (currentView !== 'ops') return;
     wakePhysics();
     nodes = buildOrgNodes(payload);
     links = buildOrgLinks(nodes);
@@ -2603,6 +2655,75 @@
       return { link: l, t: Math.random(), speed: 0.3 + Math.random() * 0.15 };
     });
   }
+
+  // ============================================================
+  // In Flight rail (plan §4 P8): one .job row per currently-active agent,
+  // sourced from the same /api/org payload the Enterprise chart draws from.
+  // Tier colour/label reuse the literal ORG_TIER_COLOR/ORG_TIER_LABEL maps
+  // above, so a name reads the same colour in the rail as on the chart.
+  // ============================================================
+  function relTime(iso) {
+    var t = iso ? Date.parse(iso) : NaN;
+    if (isNaN(t)) return '';
+    var s = Math.max(0, Math.round((Date.now() - t) / 1000));
+    if (s < 60) return s + 's';
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + 'm';
+    var h = Math.floor(m / 60);
+    if (h < 24) return h + 'h';
+    return Math.floor(h / 24) + 'd';
+  }
+
+  function flightJobRow(a) {
+    var row = el('div', 'job', []);
+    row.dataset.agentId = a.id;
+    row.dataset.lastActivity = a.lastActivity || '';
+    row.style.setProperty('--accent', ORG_TIER_COLOR[a.tier] || ORG_TIER_COLOR.unknown);
+
+    var head = el('div', 'job-head', []);
+    var tierBadge = el('span', 'badge', [ORG_TIER_LABEL[a.tier] || String(a.tier || 'unknown').toUpperCase()]);
+    tierBadge.style.setProperty('--accent', ORG_TIER_COLOR[a.tier] || ORG_TIER_COLOR.unknown);
+    head.appendChild(tierBadge);
+    head.appendChild(el('span', 'job-name', [String(a.label || a.name || a.id || 'agent')]));
+    row.appendChild(head);
+
+    var doing = a.description || a.project || '';
+    if (doing) row.appendChild(el('div', 'job-desc', [doing]));
+
+    var foot = el('div', 'job-foot', []);
+    foot.appendChild(el('span', 'job-elapsed', [relTime(a.lastActivity)]));
+    row.appendChild(foot);
+
+    // Same sweep-bar visual language as the Command place's own busy
+    // indicator (.cc-progress, reused verbatim — see ccBuildTab's markup).
+    row.appendChild(el('div', 'cc-progress', [el('i', null, [])]));
+    return row;
+  }
+
+  function renderFlight(payload) {
+    var wrap = document.getElementById('flight-jobs');
+    if (!wrap) return;
+    var active = ((payload || lastOrgPayload || {}).agents || []).filter(function (a) { return a.status === 'active'; });
+    wrap.textContent = '';
+    // Never render blank — an operator glancing at the rail needs to know
+    // "nothing" was actually checked, not confuse it with "not loaded yet".
+    if (!active.length) {
+      wrap.appendChild(el('div', 'flight-placeholder', ['Nothing running']));
+      return;
+    }
+    active.forEach(function (a) { wrap.appendChild(flightJobRow(a)); });
+  }
+
+  // The elapsed label ticks on its own 1s clock, independent of the 15s/5s
+  // org poll — "2m ago" should advance smoothly, not jump in poll-sized
+  // steps. Cheap: at most a handful of live .job rows exist at once.
+  setInterval(function () {
+    if (document.hidden) return;
+    document.querySelectorAll('#flight-jobs .job').forEach(function (row) {
+      var span = row.querySelector('.job-elapsed');
+      if (span) span.textContent = relTime(row.dataset.lastActivity);
+    });
+  }, 1000);
 
   // Layout introspection for the headless org-chart tests. Reading pixels back
   // off the canvas can prove something was painted but not that the hierarchy
@@ -2677,13 +2798,25 @@
   // pollCommandCenter joined this list in P5: the seat list now renders on
   // the Bench (#cc-seats), which — like the status rail — is on screen in
   // every place, not just Command.
-  var GLOBAL_POLLS = [{ fn: pollStatus, ms: 10000 }, { fn: pollCommandCenter, ms: 60000 }];
+  // pollOrg joined in P8: In Flight is persistent chrome too (visible on
+  // Command/Brain, not just Enterprise), so it can no longer live in
+  // POLLS.ops alone. Its interval is a function, not a fixed number — 5s
+  // while Enterprise is the active view (the chart wants fresher data),
+  // 15s everywhere else (the rail alone doesn't need to hammer the org
+  // roster). Resolved once per startViewPolls() call, which already re-runs
+  // on every switchView (including into/out of 'ops'), so the interval
+  // swap takes effect the moment the view actually changes.
+  var GLOBAL_POLLS = [
+    { fn: pollStatus, ms: 10000 },
+    { fn: pollCommandCenter, ms: 60000 },
+    { fn: pollOrg, ms: function () { return currentView === 'ops' ? 5000 : 15000; } },
+  ];
 
   var POLLS = {
     brain: [],
     dev:   [{ fn: pollWorkshop, ms: 120000 }],
     auto:  [{ fn: pollProtocols, ms: 30000 }],
-    ops:   [{ fn: pollOrg, ms: 5000 }, { fn: pollUsage, ms: 60000 }],
+    ops:   [{ fn: pollUsage, ms: 60000 }],
     directory: [{ fn: pollDirectory, ms: 60000 }],
     library: [{ fn: pollLibrary, ms: 60000 }],
     command: [],
@@ -2715,6 +2848,10 @@
     viewGeneration++;
     var gen = viewGeneration;
     GLOBAL_POLLS.concat(POLLS[view] || []).forEach(function (entry) {
+      // entry.ms may be a fixed number or a resolver fn (pollOrg's 5s/15s
+      // Enterprise-aware interval, plan §4 P8) — resolved fresh on every
+      // startViewPolls() call, i.e. on every view switch.
+      var intervalMs = typeof entry.ms === 'function' ? entry.ms() : entry.ms;
       function tick() {
         if (document.hidden) return;
         if (gen !== viewGeneration) return;
@@ -2726,7 +2863,7 @@
       }
       activePollTicks.push(tick);
       tick(); // fire immediately on view entry rather than waiting a full interval
-      activePollTimers.push(setInterval(tick, entry.ms));
+      activePollTimers.push(setInterval(tick, intervalMs));
     });
   }
 
@@ -6580,6 +6717,15 @@
     document.getElementById('cc-terms').classList.toggle('cc-grid', ccGridMode);
     document.getElementById('cc-grid-toggle').classList.toggle('active', ccGridMode);
     document.getElementById('cc-grid-toggle').setAttribute('aria-pressed', ccGridMode ? 'true' : 'false');
+    // Grid mode is a deliberate, temporary act (plan §3.3): comparing several
+    // consoles side by side needs the flight rail's width back, same as the
+    // Brain place (no-flight) and Enterprise (ops-canvas) already take it.
+    // A dedicated class, not flight-collapsed — that one is the operator's
+    // own persisted `\` choice, and grid mode's hide must never read, write
+    // or fight with it; it only ever adds/removes its own independent
+    // reason for #flight's CSS to hide (the same OR-of-classes pattern
+    // no-flight/ops-canvas/flight-collapsed already use).
+    document.body.classList.toggle('grid-hide-flight', ccGridMode);
     // Every pane's box just changed size (grid cell <-> full stage); the
     // ResizeObserver on each body catches this too, but a direct pass here
     // makes it immediate rather than waiting on the observer's next tick.
