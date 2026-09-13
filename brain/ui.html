@@ -261,23 +261,23 @@
      P6). #search-input keeps its id (runSearch/renderInstantResults/the `/`
      hotkey all read it directly) but is now the composer's own auto-growing
      textarea rather than the old Bench rail's single-line input. */
-  /* position:fixed, not absolute-within-#deck: a .legacy-pane (Roster/
-     Library/Workshop/Protocols, not yet sheeted — plan §2.2/P7) sits at
-     z-index 11, ABOVE #frame's own z-index 10, specifically so it can cover
-     #deck+#flight while active. An absolutely-positioned child of #deck is
-     capped inside #frame's stacking context regardless of its own z-index,
-     so it would render BELOW an active legacy pane no matter what number was
-     used here — this is the same class of bug search-nav.mjs already exists
-     to catch (a stale overlay eating a click), just discovered for the
-     composer instead of the old #panel. Escaping to position:fixed (with
-     left/right tracking #frame's own grid so it still reads as "inside the
-     deck") lets the composer sit in the root stacking context, where a
-     z-index above 11 actually means something. */
+  /* position:fixed, not absolute-within-#deck: a .sheet (Roster/Library/
+     Workshop/Protocols, plan §2.2/P7) sits at z-index 13, ABOVE #frame's own
+     z-index 10, specifically so it can cover #deck+#flight while open. An
+     absolutely-positioned child of #deck is capped inside #frame's stacking
+     context regardless of its own z-index, so it would render BELOW an open
+     sheet no matter what number was used here — this is the same class of
+     bug search-nav.mjs already exists to catch (a stale overlay eating a
+     click), just discovered for the composer instead of the old #panel.
+     Escaping to position:fixed (with left/right tracking #frame's own grid
+     so it still reads as "inside the deck") lets the composer sit in the
+     root stacking context, where a z-index above 13 actually means
+     something. */
   #composer-dock {
     position: fixed; left: var(--rail-w); right: var(--flight-w); bottom: 0; z-index: 20;
     display: flex; flex-direction: column; pointer-events: none;
   }
-  body.no-flight #composer-dock, body.ops-canvas #composer-dock { right: 0; }
+  body.no-flight #composer-dock, body.ops-canvas #composer-dock, body.flight-collapsed #composer-dock { right: 0; }
   #composer-dock > * { pointer-events: auto; }
   /* #panel (the note drawer, z-index 25) overlays the deck's own rightmost
      420px whenever it is open, regardless of the flight rail's state — its
@@ -288,7 +288,8 @@
      the old fixed left-edge drawer. */
   body:has(#panel.open) #composer-dock { right: var(--drawer-w); }
   body.no-flight:has(#panel.open) #composer-dock,
-  body.ops-canvas:has(#panel.open) #composer-dock { right: var(--drawer-w); }
+  body.ops-canvas:has(#panel.open) #composer-dock,
+  body.flight-collapsed:has(#panel.open) #composer-dock { right: var(--drawer-w); }
   #composer {
     margin: 0 14px 14px 14px; padding: 8px 10px;
     background: var(--panel-bg-2, var(--surface-1)); border: 1px solid var(--border-strong, var(--border));
@@ -394,8 +395,21 @@
     text-transform: uppercase; color: var(--focus); white-space: nowrap;
   }
   #views { display: flex; gap: 2px; flex: none; }
-  #dock { flex: 1 1 auto; display: flex; align-items: center; gap: 8px; min-width: 0; }
+  #dock { flex: 1 1 auto; display: flex; align-items: center; gap: 4px; min-width: 0; }
+  /* Sheet launcher icons (plan §2.1/P7): Library/Roster/Protocols/Enterprise/
+     Workshop. Plain buttons, same active/hover contract as .view-btn, but
+     kept a separate class since they open a sheet rather than switch #views'
+     2-tab nav — only .view-btn drives aria-selected on a role="tab". */
+  .dock-btn {
+    background: none; border: 1px solid transparent; border-radius: var(--r-sm);
+    color: var(--text-dim); cursor: pointer; font-family: inherit; font-size: 11px;
+    letter-spacing: .04em; padding: 5px 9px; white-space: nowrap;
+    transition: color .13s ease, border-color .13s ease, background .13s ease;
+  }
+  .dock-btn:hover { color: var(--text); border-color: var(--border-focusable); }
+  .dock-btn.active { color: var(--accent-primary); border-color: var(--accent-primary); background: color-mix(in srgb, var(--accent-primary) 12%, transparent); }
   #utils { display: flex; align-items: center; gap: 6px; flex: none; overflow-x: auto; max-width: 46vw; }
+  #palette-btn { font-size: 10px; }
   /* The utility buttons were sized for a 244px vertical rail (width:100%,
      stacked). Reused verbatim in a horizontal topbar strip (§2.2), so their
      sizing rule is overridden here rather than duplicated under a new name. */
@@ -423,11 +437,18 @@
     grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--flight-w);
   }
   #bench, #flight { pointer-events: auto; }
-  /* 'ops' (Enterprise) draws straight onto the shared #graph canvas — it has
-     no sheet of its own until P7 threads a second canvas (plan §2.6), so it
-     reuses #pane-brain as the canvas's host (with .brain-head hidden, see
-     above) rather than #pane-command. Hide #flight so its 292px column
-     doesn't clip the chart's right edge until Enterprise gets a real home. */
+  /* 'ops' (Enterprise) draws straight onto the shared #graph canvas — P7
+     took the plan's own sanctioned fallback (§2.6) here rather than
+     threading draw/physicsTick/nodeAtScreen/flyTo/the pointer handlers onto
+     a second canvas+camera surface: that threading also has to split every
+     module-level piece of state those functions close over (nodes/links/
+     nodeById, hoveredNode/draggedNode/pulses, cam/camAnim), not just pass an
+     extra argument, which is materially more than "one Sonnet phase can hold
+     safely" per the plan's own risk note. So Enterprise stays a full deck
+     place — reusing #pane-brain as the canvas's host, .brain-head hidden
+     (see above), reached from the dock/hotkey('E')/palette exactly like a
+     sheet — rather than getting a literal .sheet+its own <canvas>. Hide
+     #flight so its 292px column doesn't clip the chart's right edge. */
   body.ops-canvas #frame { grid-template-columns: var(--rail-w) minmax(0, 1fr) 0; }
   body.ops-canvas #flight { display: none; }
   /* Brain gets the same full-width treatment (P4/Atelier: the graph is the
@@ -435,6 +456,11 @@
      mostly empty beside a force-directed graph). */
   body.no-flight #frame { grid-template-columns: var(--rail-w) minmax(0, 1fr) 0; }
   body.no-flight #flight { display: none; }
+  /* `\` toggles this manually (plan §P7) — a standing user override on top of
+     the two automatic hides above, same pattern as `[`/body.rail-collapsed
+     for the Bench. Real In Flight content is P8's job; the toggle exists now. */
+  body.flight-collapsed #frame { grid-template-columns: var(--rail-w) minmax(0, 1fr) 0; }
+  body.flight-collapsed #flight { display: none; }
 
   #bench, #flight {
     min-width: 0; overflow-y: auto; overflow-x: hidden;
@@ -812,7 +838,7 @@
     transition: transform 0.35s cubic-bezier(.2,.8,.2,1), right 0.35s cubic-bezier(.2,.8,.2,1);
     display: flex; flex-direction: column; backdrop-filter: blur(6px);
   }
-  body:not(.no-flight):not(.ops-canvas) #panel { right: var(--flight-w); }
+  body:not(.no-flight):not(.ops-canvas):not(.flight-collapsed) #panel { right: var(--flight-w); }
   #panel.open { transform: translateX(0); }
   #panel-header {
     padding: 20px 22px 14px; border-bottom: 1px solid color-mix(in srgb, var(--accent-primary) 15%, transparent);
@@ -943,24 +969,50 @@
      actually render this wave.
      ========================================================================== */
 
-  /* --- .legacy-pane: Workshop/Protocols/Roster/Library, not yet sheeted
-     (P7's job — plan §2.2). Positioned clear of #bench (left: var(--bench-w))
-     so the status/search/interns column stays reachable underneath, same as
-     the old rail staying visible beside .stage. Above #frame's z-index so it
-     covers #deck + #flight while a legacy view is active. */
-  .legacy-pane {
-    position: fixed; top: var(--topbar-h); bottom: 0;
-    left: var(--bench-w); right: 0; z-index: 11;
-    overflow-y: auto; overscroll-behavior: contain;
-    display: flex; flex-direction: column; gap: 16px; padding: 16px;
-    background: var(--bg);
+  /* --- .sheet + #sheet-scrim: Workshop/Protocols/Roster/Library float as a
+     centered overlay (Atelier's concept, plan §2/P7) rather than the old
+     full-bleed .legacy-pane — ~1180px, clear of the topbar, dimmed by its
+     own scrim. z-index 13 sits above #frame's 10 but stays below
+     #composer-dock's 20 (see above), so the composer stays usable while a
+     sheet is open, exactly as .legacy-pane's z-index 11 guaranteed. It also
+     stays below .scrim/.modal's 100/110, so the source editor opened from
+     inside a sheet always renders above it, and Esc closes the editor
+     before the sheet (plan §P7 verification 4). */
+  /* Always present (not [hidden]-gated) so its opacity can transition —
+     same idiom as .scrim. Sits ABOVE #frame/.sheet but below
+     #composer-dock (z-index 20), so the composer stays usable while a
+     sheet is open, matching .legacy-pane's old guarantee. */
+  #sheet-scrim {
+    position: fixed; inset: 0; z-index: 12;
+    background: var(--scrim-bg);
+    opacity: 0; pointer-events: none; transition: opacity var(--t-base) var(--ease-out);
   }
-  /* The plain [hidden] UA rule and .legacy-pane's own `display: flex` are
-     equal specificity, so without this the flex display would win the
-     cascade (author origin beats user-agent origin at equal specificity) and
-     every inactive legacy pane would render on top of whichever place is
-     actually active. Carried over from the .stage rule this replaces. */
-  .legacy-pane[hidden] { display: none; }
+  #sheet-scrim.open { opacity: 1; pointer-events: auto; }
+  /* [hidden]-gated (like the old .legacy-pane), not opacity-gated: a sheet's
+     master-detail content wants to size/scroll correctly the instant it is
+     shown, not mid-fade — and .legacy-pane never animated either. */
+  .sheet {
+    position: fixed; z-index: 13;
+    top: calc(var(--topbar-h) + 23px); left: 50%;
+    width: min(var(--sheet-w), calc(100vw - 48px));
+    height: calc(100vh - var(--topbar-h) - 46px);
+    transform: translateX(-50%);
+    display: flex; flex-direction: column; gap: 14px; padding: 20px 22px;
+    background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--r-lg);
+    box-shadow: var(--shadow-modal);
+  }
+  /* The plain [hidden] UA rule and .sheet's own `display: flex` are equal
+     specificity, so without this the flex display would win the cascade
+     (author origin beats user-agent origin at equal specificity) and every
+     inactive sheet would render on top of whichever place is actually
+     active. Carried over from the .legacy-pane rule this replaces. */
+  .sheet[hidden] { display: none; }
+  .sheet-close { position: absolute; top: 16px; right: 16px; }
+  /* Workshop/Protocols wrap their body in this so .stage-head stays put
+     while only the content below it scrolls. Roster/Library use
+     .sheet-body (renamed .master-detail below) instead, which already
+     scrolls its two panes independently. */
+  .sheet-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
   .stage-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
   .stage-head h1 {
     margin: 0; font-size: 18px; color: var(--text); letter-spacing: .12em; text-transform: uppercase;
@@ -1191,32 +1243,34 @@
     display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
   }
 
-  /* --- master-detail (list + preview) — Library and Operative Roster stages.
-         Both panes scroll independently: .master-detail fills the remaining
-         height inside .stage's fixed box (min-height:0 is required for a flex
-         child to be allowed to shrink below its content size and scroll). */
-  .master-detail { display: flex; gap: 14px; flex: 1 1 auto; min-height: 0; }
-  .list-pane {
+  /* --- sheet-body (list + preview) — Library and Operative Roster sheets.
+         Renamed from .master-detail/.list-pane/.preview-pane (plan §2.2 P7 —
+         class rename only, no logic change). Both panes scroll independently:
+         .sheet-body fills the remaining height inside .sheet's fixed box
+         (min-height:0 is required for a flex child to be allowed to shrink
+         below its content size and scroll). */
+  .sheet-body { display: flex; gap: 14px; flex: 1 1 auto; min-height: 0; }
+  .mdlist {
     flex: 0 0 340px; max-width: 400px; min-height: 0; overflow-y: auto;
     display: flex; flex-direction: column; gap: 6px; padding-right: 4px;
   }
-  .preview-pane {
+  .mdprev {
     flex: 1 1 auto; min-width: 0; min-height: 0; overflow-y: auto;
     background: var(--panel-bg); border: 1px solid var(--border); border-radius: 6px;
     padding: 18px 22px; font-size: 13px; line-height: 1.6; color: var(--text);
   }
-  .preview-pane h1, .preview-pane h2, .preview-pane h3 { color: var(--accent-primary); font-size: 15px; letter-spacing: 1px; margin: 16px 0 8px; }
-  .preview-pane h1:first-child, .preview-pane h2:first-child, .preview-pane h3:first-child { margin-top: 0; }
-  .preview-pane strong { color: #fff; }
-  .preview-pane code { background: color-mix(in srgb, var(--accent-primary) 8%, transparent); padding: 1px 5px; border-radius: 2px; color: var(--amber); font-size: 13px; }
-  .preview-pane pre { background: rgba(0,0,0,0.3); border: 1px solid color-mix(in srgb, var(--accent-primary) 15%, transparent); border-radius: 3px; padding: 10px; overflow-x: auto; }
-  .preview-pane pre code { background: none; color: var(--text); }
-  .preview-pane a { color: var(--accent-primary); }
-  .preview-pane ul { padding-left: 18px; }
-  .preview-pane li { margin-bottom: 3px; }
-  .preview-pane table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 12px; }
-  .preview-pane th, .preview-pane td { border: 1px solid color-mix(in srgb, var(--accent-primary) 18%, transparent); padding: 4px 7px; text-align: left; vertical-align: top; }
-  .preview-pane th { color: var(--accent-primary); text-transform: uppercase; letter-spacing: .08em; font-size: 11px; }
+  .mdprev h1, .mdprev h2, .mdprev h3 { color: var(--accent-primary); font-size: 15px; letter-spacing: 1px; margin: 16px 0 8px; }
+  .mdprev h1:first-child, .mdprev h2:first-child, .mdprev h3:first-child { margin-top: 0; }
+  .mdprev strong { color: #fff; }
+  .mdprev code { background: color-mix(in srgb, var(--accent-primary) 8%, transparent); padding: 1px 5px; border-radius: 2px; color: var(--amber); font-size: 13px; }
+  .mdprev pre { background: rgba(0,0,0,0.3); border: 1px solid color-mix(in srgb, var(--accent-primary) 15%, transparent); border-radius: 3px; padding: 10px; overflow-x: auto; }
+  .mdprev pre code { background: none; color: var(--text); }
+  .mdprev a { color: var(--accent-primary); }
+  .mdprev ul { padding-left: 18px; }
+  .mdprev li { margin-bottom: 3px; }
+  .mdprev table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 12px; }
+  .mdprev th, .mdprev td { border: 1px solid color-mix(in srgb, var(--accent-primary) 18%, transparent); padding: 4px 7px; text-align: left; vertical-align: top; }
+  .mdprev th { color: var(--accent-primary); text-transform: uppercase; letter-spacing: .08em; font-size: 11px; }
   .preview-head {
     display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
     padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid color-mix(in srgb, var(--accent-primary) 15%, transparent);
@@ -1246,9 +1300,9 @@
   }
 
   @media (max-width: 900px) {
-    .master-detail { flex-direction: column; }
-    .list-pane { flex: 0 0 240px; max-width: none; }
-    .preview-pane { flex: 1 1 260px; }
+    .sheet-body { flex-direction: column; }
+    .mdlist { flex: 0 0 240px; max-width: none; }
+    .mdprev { flex: 1 1 260px; }
   }
 
   .badge {
@@ -1350,6 +1404,27 @@
   .pyr-rule { font-size: 10px; padding: 1px 6px; border: 1px solid var(--hairline); border-radius: 2px; color: var(--text-dim); }
   .pyr-rule.d1 { color: var(--text-soft); border-color: var(--border-focusable); }
   .pyr-rule.more { border-style: dashed; }
+
+  /* --- Command palette (Ctrl+K, plan §P7) --------------------------------
+     Reuses .modal/.scrim rather than growing a third dialog implementation;
+     only the width, the input-as-head and the result-list body differ. Sits
+     in the same z-index tier as the other dialogs (100/110) — above every
+     sheet, so it can jump straight to a different destination without a
+     sheet fighting it for the top layer. */
+  .modal.palette { top: 18vh; transform: translate(-50%, 0) scale(0.985); width: min(560px, calc(100vw - 32px)); max-height: 60vh; }
+  .modal.palette.open { transform: translate(-50%, 0) scale(1); }
+  #palette-input {
+    width: 100%; background: none; border: none; outline: none;
+    color: var(--text); font-family: inherit; font-size: 14px; padding: 4px 0;
+  }
+  #palette-input::placeholder { color: var(--text-dim); }
+  .palette-item {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+    padding: 9px 10px; border-radius: 4px; cursor: pointer; color: var(--text-soft);
+  }
+  .palette-item .pi-hint { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .08em; }
+  .palette-item:hover, .palette-item.sel { background: color-mix(in srgb, var(--accent-primary) 12%, transparent); color: var(--text); }
+  .palette-empty { padding: 10px; font-size: 12px; color: var(--text-dim); }
 
   /* --- Source editor ----------------------------------------------------
      Reuses .modal/.scrim rather than growing a second dialog implementation;
@@ -1460,10 +1535,18 @@
     <button class="view-btn active" data-view="brain" role="tab" aria-selected="true" aria-controls="pane-brain">Brain</button>
     <button class="view-btn" data-view="command" role="tab" aria-selected="false" aria-controls="pane-command">Command</button>
   </nav>
-  <!-- Reserved for P7's sheet-launcher icons (Library/Roster/Protocols/
-       Enterprise/Workshop) — slot only, no icons yet. -->
-  <div id="dock" aria-label="Sheets (coming soon)"></div>
+  <!-- Sheet launchers (plan §2.1/P7): each opens its named sheet via
+       switchView's existing internal view name (dev/auto/directory/library/
+       ops — see LEGACY_VIEW). Same wiring loop as .view-btn below. -->
+  <nav id="dock" role="toolbar" aria-label="Sheets">
+    <button class="dock-btn" data-view="library" title="Library (L)">Library</button>
+    <button class="dock-btn" data-view="directory" title="Operative Roster (R)">Roster</button>
+    <button class="dock-btn" data-view="auto" title="Protocols (P)">Protocols</button>
+    <button class="dock-btn" data-view="ops" title="Enterprise (E)">Enterprise</button>
+    <button class="dock-btn" data-view="dev" title="Workshop (W)">Workshop</button>
+  </nav>
   <div id="utils">
+    <button id="palette-btn" title="Command palette — jump to any place or sheet (Ctrl+K)">&#8981; Jump</button>
     <button id="mute-toggle">&#128266; FX Sound: On</button>
     <!-- On demand instead of only at startup: Alfred's own status plus the dp
          brief (a separate project's GitHub Action output), read aloud through
@@ -1639,12 +1722,12 @@
      Ask/Search drawer move here verbatim — renderCouncil(), pollCouncilRun(),
      askAlfred() and runSearch() are untouched, only their markup's parent and
      trigger wiring changed.
-     A sibling of #frame (like .legacy-pane and #panel below), not a child of
+     A sibling of #frame (like .sheet and #panel below), not a child of
      #deck as the plan's own diagram first sketched it: #frame establishes its
      own stacking context (position:fixed + z-index:10), so a descendant's
      z-index — however high — can never outrank a body-level sibling like
-     .legacy-pane (z-index 11). Composer must outrank it to stay usable while
-     a legacy view (Roster/Library/Workshop/Protocols) is open, which is
+     .sheet (z-index 13). Composer must outrank it to stay usable while
+     a sheet (Roster/Library/Workshop/Protocols) is open, which is
      exactly the class of bug search-nav.mjs exists to catch — found here by
      that same suite when the composer first landed as #deck's child. -->
 <div id="composer-dock">
@@ -1683,12 +1766,19 @@
   </div>
 </div>
 
-<!-- Legacy places, not yet sheeted (P7's job — plan §2.2). Each is a
-     scrollable content region, hidden (not unmounted) so switchView() can
-     toggle without losing scroll position or re-fetching on every visit. -->
-<div id="stage-dev" class="legacy-pane" hidden>
+<!-- Sheets (plan §2.1/P7): Workshop/Protocols/Roster/Library, floating over
+     one shared scrim. Each is hidden (not unmounted) so switchView() can
+     toggle without losing scroll position or re-fetching on every visit —
+     same contract .legacy-pane had, just a different box. Enterprise (ops)
+     is NOT a sheet — see the fallback note by #pane-brain (plan §2.6): the
+     canvas-threading this would need was judged too large/risky for one
+     phase, so Enterprise stays the shared-canvas full pane it already was. -->
+<div id="sheet-scrim"></div>
+
+<section class="sheet" id="sheet-workshop" role="dialog" aria-modal="true" aria-labelledby="sheet-workshop-title" hidden>
+  <button class="icon-btn sheet-close" data-sheet-close aria-label="Close">&#10005;</button>
   <div class="stage-head">
-    <h1>Workshop</h1>
+    <h1 id="sheet-workshop-title">Workshop</h1>
     <div class="filter-chips" data-filter-group="dev">
       <button class="filter-chip active" data-filter="all">All</button>
       <button class="filter-chip" data-filter="local">Cloned here</button>
@@ -1700,19 +1790,21 @@
          re-fetch (?refresh=1). -->
     <button class="filter-chip" id="dev-refresh" title="Re-fetch from GitHub now, bypassing the 5-minute cache">&#8635; Refresh</button>
   </div>
-  <div class="stage-grid" id="dev-grid"></div>
-</div>
+  <div class="sheet-scroll"><div class="stage-grid" id="dev-grid"></div></div>
+</section>
 
-<div id="stage-auto" class="legacy-pane" hidden>
+<section class="sheet" id="sheet-protocols" role="dialog" aria-modal="true" aria-labelledby="sheet-protocols-title" hidden>
+  <button class="icon-btn sheet-close" data-sheet-close aria-label="Close">&#10005;</button>
   <div class="stage-head">
-    <h1>Protocols</h1>
+    <h1 id="sheet-protocols-title">Protocols</h1>
   </div>
-  <div id="auto-body"></div>
-</div>
+  <div class="sheet-scroll"><div id="auto-body"></div></div>
+</section>
 
-<div id="stage-directory" class="legacy-pane" hidden>
+<section class="sheet" id="sheet-roster" role="dialog" aria-modal="true" aria-labelledby="sheet-roster-title" hidden>
+  <button class="icon-btn sheet-close" data-sheet-close aria-label="Close">&#10005;</button>
   <div class="stage-head">
-    <h1>Operative Roster</h1>
+    <h1 id="sheet-roster-title">Operative Roster</h1>
     <div class="stage-head-controls">
       <input id="directory-search" class="stage-search" type="text" placeholder="Search name, mission, skills&hellip;" autocomplete="off" />
       <div class="filter-chips" data-filter-group="directory">
@@ -1723,15 +1815,16 @@
       </div>
     </div>
   </div>
-  <div class="master-detail">
-    <div class="list-pane" id="directory-list"></div>
-    <div class="preview-pane" id="directory-preview"></div>
+  <div class="sheet-body">
+    <div class="mdlist" id="directory-list"></div>
+    <div class="mdprev" id="directory-preview"></div>
   </div>
-</div>
+</section>
 
-<div id="stage-library" class="legacy-pane" hidden>
+<section class="sheet" id="sheet-library" role="dialog" aria-modal="true" aria-labelledby="sheet-library-title" hidden>
+  <button class="icon-btn sheet-close" data-sheet-close aria-label="Close">&#10005;</button>
   <div class="stage-head">
-    <h1>Library</h1>
+    <h1 id="sheet-library-title">Library</h1>
     <div class="stage-head-controls">
       <input id="library-search" class="stage-search" type="text" placeholder="Search name, description&hellip;" autocomplete="off" />
       <div class="filter-chips" data-filter-group="library-type">
@@ -1749,10 +1842,22 @@
       </div>
     </div>
   </div>
-  <div class="master-detail">
-    <div class="list-pane" id="library-list"></div>
-    <div class="preview-pane" id="library-preview"></div>
+  <div class="sheet-body">
+    <div class="mdlist" id="library-list"></div>
+    <div class="mdprev" id="library-preview"></div>
   </div>
+</section>
+
+<!-- Command palette (Ctrl+K, plan §P7): fuzzy-searchable list of every place/
+     sheet plus other palette-worthy actions already in the app. Reuses the
+     .modal/.scrim dialog primitive, so it naturally renders above every
+     sheet (z-index 100/110 vs the sheet's 13). -->
+<div id="palette-scrim" class="scrim"></div>
+<div id="palette" class="modal palette" role="dialog" aria-modal="true" aria-label="Command palette">
+  <div class="modal-head">
+    <input id="palette-input" type="text" placeholder="Jump to a place, a sheet, or an action&hellip;" autocomplete="off" />
+  </div>
+  <div class="modal-body" id="palette-results"></div>
 </div>
 
 <div id="tooltip"><div class="tt-title"></div><div class="tt-folder"></div></div>
@@ -1955,6 +2060,18 @@
   try { audioEnabled = localStorage.getItem('alfred-muted') !== '1'; } catch (e) { /* localStorage unavailable */ }
 
   try { if (localStorage.getItem('alfred-rail-collapsed') === '1') document.body.classList.add('rail-collapsed'); } catch (e) { /* localStorage unavailable */ }
+  // `\` toggle (plan §P7) — a manual override on top of the no-flight/
+  // ops-canvas auto-hides; persisted the same way `[` persists the Bench.
+  try { if (localStorage.getItem('alfred-flight-collapsed') === '1') document.body.classList.add('flight-collapsed'); } catch (e) { /* localStorage unavailable */ }
+  function toggleFlightCollapsed() {
+    document.body.classList.toggle('flight-collapsed');
+    try { localStorage.setItem('alfred-flight-collapsed', document.body.classList.contains('flight-collapsed') ? '1' : '0'); } catch (e) { /* localStorage unavailable */ }
+  }
+  function toggleBenchCollapsed() {
+    document.body.classList.toggle('rail-collapsed');
+    try { localStorage.setItem('alfred-rail-collapsed', document.body.classList.contains('rail-collapsed') ? '1' : '0'); } catch (e) { /* localStorage unavailable */ }
+    applyBenchTight(); // an explicit choice just landed — the auto rule must yield to it now
+  }
 
   // --- Bench-tight responsive rule (plan §3.3) ---------------------------
   // Auto-narrows the Bench at <=1180px, but only while the operator has never
@@ -2612,22 +2729,27 @@
     canvas.classList.toggle('canvas-ghost', view === 'dev' || view === 'auto' || view === 'directory' || view === 'library' || view === 'command');
   }
 
-  // dev/auto/directory/library still show their own full content (a
-  // .legacy-pane, not a sheet — P7's job); 'command'/'brain'/'ops' show the
-  // new #pane-command/#pane-brain instead of a '#stage-command' lookup —
-  // 'ops' reuses #pane-brain as the shared canvas's host (§ P4), just with
-  // .brain-head hidden and (per body.ops-canvas in CSS) #flight hidden too
-  // so neither clips the chart's right edge.
+  // dev/auto/directory/library now show as a floating .sheet over #sheet-scrim
+  // (plan §2.2/P7) rather than a full-bleed .legacy-pane; 'command'/'brain'/
+  // 'ops' show the #pane-command/#pane-brain place instead. 'ops' (Enterprise)
+  // reuses #pane-brain as the shared canvas's host (§ P4) rather than getting
+  // a sheet of its own — see the fallback note by #pane-brain (plan §2.6).
+  var SHEET_ID = { dev: 'sheet-workshop', auto: 'sheet-protocols', directory: 'sheet-roster', library: 'sheet-library' };
   function showStage(view) {
-    ['dev', 'auto', 'directory', 'library'].forEach(function (v) {
-      var stageEl = document.getElementById('stage-' + v);
-      if (stageEl) stageEl.hidden = (v !== view);
+    var anySheetOpen = false;
+    Object.keys(SHEET_ID).forEach(function (v) {
+      var sheetEl = document.getElementById(SHEET_ID[v]);
+      var open = (v === view);
+      if (sheetEl) sheetEl.hidden = !open;
+      if (open) anySheetOpen = true;
     });
+    var sheetScrim = document.getElementById('sheet-scrim');
+    if (sheetScrim) sheetScrim.classList.toggle('open', anySheetOpen);
     var paneCommand = document.getElementById('pane-command');
     var paneBrain = document.getElementById('pane-brain');
     if (paneCommand) paneCommand.hidden = (view !== 'command');
     // 'ops' also shows this pane — it hosts the same #graph canvas, just with
-    // .brain-head hidden (CSS) until P7 gives Enterprise its own surface.
+    // .brain-head hidden (CSS) until Enterprise gets a real surface of its own.
     if (paneBrain) paneBrain.hidden = (view !== 'brain' && view !== 'ops');
     document.body.classList.toggle('ops-canvas', view === 'ops');
     // The graph is the content on the Brain place, so the activity rail
@@ -2636,13 +2758,28 @@
     // ops-canvas above; kept separate since the two views hide different
     // reasons for the same rail collapse.
     document.body.classList.toggle('no-flight', view === 'brain');
+    // Dock icons highlight their own sheet (not navActive's command-collapse —
+    // Library/Roster/Protocols/Enterprise/Workshop each get their own icon).
+    document.querySelectorAll('.dock-btn').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.view === view);
+    });
   }
+
+  // Whichever of the two real places (Command/Brain) was active before a
+  // sheet opened — Esc and each sheet's close button return here, exactly
+  // "the prior state" rather than a hardcoded default (plan §P7 verification 1).
+  var lastPlace = 'brain';
+  function closeSheet() { switchView(lastPlace); }
 
   function switchView(view, opts) {
     opts = opts || {};
     if (VALID_VIEWS.indexOf(view) === -1) view = 'brain';
     if (view === currentView && !opts.force) return;
     wakePhysics(); // a different dataset and a different attractor per node
+    // Recorded BEFORE currentView is overwritten below, and only when leaving
+    // a real place (not another sheet) — closing a sheet must return to
+    // Brain/Command, never to whichever sheet happened to be open before it.
+    if (currentView === 'brain' || currentView === 'command') lastPlace = currentView;
     currentView = view;
     folderFilter = null; // a BRAIN-view folder filter has no meaning against org tiers or the new stages
     hoveredNode = null;
@@ -2694,9 +2831,105 @@
     if (VALID_VIEWS.indexOf(v) !== -1) switchView(v, { skipHash: true });
   });
 
-  document.querySelectorAll('.view-btn').forEach(function (btn) {
+  document.querySelectorAll('.view-btn, .dock-btn').forEach(function (btn) {
     btn.addEventListener('click', function () { switchView(btn.dataset.view); });
   });
+
+  // Sheet chrome: each sheet's own close button, and clicking the scrim
+  // behind it, both return to lastPlace exactly like Esc does.
+  document.querySelectorAll('.sheet [data-sheet-close]').forEach(function (btn) {
+    btn.addEventListener('click', closeSheet);
+  });
+  document.getElementById('sheet-scrim').addEventListener('click', closeSheet);
+
+  // ============================================================
+  // Command palette (Ctrl+K, plan §P7) — fuzzy-searchable jump list over the
+  // same destinations the dock/hotkeys reach, plus the other palette-worthy
+  // actions already in #utils. Reuses .modal/.scrim (see CSS) so it renders
+  // above every sheet automatically.
+  // ============================================================
+  var paletteScrim = document.getElementById('palette-scrim');
+  var paletteEl = document.getElementById('palette');
+  var paletteInput = document.getElementById('palette-input');
+  var paletteResults = document.getElementById('palette-results');
+  var paletteSelIndex = 0;
+
+  function paletteAction(label, hint, run) { return { label: label, hint: hint, run: run }; }
+  function getPaletteItems() {
+    return [
+      paletteAction('Command', '1', function () { switchView('command'); }),
+      paletteAction('Brain', '2', function () { switchView('brain'); }),
+      paletteAction('Library', 'L', function () { switchView('library'); }),
+      paletteAction('Operative Roster', 'R', function () { switchView('directory'); }),
+      paletteAction('Protocols', 'P', function () { switchView('auto'); }),
+      paletteAction('Enterprise', 'E', function () { switchView('ops'); }),
+      paletteAction('Workshop', 'W', function () { switchView('dev'); }),
+      paletteAction('Field Manual', '?', function () { openKbHelp(); }),
+      paletteAction('Settings', '', function () { openSettings(); }),
+      paletteAction('Morning Brief', '', function () { var b = document.getElementById('morning-brief-btn'); if (b) b.click(); }),
+      paletteAction('Org Self-Test', '', function () { var b = document.getElementById('org-selftest-btn'); if (b) b.click(); }),
+      paletteAction('Open Terminal', '', function () { var b = document.getElementById('open-terminal-btn'); if (b) b.click(); }),
+      paletteAction('Toggle FX Sound', '', function () { var b = document.getElementById('mute-toggle'); if (b) b.click(); }),
+      paletteAction('Toggle Bench', '[', function () { toggleBenchCollapsed(); }),
+      paletteAction('Toggle In Flight rail', '\\', function () { toggleFlightCollapsed(); }),
+    ];
+  }
+  // Subsequence fuzzy match (letters of q must appear in order in the label) —
+  // no scoring/ranking library needed for a list this short.
+  function fuzzyMatch(q, label) {
+    if (!q) return true;
+    q = q.toLowerCase(); label = label.toLowerCase();
+    var qi = 0;
+    for (var i = 0; i < label.length && qi < q.length; i++) { if (label[i] === q[qi]) qi++; }
+    return qi === q.length;
+  }
+  function renderPaletteResults(q) {
+    var items = getPaletteItems().filter(function (it) { return fuzzyMatch(q, it.label); });
+    paletteSelIndex = 0;
+    if (!items.length) { paletteResults.innerHTML = '<div class="palette-empty">No matches</div>'; return; }
+    paletteResults.innerHTML = '';
+    items.forEach(function (it, i) {
+      var row = document.createElement('div');
+      row.className = 'palette-item' + (i === 0 ? ' sel' : '');
+      row.textContent = it.label;
+      if (it.hint) { var hint = document.createElement('span'); hint.className = 'pi-hint'; hint.textContent = it.hint; row.appendChild(hint); }
+      row.addEventListener('click', function () { closePalette(); it.run(); });
+      row.dataset.idx = i;
+      paletteResults.appendChild(row);
+    });
+    paletteResults._items = items;
+  }
+  function openPalette() {
+    paletteScrim.classList.add('open');
+    paletteEl.classList.add('open');
+    paletteInput.value = '';
+    renderPaletteResults('');
+    setTimeout(function () { paletteInput.focus(); }, 0);
+  }
+  function closePalette() {
+    paletteScrim.classList.remove('open');
+    paletteEl.classList.remove('open');
+  }
+  paletteInput.addEventListener('input', function () { renderPaletteResults(paletteInput.value); });
+  paletteInput.addEventListener('keydown', function (e) {
+    var rows = paletteResults.querySelectorAll('.palette-item');
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!rows.length) return;
+      rows[paletteSelIndex].classList.remove('sel');
+      paletteSelIndex = (paletteSelIndex + (e.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
+      rows[paletteSelIndex].classList.add('sel');
+      rows[paletteSelIndex].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      var items = paletteResults._items || [];
+      if (items[paletteSelIndex]) { closePalette(); items[paletteSelIndex].run(); }
+    }
+  });
+  document.getElementById('palette-btn').addEventListener('click', function () {
+    if (paletteEl.classList.contains('open')) closePalette(); else openPalette();
+  });
+  paletteScrim.addEventListener('click', closePalette);
 
   // View survives reload / back-button per §4.1. currentView already reads
   // 'brain' from its declaration above, but switchView's early-return guard
@@ -2832,10 +3065,10 @@
     staggerReveal(grid);
   }
 
-  document.querySelectorAll('#stage-dev .filter-chip').forEach(function (chip) {
+  document.querySelectorAll('#sheet-workshop .filter-chip').forEach(function (chip) {
     chip.addEventListener('click', function () {
       workshopFilter = chip.dataset.filter;
-      document.querySelectorAll('#stage-dev .filter-chip').forEach(function (c) { c.classList.toggle('active', c === chip); });
+      document.querySelectorAll('#sheet-workshop .filter-chip').forEach(function (c) { c.classList.toggle('active', c === chip); });
       applyWorkshopFilter();
     });
   });
@@ -3331,7 +3564,7 @@
     directoryFilter = 'all';
     directoryQuery = '';
     document.getElementById('directory-search').value = '';
-    document.querySelectorAll('#stage-directory .filter-chip').forEach(function (c) {
+    document.querySelectorAll('#sheet-roster .filter-chip').forEach(function (c) {
       c.classList.toggle('active', c.dataset.filter === 'all');
     });
     switchView('directory');
@@ -3347,10 +3580,10 @@
     if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
   }
 
-  document.querySelectorAll('#stage-directory .filter-chip').forEach(function (chip) {
+  document.querySelectorAll('#sheet-roster .filter-chip').forEach(function (chip) {
     chip.addEventListener('click', function () {
       directoryFilter = chip.dataset.filter;
-      document.querySelectorAll('#stage-directory .filter-chip').forEach(function (c) { c.classList.toggle('active', c === chip); });
+      document.querySelectorAll('#sheet-roster .filter-chip').forEach(function (c) { c.classList.toggle('active', c === chip); });
       applyDirectoryFilter();
     });
   });
@@ -3501,7 +3734,7 @@
     libraryOriginFilter = 'all';
     libraryQuery = '';
     document.getElementById('library-search').value = '';
-    document.querySelectorAll('#stage-library .filter-chip').forEach(function (c) {
+    document.querySelectorAll('#sheet-library .filter-chip').forEach(function (c) {
       c.classList.toggle('active', c.dataset.filter === 'all');
     });
     switchView('library');
@@ -3517,18 +3750,18 @@
     if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
   }
 
-  document.querySelectorAll('#stage-library [data-filter-group="library-type"] .filter-chip').forEach(function (chip) {
+  document.querySelectorAll('#sheet-library [data-filter-group="library-type"] .filter-chip').forEach(function (chip) {
     chip.addEventListener('click', function () {
       libraryTypeFilter = chip.dataset.filter;
-      document.querySelectorAll('#stage-library [data-filter-group="library-type"] .filter-chip').forEach(function (c) { c.classList.toggle('active', c === chip); });
+      document.querySelectorAll('#sheet-library [data-filter-group="library-type"] .filter-chip').forEach(function (c) { c.classList.toggle('active', c === chip); });
       applyLibraryFilter();
     });
   });
 
-  document.querySelectorAll('#stage-library [data-filter-group="library-origin"] .filter-chip').forEach(function (chip) {
+  document.querySelectorAll('#sheet-library [data-filter-group="library-origin"] .filter-chip').forEach(function (chip) {
     chip.addEventListener('click', function () {
       libraryOriginFilter = chip.dataset.filter;
-      document.querySelectorAll('#stage-library [data-filter-group="library-origin"] .filter-chip').forEach(function (c) { c.classList.toggle('active', c === chip); });
+      document.querySelectorAll('#sheet-library [data-filter-group="library-origin"] .filter-chip').forEach(function (c) { c.classList.toggle('active', c === chip); });
       applyLibraryFilter();
     });
   });
@@ -3617,13 +3850,15 @@
   // focus is in a text input (except Esc, which always applies).
   // ============================================================
   var KB_MAP = [
-    ['1-7', 'Switch view: Brain / Workshop / Protocols / Enterprise / Operative Roster / Library / Command Center'],
-    ['/', 'Focus the omnibox'],
-    ['[', 'Collapse/expand the left rail'],
-    ['Shift+Enter', 'Ask (in the omnibox)'],
-    ['r', "Refresh the active view's data"],
-    ['f', "Focus the active view's filter chips"],
-    ['Esc', 'Close dialog -> close panel -> dismiss toasts -> blur omnibox, in that order'],
+    ['1 / 2', 'Command / Brain'],
+    ['L / R / P / E / W', 'Open the Library / Roster / Protocols / Enterprise / Workshop sheet'],
+    ['Ctrl+K', 'Command palette — jump to any place, sheet or action'],
+    ['/', 'Focus the composer'],
+    ['[', 'Collapse/expand the Bench'],
+    ['\\', 'Collapse/expand the In Flight rail'],
+    ['Shift+Enter', 'New line in the composer (Enter sends)'],
+    ['f', "Focus the active sheet's filter chips"],
+    ['Esc', 'Close: dialog -> palette -> sheet -> panel -> toast -> blur, in that order'],
     ['?', 'This help overlay'],
     ['Ctrl+1-9', 'Command Center: focus the Nth open console tab'],
     ['Ctrl+\\', 'Command Center: toggle grid view of every open console'],
@@ -4023,10 +4258,22 @@
     return false;
   }
 
+  // Letter → internal view name for the sheet hotkeys (plan §P7). Keys, not
+  // VALID_VIEWS values, so the mapping reads the same as the dock buttons.
+  var SHEET_KEY = { l: 'library', r: 'directory', p: 'auto', e: 'ops', w: 'dev' };
+
   window.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
+      // Esc ladder (extended, not replaced, from the pre-P7 version): dialog
+      // (kb/src modal) → palette → sheet → panel → toast → blur. Dialog and
+      // palette both render above a sheet (z-index 100/110 vs 13), so
+      // whichever is topmost closes first — a src-modal opened from inside a
+      // sheet closes on the first Esc, the sheet itself on the second
+      // (plan §P7 verification 4).
       if (srcModal.classList.contains('open')) { closeSourceEditor(); return; }
       if (kbModal.classList.contains('open')) { closeKbHelp(); return; }
+      if (document.getElementById('palette').classList.contains('open')) { closePalette(); return; }
+      if (Object.keys(SHEET_ID).indexOf(currentView) !== -1) { closeSheet(); return; }
       if (document.getElementById('panel').classList.contains('open')) { document.getElementById('panel').classList.remove('open'); return; }
       if (document.getElementById('toast-stack').children.length) {
         document.getElementById('toast-stack').lastElementChild.querySelector('.toast-close').click();
@@ -4036,28 +4283,30 @@
       return;
     }
     if (ccHandleGlobalShortcut(e)) return;
+    // Ctrl+K opens the palette regardless of focus (same convention as
+    // Ctrl+1-9/Ctrl+\ above it) — 'k' never falls inside ccHandleGlobalShortcut's
+    // own 1-9/\ handling, so this never fights it for the same chord.
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault();
+      if (document.getElementById('palette').classList.contains('open')) closePalette(); else openPalette();
+      return;
+    }
     if (isTextInputFocused()) return;
     if (e.key === '?') { e.preventDefault(); openKbHelp(); return; }
-    if (e.key >= '1' && e.key <= '7' && !e.ctrlKey && !e.metaKey) {
-      var byIndex = ['brain', 'dev', 'auto', 'ops', 'directory', 'library', 'command'];
-      switchView(byIndex[parseInt(e.key, 10) - 1]);
-      return;
+    if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (e.key === '1') { switchView('command'); return; }
+      if (e.key === '2') { switchView('brain'); return; }
+      var sheetKey = SHEET_KEY[e.key.toLowerCase()];
+      if (sheetKey) { switchView(sheetKey); return; }
     }
     if (e.key === '/') { e.preventDefault(); document.getElementById('search-input').focus(); return; }
-    if (e.key === '[') {
-      e.preventDefault();
-      document.body.classList.toggle('rail-collapsed');
-      try { localStorage.setItem('alfred-rail-collapsed', document.body.classList.contains('rail-collapsed') ? '1' : '0'); } catch (e) { /* localStorage unavailable */ }
-      applyBenchTight(); // an explicit choice just landed — the auto rule must yield to it now
-      return;
-    }
-    if (e.key === 'r' || e.key === 'R') {
-      stopViewPolls();
-      startViewPolls(currentView);
-      return;
-    }
+    if (e.key === '[') { e.preventDefault(); toggleBenchCollapsed(); return; }
+    // Plain \ only — Ctrl+\ is ccHandleGlobalShortcut's grid-mode toggle
+    // (checked above) and must never fall through to this even when it
+    // declined to act (e.g. outside the Command place with no terminals open).
+    if (e.key === '\\' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); toggleFlightCollapsed(); return; }
     if (e.key === 'f' || e.key === 'F') {
-      var firstChip = document.querySelector('.legacy-pane:not([hidden]) .filter-chip, .pane:not([hidden]) .filter-chip');
+      var firstChip = document.querySelector('.sheet:not([hidden]) .filter-chip, .pane:not([hidden]) .filter-chip');
       if (firstChip) firstChip.focus();
       return;
     }

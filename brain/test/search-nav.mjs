@@ -114,9 +114,9 @@ T('the Library preview actually loaded for the clicked item',
 // Arriving at a list that has silently filtered out the thing you just clicked
 // is worse than not navigating at all.
 T('navigating to the Library resets its filters to "all"',
-  await page.evaluate(() => [...document.querySelectorAll('#stage-library .filter-chip.active')]
+  await page.evaluate(() => [...document.querySelectorAll('#sheet-library .filter-chip.active')]
     .every((c) => c.dataset.filter === 'all')),
-  await page.evaluate(() => [...document.querySelectorAll('#stage-library .filter-chip.active')].map((c) => c.dataset.filter).join(',')));
+  await page.evaluate(() => [...document.querySelectorAll('#sheet-library .filter-chip.active')].map((c) => c.dataset.filter).join(',')));
 
 T('no uncaught JS errors', errs.length === 0, errs.slice(0, 2).join(' | '));
 
