@@ -395,15 +395,24 @@
     text-transform: uppercase; color: var(--focus); white-space: nowrap;
   }
   #views { display: flex; gap: 2px; flex: none; }
-  #dock { flex: 1 1 auto; display: flex; align-items: center; gap: 4px; min-width: 0; }
+  /* min-width:0 + overflow-x:auto: a flex item's default min-width is its
+     content size, so without this a wide dock would refuse to shrink and
+     spill its later buttons UNDER #utils (a subsequent sibling, later in
+     paint order) instead of wrapping or clipping — found live: the
+     Enterprise icon rendered fine but #palette-btn, painted on top, ate
+     every click meant for it. Scrolls rather than clips so no icon is ever
+     unreachable at a narrow width. */
+  #dock { flex: 1 1 auto; display: flex; align-items: center; gap: 4px; min-width: 0; overflow-x: auto; }
   /* Sheet launcher icons (plan §2.1/P7): Library/Roster/Protocols/Enterprise/
-     Workshop. Plain buttons, same active/hover contract as .view-btn, but
+     Workshop. Short glyphs (LIB/ROS/PRO/ENT/WKS), same abbreviation
+     convention as .cat-btn's PRJ/PAT/DEC/LRN/CLD — full names live in
+     `title`. Plain buttons, same active/hover contract as .view-btn, but
      kept a separate class since they open a sheet rather than switch #views'
      2-tab nav — only .view-btn drives aria-selected on a role="tab". */
   .dock-btn {
     background: none; border: 1px solid transparent; border-radius: var(--r-sm);
-    color: var(--text-dim); cursor: pointer; font-family: inherit; font-size: 11px;
-    letter-spacing: .04em; padding: 5px 9px; white-space: nowrap;
+    color: var(--text-dim); cursor: pointer; font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: .08em; padding: 5px 9px; white-space: nowrap; flex: none;
     transition: color .13s ease, border-color .13s ease, background .13s ease;
   }
   .dock-btn:hover { color: var(--text); border-color: var(--border-focusable); }
@@ -1539,11 +1548,11 @@
        switchView's existing internal view name (dev/auto/directory/library/
        ops — see LEGACY_VIEW). Same wiring loop as .view-btn below. -->
   <nav id="dock" role="toolbar" aria-label="Sheets">
-    <button class="dock-btn" data-view="library" title="Library (L)">Library</button>
-    <button class="dock-btn" data-view="directory" title="Operative Roster (R)">Roster</button>
-    <button class="dock-btn" data-view="auto" title="Protocols (P)">Protocols</button>
-    <button class="dock-btn" data-view="ops" title="Enterprise (E)">Enterprise</button>
-    <button class="dock-btn" data-view="dev" title="Workshop (W)">Workshop</button>
+    <button class="dock-btn" data-view="library" aria-label="Library" title="Library (L)">LIB</button>
+    <button class="dock-btn" data-view="directory" aria-label="Operative Roster" title="Operative Roster (R)">ROS</button>
+    <button class="dock-btn" data-view="auto" aria-label="Protocols" title="Protocols (P)">PRO</button>
+    <button class="dock-btn" data-view="ops" aria-label="Enterprise" title="Enterprise (E)">ENT</button>
+    <button class="dock-btn" data-view="dev" aria-label="Workshop" title="Workshop (W)">WKS</button>
   </nav>
   <div id="utils">
     <button id="palette-btn" title="Command palette — jump to any place or sheet (Ctrl+K)">&#8981; Jump</button>
