@@ -292,11 +292,11 @@
      root stacking context, where a z-index above 13 actually means
      something. */
   #composer-dock {
-    position: fixed; left: var(--rail-w); right: var(--flight-w); bottom: 0; z-index: 20;
+    position: fixed; left: 0; right: var(--flight-w); bottom: 0; z-index: 20;
     display: flex; flex-direction: column; pointer-events: none;
   }
   body.no-flight #composer-dock, body.ops-canvas #composer-dock, body.flight-collapsed #composer-dock,
-  body.grid-hide-flight #composer-dock { right: 0; }
+  body.grid-hide-flight #composer-dock, body.flight-idle #composer-dock { right: 0; }
   #composer-dock > * { pointer-events: auto; }
   /* #panel (the note drawer, z-index 25) overlays the deck's own rightmost
      420px whenever it is open, regardless of the flight rail's state — its
@@ -309,7 +309,8 @@
   body.no-flight:has(#panel.open) #composer-dock,
   body.ops-canvas:has(#panel.open) #composer-dock,
   body.flight-collapsed:has(#panel.open) #composer-dock,
-  body.grid-hide-flight:has(#panel.open) #composer-dock { right: var(--drawer-w); }
+  body.grid-hide-flight:has(#panel.open) #composer-dock,
+  body.flight-idle:has(#panel.open) #composer-dock { right: var(--drawer-w); }
   #composer {
     margin: 0 14px 14px 14px; padding: 8px 10px;
     background: var(--panel-bg-2, var(--surface-1)); border: 1px solid var(--border-strong, var(--border));
@@ -463,9 +464,11 @@
   #frame {
     position: fixed; inset: var(--topbar-h) 0 0 0; z-index: 10;
     display: grid; pointer-events: none;
-    grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--flight-w);
+    /* Bench (left rail) retired — everything it held moved into #composer.
+       Two columns now, not three: deck, then flight. */
+    grid-template-columns: minmax(0, 1fr) var(--flight-w);
   }
-  #bench, #flight { pointer-events: auto; }
+  #flight { pointer-events: auto; }
   /* 'ops' (Enterprise) draws straight onto the shared #graph canvas — P7
      took the plan's own sanctioned fallback (§2.6) here rather than
      threading draw/physicsTick/nodeAtScreen/flyTo/the pointer handlers onto
@@ -478,30 +481,35 @@
      (see above), reached from the dock/hotkey('E')/palette exactly like a
      sheet — rather than getting a literal .sheet+its own <canvas>. Hide
      #flight so its 292px column doesn't clip the chart's right edge. */
-  body.ops-canvas #frame { grid-template-columns: var(--rail-w) minmax(0, 1fr) 0; }
+  body.ops-canvas #frame { grid-template-columns: minmax(0, 1fr) 0; }
   body.ops-canvas #flight { display: none; }
   /* Brain gets the same full-width treatment (P4/Atelier: the graph is the
      content here, so the activity rail yields its width rather than sitting
      mostly empty beside a force-directed graph). */
-  body.no-flight #frame { grid-template-columns: var(--rail-w) minmax(0, 1fr) 0; }
+  body.no-flight #frame { grid-template-columns: minmax(0, 1fr) 0; }
   body.no-flight #flight { display: none; }
   /* `\` toggles this manually (plan §P7) — a standing user override on top of
      the two automatic hides above, same pattern as `[`/body.rail-collapsed
      for the Bench. Real In Flight content is P8's job; the toggle exists now. */
-  body.flight-collapsed #frame { grid-template-columns: var(--rail-w) minmax(0, 1fr) 0; }
+  body.flight-collapsed #frame { grid-template-columns: minmax(0, 1fr) 0; }
   body.flight-collapsed #flight { display: none; }
   /* Grid mode's own auto-hide (plan §3.3/§4 P8) — set/cleared by
      ccSetGridMode(), independent of the persisted flight-collapsed choice. */
-  body.grid-hide-flight #frame { grid-template-columns: var(--rail-w) minmax(0, 1fr) 0; }
+  body.grid-hide-flight #frame { grid-template-columns: minmax(0, 1fr) 0; }
   body.grid-hide-flight #flight { display: none; }
+  /* Auto-hide when idle (everything-bar redesign): renderFlight() toggles
+     this the instant there are no active agents to show, same treatment as
+     the four manual/view-driven hides above — "Nothing running" no longer
+     costs 292px of screen. */
+  body.flight-idle #frame { grid-template-columns: minmax(0, 1fr) 0; }
+  body.flight-idle #flight { display: none; }
 
-  #bench, #flight {
+  #flight {
     min-width: 0; overflow-y: auto; overflow-x: hidden;
     padding: 14px; display: flex; flex-direction: column; gap: 10px;
     background: var(--surface-1);
+    border-left: 1px solid var(--border);
   }
-  #bench { border-right: 1px solid var(--border); }
-  #flight { border-left: 1px solid var(--border); }
   /* #topleft (status) is pinned to the foot of the Bench column via the
      flexbox auto-margin trick — everything above it (search, interns) packs
      to the top, the status readout always sits at the bottom (plan §2.2). */
@@ -572,47 +580,38 @@
      comment already documented; #pane-command just needed its own rule. */
   #pane-command[hidden], #pane-brain[hidden] { display: none; }
   /* Room for the composer + its results surface, which overlay the foot of
-     whichever pane is showing (plan §3.4 P6). A fixed reserve, not one kept
-     live via a ResizeObserver on #composer: the Bench's async seat fetch
-     changes the composer's height once (route chips wrapping to a 2nd line)
+     whichever pane is showing (plan §3.4 P6). #pane-brain keeps a FIXED
+     reserve, not one kept live via a ResizeObserver on #composer: the
+     Bench's async seat fetch used to change the composer's height once
      shortly after load, and feeding that into #pane-brain's own box would
      shrink .brain-canvas a second time AFTER P4's own ResizeObserver and the
      test/camera math had already settled on the first size — a race that
      intermittently misplaced node click targets (caught by redesign.mjs's
      coordinate-offset assertions). A static value large enough for the
-     composer's worst case (◎ Council armed, chips wrapped) costs a little
-     unused scroll space and buys back the determinism P4 depends on. */
-  #pane-command, #pane-brain { padding-bottom: 190px; }
+     composer's worst case (seat strip + ◎ Council armed + tools row) costs
+     a little unused scroll space and buys back the determinism P4 depends
+     on. 260px — raised from 190px when the seat strip and tools row (Open
+     all/Refresh/Local GPU/Status) moved into the composer off the retired
+     Bench (everything-bar redesign); Local GPU/Status pop up as absolutely-
+     positioned overlays above the bar rather than growing it, so this only
+     had to grow by the new rows' own height, not their popover content. */
+  #pane-brain { padding-bottom: 260px; }
+  /* #pane-command has no such race (nothing here does P4's coordinate math),
+     so it gets a live reserve instead of a guessed static one — the actual
+     fix for "the terminal sits behind the bottom bar": a ResizeObserver on
+     #composer-dock (see the script) keeps --composer-live-h equal to the
+     bar's real rendered height, so the terminal's bottom rows are never
+     covered no matter how tall the bar gets. */
+  #pane-command { padding-bottom: var(--composer-live-h, 260px); }
 
-  /* --- collapsible rail: `[` toggles body.rail-collapsed, persisted in
-       localStorage. Each rail panel keeps a compact glyph visible and hides
-       its expanded body, so the rail narrows to --rail-w-narrow without
-       losing at-a-glance status. --- */
-  .rail-glyph { display: none; text-align: center; font-size: 16px; line-height: 1; padding: 8px 0; color: var(--accent-primary); }
-  body.rail-collapsed .rail-glyph { display: block; }
-  body.rail-collapsed #status .body,
-  body.rail-collapsed #interns-panel .body { display: none; }
-  /* Collapsed bench: seats shrink to just their identity bulb — the one
-     thing worth keeping legible at 58px (plan §3.2/§3.3). Applies under
-     BOTH the manual `[` toggle and the automatic bench-tight rule — the
-     Bench column narrows to the same --rail-w-narrow either way, and
-     #bench's own overflow-x:hidden means unhidden row content (tick, name,
-     model, "...") doesn't wrap, it clips and becomes unreachable. */
-  body.rail-collapsed .rail-glyph,
-  body.bench-tight .rail-glyph { display: block; }
-  body.rail-collapsed #bench-head .bench-sect-title span:last-child,
-  body.rail-collapsed #bench-head .bench-sect-actions,
-  body.rail-collapsed #bench-head > .panel-help,
-  body.rail-collapsed .seat-name, body.rail-collapsed .seat-model,
-  body.rail-collapsed .seat-tick, body.rail-collapsed .seat-more,
-  body.bench-tight #bench-head .bench-sect-title span:last-child,
-  body.bench-tight #bench-head .bench-sect-actions,
-  body.bench-tight #bench-head > .panel-help,
-  body.bench-tight .seat-name, body.bench-tight .seat-model,
-  body.bench-tight .seat-tick, body.bench-tight .seat-more { display: none; }
-  body.rail-collapsed .seat, body.bench-tight .seat { justify-content: center; padding: 6px 0; }
-  body.bench-tight #status .body,
-  body.bench-tight #interns-panel .body { display: none; }
+  /* Collapsible-rail CSS (rail-collapsed/bench-tight hiding .seat-name/
+     .seat-tick/.seat-more/etc. and #status/#interns-panel .body) retired
+     with the Bench itself (everything-bar redesign) — those selectors were
+     NOT scoped to #bench, so left in place they would have also hidden the
+     same classes now reused in the composer's seat strip on narrow
+     viewports or after a prior `[` choice restored from localStorage. The
+     `[` hotkey and applyBenchTight() still toggle rail-collapsed/bench-tight
+     on body (harmless — nothing reads those classes anymore). */
 
   /* --- Bench sections (plan §2.1/§3.1/§3.2): a shared card shell for the
        seat list, search, interns and status blocks that stack in #bench.
@@ -635,6 +634,39 @@
        actionable lives behind the row's own "..." popover so a 244px column
        never has to fit five controls on one line. --- */
   .bench-seats { display: flex; flex-direction: column; gap: 2px; }
+  /* --- Composer seats (everything-bar redesign): the same #cc-seats markup
+       renderCcSeats() already builds, just laid out as a horizontal
+       scrollable strip instead of the old Bench's vertical stack — ~7
+       seats (providers.json) fit one row. Each chip gets a fixed width
+       since flex:1-growing .seat-main would otherwise fight for space
+       across a row instead of a column; the model name is dropped here
+       (still in the "..." popover) since there isn't room for it. */
+  .composer-seats { display: flex; flex-direction: row; gap: 4px; overflow-x: auto; overflow-y: hidden; padding-bottom: 2px; }
+  .composer-seats .seat { flex: 0 0 auto; width: 152px; }
+  .composer-seats .seat-model { display: none; }
+  /* --- Composer tools row: Open all / Refresh / Local GPU / Status — the
+       rest of the old Bench's jobs, folded into the bottom bar. Local GPU
+       and Status are native <details> so their content pops up as a
+       floating panel ABOVE the bar (position:absolute, out of flow)
+       instead of growing the composer's own height — keeps the fixed
+       #pane-command/#pane-brain bottom reserve (see that rule) close to
+       its old size despite the extra controls. */
+  .composer-tools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .composer-tool { position: relative; }
+  .composer-tool > summary {
+    list-style: none; cursor: pointer; font-size: 9px; padding: 3px 7px;
+    border-radius: 4px; border: 1px solid var(--border-focusable); color: var(--text-dim);
+    transition: color .13s ease, border-color .13s ease;
+  }
+  .composer-tool > summary::-webkit-details-marker { display: none; }
+  .composer-tool > summary:hover { color: var(--text); border-color: var(--accent-primary); }
+  .composer-tool[open] > summary { color: var(--accent-primary); border-color: var(--accent-primary); }
+  .composer-tool-body {
+    position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 30;
+    width: 260px; max-height: 340px; overflow-y: auto;
+    background: var(--surface-2); border: 1px solid var(--border-strong, var(--border));
+    border-radius: var(--r-md); box-shadow: var(--shadow-panel); padding: 10px 12px;
+  }
   .seat {
     --accent: var(--gray);
     position: relative; display: flex; align-items: center; gap: 8px;
@@ -1657,95 +1689,9 @@
        colour; the search box; the intern bench; the status readout pinned to
        the foot via #topleft's auto-margin. #topleft's id is kept: org.mjs's
        regression test queries `#topleft .row` directly for the status rows. -->
-  <aside id="bench">
-    <!-- Seat rows — moved out of the Command pane's old "Lanes" section
-         (plan §2.2 disposition table, P5 row) since every seat belongs on
-         the Bench regardless of which place is open. renderCcSeats() owns
-         #cc-seats; the popover it opens is #seat-popover, appended once
-         below (outside #bench, so it is never clipped by the Bench's own
-         overflow-y: auto). -->
-    <div id="bench-head" class="bench-sect">
-      <div class="bench-sect-title">
-        <span>Bench</span>
-        <span id="cc-summary" class="panel-help"></span>
-      </div>
-      <div class="bench-sect-actions">
-        <button class="btn small" id="cc-open-btn" title="Open every ticked seat at once in a fresh Windows Terminal window, equal columns">&#9002; Open all</button>
-        <button class="filter-chip" id="cc-refresh" title="Re-check which seats are installed and signed in">&#8635; Refresh</button>
-      </div>
-      <div id="cc-seats" class="bench-seats"></div>
-      <div class="panel-help">Click a seat to focus it — the app re-tints to that provider's colour. Tick the box to include it in the council. The &#8943; opens model, open and sign-in controls.</div>
-    </div>
-
-    <!-- Ask/Search moved to #composer at the foot of the Deck (plan §3.4 P6)
-         — #search-input is now the composer's own textarea, not a Bench
-         panel. Results still land in #ask-drawer, relocated alongside it. -->
-
-    <!-- Observe, don't do: the "prompt the intern" box was removed with the
-         terminal, for the same reason. Alfred watches how models are used in
-         real sessions elsewhere; it is not a chat surface of its own.
-         Local GPU: a glanceable resident/installed strip up top (plan §3.1),
-         expanding via #intern-toggle to the exact Installed/Cloud/Available
-         markup that shipped — renderInstalledModels/renderCloudSection/
-         runCatalogSearch/pickCatalogModel/startPull/followPull are untouched;
-         only this parent structure and its CSS changed. -->
-    <div id="interns-panel" class="frame bench-sect">
-      <div class="rail-glyph" aria-hidden="true" title="Interns">&#9881;</div>
-      <div class="body">
-      <div class="intern-panel-title-row">
-        <div class="panel-title">Local GPU</div>
-        <button id="intern-toggle" type="button" aria-expanded="false" aria-controls="intern-detail" title="Show installed, cloud and available models">&#9662;</button>
-      </div>
-      <div class="intern-summary">
-        <div class="vram-bar"><i id="intern-vram-fill" style="width:0%"></i></div>
-        <div class="intern-summary-line" id="intern-summary-line">-- installed</div>
-      </div>
-      <div id="intern-detail" hidden>
-      <details class="intern-section" id="intern-section-installed" open>
-        <summary>Installed</summary>
-        <div id="intern-installed-list"></div>
-      </details>
-      <details class="intern-section" id="intern-section-cloud">
-        <summary>Cloud &middot; Ollama</summary>
-        <div id="intern-cloud-body"></div>
-      </details>
-      <details class="intern-section" id="intern-section-available">
-        <summary>Available</summary>
-        <div class="intern-add">
-          <input id="intern-pull-input" placeholder="search or type a model&hellip;" autocomplete="off" spellcheck="false" />
-          <button id="intern-pull-btn" class="icon-btn compact" title="Pull this model with ollama" aria-label="Pull model">&#43;</button>
-        </div>
-        <div id="intern-catalog-results"></div>
-        <div id="intern-pull-status" class="panel-help"></div>
-      </details>
-      </div>
-      </div>
-    </div>
-
-    <div id="topleft">
-      <div id="status" class="frame bench-sect">
-        <div class="rail-glyph" aria-hidden="true" title="Status">&#9673;</div>
-        <div class="body">
-        <div class="row" id="stat-files-row" title="Everything Alfred can see: vault notes, agent charters, and every Library artifact"><span>Files</span><span class="val" id="stat-notes">--</span></div>
-        <div id="stat-files-breakdown"></div>
-        <div class="row"><span>Leads</span><span class="val" id="stat-links">--</span></div>
-        <div class="row">
-          <span>Indexed</span>
-          <span class="row-right">
-            <span class="val" id="stat-fresh">--</span>
-            <button id="stat-reindex-btn" class="icon-btn compact" title="Re-index the vault now" aria-label="Re-index the vault now">&#10227;</button>
-          </span>
-        </div>
-        <div class="row" id="stat-brain-row" title="Files in your brain vault with uncommitted git changes"><span>Vault Edits</span><span class="val" id="stat-brain">--</span></div>
-        <div class="row"><span>Ollama</span><span class="val" id="stat-ollama">--</span></div>
-        <div class="row"><span>Intern</span><span class="val" id="stat-tokens">--</span></div>
-        <div class="row" id="stat-build-row" title="ui.html fingerprint the running server is serving, and how long it has been up"><span>Build</span><span class="val" id="stat-build">--</span></div>
-        <div id="usage-rows"></div>
-        <div id="legend"></div>
-        </div>
-      </div>
-    </div>
-  </aside>
+  <!-- The Bench (left rail) is retired — every seat toggle, Open all/
+       Refresh, Local GPU and the status readout now live in #composer at
+       the foot of the Deck (see #cc-seats/#composer-tools there). -->
 
   <main id="deck">
     <!-- Brain pane: #graph is contained here now (P4), inside .brain-canvas,
@@ -1839,7 +1785,14 @@
   </div>
 
   <div id="composer">
-    <div id="route-chips" class="route-chips"></div>
+    <!-- Seats live here now, not on the old left Bench (retired — see the
+         removed #bench block). #cc-seats keeps its id: renderCcSeats() and
+         every seat-popover/route-chip helper below already target it by id,
+         so relocating it costs zero JS. .composer-seats replaces
+         .bench-seats with a horizontal, scrollable strip instead of a
+         vertical stack — ~7 seats fit one row without wrapping. -->
+    <div id="cc-seats" class="composer-seats"></div>
+    <div class="panel-help">Tick a seat for the council — ticking also opens or focuses its terminal. &#8943; for model, sign-in and native-window controls.</div>
     <div class="composer-row">
       <span class="prompt" aria-hidden="true">&gt;</span>
       <textarea id="search-input" class="composer-input" rows="1" placeholder="Ask, or / skills  @ seats  ? search" autocomplete="off" spellcheck="true" aria-label="Ask Alfred — or / for skills, @ for seats, ? for search"></textarea>
@@ -1850,6 +1803,69 @@
       <label class="cc-check"><input type="checkbox" id="cc-synth" checked> Claude chairs a verdict as</label>
       <input id="cc-synth-model" class="cc-model-input" list="cc-synth-models" placeholder="sonnet" title="Which Claude model chairs the council (blank = sonnet)" autocomplete="off">
       <datalist id="cc-synth-models"><option value="sonnet"><option value="opus"><option value="haiku"><option value="fable"></datalist>
+    </div>
+    <!-- Composer tools row — the rest of the old Bench's jobs (Open all,
+         Refresh, Local GPU model management, the file/index/spend status
+         readout) folded in here instead of a dedicated left rail. Local GPU
+         and Status keep their exact original inner markup/ids/JS (renderInstalled
+         Models/renderCloudSection/etc. for the former; org.mjs's regression
+         test still finds #topleft .row for the latter) — only their outer
+         wrapper and default-collapsed state changed. -->
+    <div id="composer-tools" class="composer-tools">
+      <span id="cc-summary" class="panel-help"></span>
+      <button class="btn small" id="cc-open-btn" title="Open every ticked seat at once in a fresh Windows Terminal window, equal columns">&#9002; Open all</button>
+      <button class="filter-chip" id="cc-refresh" title="Re-check which seats are installed and signed in">&#8635; Refresh</button>
+      <div class="intern-summary" id="interns-panel">
+        <div class="vram-bar"><i id="intern-vram-fill" style="width:0%"></i></div>
+        <div class="intern-summary-line" id="intern-summary-line">-- installed</div>
+      </div>
+      <details class="composer-tool">
+        <summary>&#9881; Local GPU</summary>
+        <div id="intern-detail" class="composer-tool-body">
+          <details class="intern-section" id="intern-section-installed" open>
+            <summary>Installed</summary>
+            <div id="intern-installed-list"></div>
+          </details>
+          <details class="intern-section" id="intern-section-cloud">
+            <summary>Cloud &middot; Ollama</summary>
+            <div id="intern-cloud-body"></div>
+          </details>
+          <details class="intern-section" id="intern-section-available">
+            <summary>Available</summary>
+            <div class="intern-add">
+              <input id="intern-pull-input" placeholder="search or type a model&hellip;" autocomplete="off" spellcheck="false" />
+              <button id="intern-pull-btn" class="icon-btn compact" title="Pull this model with ollama" aria-label="Pull model">&#43;</button>
+            </div>
+            <div id="intern-catalog-results"></div>
+            <div id="intern-pull-status" class="panel-help"></div>
+          </details>
+        </div>
+      </details>
+      <details class="composer-tool">
+        <summary>&#9673; Status</summary>
+        <div id="topleft" class="composer-tool-body">
+          <div id="status" class="frame">
+            <div class="body">
+            <div class="row" id="stat-files-row" title="Everything Alfred can see: vault notes, agent charters, and every Library artifact"><span>Files</span><span class="val" id="stat-notes">--</span></div>
+            <div id="stat-files-breakdown"></div>
+            <div class="row"><span>Leads</span><span class="val" id="stat-links">--</span></div>
+            <div class="row">
+              <span>Indexed</span>
+              <span class="row-right">
+                <span class="val" id="stat-fresh">--</span>
+                <button id="stat-reindex-btn" class="icon-btn compact" title="Re-index the vault now" aria-label="Re-index the vault now">&#10227;</button>
+              </span>
+            </div>
+            <div class="row" id="stat-brain-row" title="Files in your brain vault with uncommitted git changes"><span>Vault Edits</span><span class="val" id="stat-brain">--</span></div>
+            <div class="row"><span>Ollama</span><span class="val" id="stat-ollama">--</span></div>
+            <div class="row"><span>Intern</span><span class="val" id="stat-tokens">--</span></div>
+            <div class="row" id="stat-build-row" title="ui.html fingerprint the running server is serving, and how long it has been up"><span>Build</span><span class="val" id="stat-build">--</span></div>
+            <div id="usage-rows"></div>
+            <div id="legend"></div>
+            </div>
+          </div>
+        </div>
+      </details>
     </div>
     <div class="composer-hint">Enter &mdash; send &middot; Shift+Enter &mdash; new line &middot; / skill &middot; @ seat &middot; ? search (Enter asks Alfred)</div>
   </div>
@@ -2745,6 +2761,10 @@
     var wrap = document.getElementById('flight-jobs');
     if (!wrap) return;
     var active = ((payload || lastOrgPayload || {}).agents || []).filter(function (a) { return a.status === 'active'; });
+    // Idle rail costs 292px for a "Nothing running" placeholder nobody reads —
+    // collapse it the same way the view-driven hides already do, and expand
+    // back the instant a real job shows up.
+    document.body.classList.toggle('flight-idle', !active.length);
     wrap.textContent = '';
     // Never render blank — an operator glancing at the rail needs to know
     // "nothing" was actually checked, not confuse it with "not loaded yet".
@@ -5902,6 +5922,21 @@
   // observer can't drift out of sync the way a manually-repeated toggle can.
   var askDrawer = document.getElementById('ask-drawer');
   var ccCouncilResults = document.getElementById('cc-council');
+
+  // Keep #pane-command's bottom reserve equal to the composer's real
+  // height (see the CSS rule on #pane-command) — the seat strip, Council
+  // arming, and the tools row can all change how tall #composer-dock is,
+  // and a stale/undersized reserve is exactly what leaves a terminal's
+  // bottom rows hidden behind the bar. +12px covers the dock's own bottom
+  // margin, which the observed box doesn't include.
+  (function () {
+    var dock = document.getElementById('composer-dock');
+    if (!dock || typeof ResizeObserver !== 'function') return;
+    new ResizeObserver(function (entries) {
+      var h = entries[0].contentRect.height;
+      document.documentElement.style.setProperty('--composer-live-h', Math.ceil(h + 12) + 'px');
+    }).observe(dock);
+  })();
   function syncAskDrawer() {
     var open = answerPanel.classList.contains('show') || searchResults.classList.contains('show') || !ccCouncilResults.hidden;
     askDrawer.classList.toggle('open', open);
@@ -6409,19 +6444,17 @@
   }
 
   function positionSeatPopover(anchor) {
-    // Floats just outside the Bench, to its right, rather than below the row
-    // within the Bench's own 244px column — a popover tall enough to hold a
-    // model input and open/sign-in controls would otherwise cover several
-    // sibling rows below it, intercepting clicks meant for THEIR "..." (a
-    // narrow, densely-packed list has no clear vertical space to grow into).
+    // Seats now live in the composer's horizontal strip at the foot of the
+    // screen (Bench retired), so the popover floats ABOVE its anchor button
+    // instead of to the right of a left rail that no longer exists — same
+    // idea as .composer-tool-body's placement just above the bar.
     var r = anchor.getBoundingClientRect();
-    var benchRect = document.getElementById('bench').getBoundingClientRect();
     var width = seatPopoverEl.offsetWidth || 236;
     var height = seatPopoverEl.offsetHeight || 160;
-    var left = Math.min(benchRect.right + 8, window.innerWidth - width - 8);
-    var top = Math.min(Math.max(8, r.top - 4), window.innerHeight - height - 8);
-    seatPopoverEl.style.left = Math.max(8, left) + 'px';
-    seatPopoverEl.style.top = Math.max(8, top) + 'px';
+    var left = Math.min(Math.max(8, r.left), window.innerWidth - width - 8);
+    var top = Math.max(8, r.top - height - 8);
+    seatPopoverEl.style.left = left + 'px';
+    seatPopoverEl.style.top = top + 'px';
   }
 
   function openSeatPopover(s, anchorBtn) {
@@ -6463,7 +6496,10 @@
       var box = document.createElement('input');
       box.type = 'checkbox'; box.disabled = !s.ready; box.checked = !!ccChecked[s.id];
       box.title = 'Include ' + s.label + ' in the council and in "Open all"';
-      box.addEventListener('change', function () { ccChecked[s.id] = box.checked; ccRenderAsking(); renderRouteChips(); });
+      box.addEventListener('change', function () {
+        ccChecked[s.id] = box.checked; ccRenderAsking(); renderRouteChips();
+        if (box.checked) ccOpenOrFocusSeatTerminal(s);
+      });
       tick.appendChild(box);
       row.appendChild(tick);
 
@@ -6938,6 +6974,28 @@
     });
   }
 
+  // Everything-bar redesign: ticking a seat both arms it for the Council
+  // AND opens/focuses its terminal — one action, two effects (the "..."
+  // popover stays the separate, advanced path for model/sign-in/native-
+  // window choices). Mirrors the lookup ccReattachTerminals() already does
+  // once at load — find a running terminal for this seat, focus its mounted
+  // pane if there is one, mount it if not, else start a fresh one.
+  function ccOpenOrFocusSeatTerminal(s) {
+    if (!s.ready) return;
+    var shimBtn = { disabled: false };
+    bridgeFetch('/api/terminals').then(function (r) { return r.json(); }).then(function (d) {
+      var running = (d.terminals || []).filter(function (t) { return t.provider === s.id && t.status === 'running'; });
+      var t = running.length ? running[running.length - 1] : null;
+      if (s.surface === 'web') {
+        if (t) window.open(s.webUrl, '_blank'); else ccOpenWebPanel(s, shimBtn);
+        return;
+      }
+      if (t) { if (ccTerms[t.id]) ccFocusTerm(t.id); else ccMountTerminal(t); }
+      else ccOpenBrowserTerminal(s, shimBtn);
+      switchView('command');
+    }).catch(function () {});
+  }
+
   // A "web" surface seat's PTY is the web server, not something to look at —
   // it starts the terminal exactly like any other seat (so kill still works),
   // then hands the operator the real interface: the seat's own page, in its
@@ -7326,17 +7384,11 @@
   }
   refreshInternBench();
 
-  // The summary strip is always visible; `intern-toggle` reveals the exact
-  // Installed/Cloud/Available markup beneath it, unchanged (plan §3.1).
-  (function () {
-    var toggleBtn = document.getElementById('intern-toggle');
-    var detailEl = document.getElementById('intern-detail');
-    toggleBtn.addEventListener('click', function () {
-      var opening = detailEl.hidden;
-      detailEl.hidden = !opening;
-      toggleBtn.setAttribute('aria-expanded', opening ? 'true' : 'false');
-    });
-  })();
+  // The summary strip sits outside the <details> now (always visible in
+  // #composer-tools); the native <details>/<summary> that wraps
+  // #intern-detail handles open/close directly, so the old #intern-toggle
+  // button (removed when Local GPU moved off the Bench) no longer exists —
+  // nothing to wire here.
 
   // --- adding a local model -------------------------------------------
   var pullInput = document.getElementById('intern-pull-input');
