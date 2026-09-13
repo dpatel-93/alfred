@@ -264,6 +264,12 @@ if (!(await up())) {
     ).catch(() => {});
     const catalogCount = await page.locator('#intern-catalog-results .intern-catalog-item').count();
     chk(tag('typing a model name searches the Interns catalog'), catalogCount > 0, `count=${catalogCount}`);
+    // Close it before the next section — Local GPU's popover and the seat
+    // strip share the same small area at the foot of the screen, and a left-
+    // open <details> would otherwise cover the "..." buttons clicked next
+    // (the app itself now guards this too: opening a seat popover closes any
+    // open .composer-tool, and vice versa — this mirrors that for the test).
+    await page.evaluate(() => { document.getElementById('composer-tool-interns').open = false; });
 
     // --- 5. DeepSeek external-panel label ---------------------------------
     // The control now lives in the seat popover (plan §3.2) — open each

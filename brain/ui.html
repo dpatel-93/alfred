@@ -1819,7 +1819,7 @@
         <div class="vram-bar"><i id="intern-vram-fill" style="width:0%"></i></div>
         <div class="intern-summary-line" id="intern-summary-line">-- installed</div>
       </div>
-      <details class="composer-tool" id="composer-tool-interns">
+      <details class="composer-tool" id="composer-tool-interns" name="composer-tool">
         <summary>&#9881; Local GPU</summary>
         <div id="intern-detail" class="composer-tool-body">
           <details class="intern-section" id="intern-section-installed" open>
@@ -1841,7 +1841,7 @@
           </details>
         </div>
       </details>
-      <details class="composer-tool">
+      <details class="composer-tool" id="composer-tool-status" name="composer-tool">
         <summary>&#9673; Status</summary>
         <div id="topleft" class="composer-tool-body">
           <div id="status" class="frame">
@@ -6443,6 +6443,16 @@
     document.querySelectorAll('.seat-more[aria-expanded="true"]').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
   }
 
+  // Everything-bar redesign: the seat popover and the composer-tools
+  // details (Local GPU/Status) all float over the same small strip at the
+  // foot of the screen — closing whichever one wasn't just opened keeps two
+  // from covering each other and eating each other's clicks, the same way
+  // openSeatPopover() already closes any OTHER seat's popover before
+  // showing its own.
+  document.querySelectorAll('.composer-tool').forEach(function (d) {
+    d.addEventListener('toggle', function () { if (d.open) closeSeatPopover(); });
+  });
+
   function positionSeatPopover(anchor) {
     // Seats now live in the composer's horizontal strip at the foot of the
     // screen (Bench retired), so the popover floats ABOVE its anchor button
@@ -6459,6 +6469,7 @@
 
   function openSeatPopover(s, anchorBtn) {
     closeSeatPopover();
+    document.querySelectorAll('.composer-tool[open]').forEach(function (d) { d.open = false; });
     seatPopoverEl.appendChild(buildSeatPopoverBody(s));
     seatPopoverEl.classList.add('open');
     seatPopoverId = s.id;
