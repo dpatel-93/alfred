@@ -22,126 +22,62 @@ const sleep = ms => new Promise(r=>setTimeout(r,ms));
 async function up() { const deadline=Date.now()+30000; while(Date.now()<deadline){ try{ if((await fetch('http://127.0.0.1:'+PORT+'/api/status')).ok) return true;}catch{} await sleep(300);} return false; }
 if (!(await up())) { console.log('server did not boot'); process.exit(1); }
 const browser = await chromium.launch({ args: ['--no-sandbox'] });
+const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+const page = await ctx.newPage();
+page.on('pageerror', e => console.log('PAGEERROR', e.message));
+page.on('crash', () => console.log('PAGE CRASHED'));
 
-async function freshPage(width) {
-  const ctx = await browser.newContext({ viewport: { width, height: 900 } });
-  const page = await ctx.newPage();
-  page.on('pageerror', e => console.log('PAGEERROR', width, e.message));
-  await page.goto('http://127.0.0.1:'+PORT+'/', { waitUntil: 'domcontentloaded' });
-  await page.click('#landing').catch(()=>{});
-  await page.waitForTimeout(1200);
-  await page.click('[data-view="command"]');
-  await page.waitForFunction(() => document.querySelectorAll('#cc-seats .seat').length > 0, null, { timeout: 10000 }).catch(()=>{});
-  return { ctx, page };
-}
+await page.goto('http://127.0.0.1:'+PORT+'/', { waitUntil: 'domcontentloaded' });
+await page.click('#landing').catch(()=>{});
+await page.waitForTimeout(1200);
+await page.click('[data-view="command"]');
+await page.waitForFunction(() => document.querySelectorAll('#cc-seats .seat').length > 0, null, { timeout: 10000 }).catch(()=>{});
+console.log('step1 seats loaded ok');
 
-// --- 1. Screenshots at 1024/1440/1920, expanded ---
+// Screenshots at 3 widths, expanded (force explicit-wide so no auto-tight interferes)
+await page.evaluate(() => { try { localStorage.setItem('alfred-rail-collapsed', '0'); } catch(e){} document.body.classList.remove('bench-tight','rail-collapsed'); });
 for (const width of [1024, 1440, 1920]) {
-  const { ctx, page } = await freshPage(width);
+  await page.setViewportSize({ width, height: 900 });
+  await sleep(150);
   await page.screenshot({ path: `brain/test/tmp_p5_${width}_expanded.png` });
-  await ctx.close();
+  console.log('screenshot', width, 'ok');
 }
 
-// --- 2. bench-tight auto-narrow at <=1180, no explicit choice ---
-{
-  const { ctx, page } = await freshPage(1024);
-  const tight = await page.evaluate(() => document.body.classList.contains('bench-tight'));
-  console.log('bench-tight at 1024 (no explicit choice):', tight);
-  // manual override: press [ -> explicit choice recorded -> bench-tight should clear
-  await page.keyboard.press('[');
-  await sleep(100);
-  const afterExplicit = await page.evaluate(() => ({
-    tight: document.body.classList.contains('bench-tight'),
-    collapsed: document.body.classList.contains('rail-collapsed'),
-    ls: localStorage.getItem('alfred-rail-collapsed'),
-  }));
-  console.log('after [ at 1024:', JSON.stringify(afterExplicit));
-  await page.screenshot({ path: 'brain/test/tmp_p5_1024_bench-tight-then-manual.png' });
-  await ctx.close();
-}
+// bench-tight auto-narrow check: clear the explicit choice, resize to 1024
+await page.evaluate(() => { try { localStorage.removeItem('alfred-rail-collapsed'); } catch(e){} });
+await page.setViewportSize({ width: 1024, height: 900 });
+await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+await sleep(200);
+let tight = await page.evaluate(() => document.body.classList.contains('bench-tight'));
+console.log('bench-tight at 1024 with no explicit choice:', tight);
+await page.screenshot({ path: 'brain/test/tmp_p5_1024_bench-tight.png' });
 
-// --- 3. wide viewport, no auto-narrow ---
-{
-  const { ctx, page } = await freshPage(1440);
-  const tight = await page.evaluate(() => document.body.classList.contains('bench-tight'));
-  console.log('bench-tight at 1440:', tight);
-  await ctx.close();
-}
+// manual override wins
+await page.keyboard.press('[');
+await sleep(150);
+let state = await page.evaluate(() => ({ tight: document.body.classList.contains('bench-tight'), collapsed: document.body.classList.contains('rail-collapsed'), ls: localStorage.getItem('alfred-rail-collapsed') }));
+console.log('after pressing [ at 1024:', JSON.stringify(state));
+await page.screenshot({ path: 'brain/test/tmp_p5_1024_after_manual.png' });
 
-// --- 4. [ collapse persists across reload ---
-{
-  const { ctx, page } = await freshPage(1440);
-  await page.keyboard.press('[');
-  await sleep(100);
-  const collapsedBefore = await page.evaluate(() => document.body.classList.contains('rail-collapsed'));
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await sleep(500);
-  const collapsedAfter = await page.evaluate(() => document.body.classList.contains('rail-collapsed'));
-  console.log('rail-collapsed before reload:', collapsedBefore, 'after reload:', collapsedAfter);
-  await page.screenshot({ path: 'brain/test/tmp_p5_1440_collapsed.png' });
-  await ctx.close();
-}
+// undo the collapse (second [ press) -> explicit "expanded" choice at narrow width should now win over auto-tight
+await page.keyboard.press('[');
+await sleep(150);
+state = await page.evaluate(() => ({ tight: document.body.classList.contains('bench-tight'), collapsed: document.body.classList.contains('rail-collapsed'), ls: localStorage.getItem('alfred-rail-collapsed') }));
+console.log('after pressing [ again at 1024 (explicit expand):', JSON.stringify(state));
+await page.screenshot({ path: 'brain/test/tmp_p5_1024_explicit_expand.png' });
 
-// --- 5. re-tint count + transition timing ---
-{
-  const { ctx, page } = await freshPage(1440);
-  const result = await page.evaluate(async () => {
-    function sample() {
-      var all = document.querySelectorAll('*');
-      var out = [];
-      for (var i = 0; i < all.length; i++) {
-        var cs = getComputedStyle(all[i]);
-        out.push(cs.color + '|' + cs.borderColor + '|' + cs.backgroundColor + '|' + cs.boxShadow);
-      }
-      return out;
-    }
-    var before = sample();
-    var t0 = performance.now();
-    setFocusSeat('gemini');
-    // Sample repeatedly to catch the mid-transition value and confirm it is NOT instant.
-    await new Promise(r => setTimeout(r, 60));
-    var mid = sample();
-    await new Promise(r => setTimeout(r, 600));
-    var after = sample();
-    var t1 = performance.now();
-    var changedAfter = 0, changedMid = 0;
-    for (var i = 0; i < before.length; i++) {
-      if (before[i] !== after[i]) changedAfter++;
-      if (before[i] !== mid[i]) changedMid++;
-    }
-    return { changedAfter, changedMid, totalEls: before.length, elapsedMs: t1 - t0 };
-  });
-  console.log('retint result', JSON.stringify(result));
-  await page.screenshot({ path: 'brain/test/tmp_p5_1440_focus-gemini.png' });
-  await ctx.close();
-}
+// reload persistence of rail-collapsed
+await page.keyboard.press('['); // collapse again
+await sleep(150);
+const beforeReload = await page.evaluate(() => document.body.classList.contains('rail-collapsed'));
+await page.reload({ waitUntil: 'domcontentloaded' });
+await sleep(800);
+const afterReload = await page.evaluate(() => document.body.classList.contains('rail-collapsed'));
+console.log('rail-collapsed before reload:', beforeReload, 'after reload:', afterReload);
 
-// --- 6. focus a different seat and screenshot ---
-{
-  const { ctx, page } = await freshPage(1440);
-  await page.evaluate(() => setFocusSeat('grok'));
-  await sleep(600);
-  await page.screenshot({ path: 'brain/test/tmp_p5_1440_focus-grok.png' });
-  await ctx.close();
-}
-
-// --- 7. model input round-trip ---
-{
-  const { ctx, page } = await freshPage(1440);
-  await page.locator('#cc-seats .seat-more').first().click();
-  await page.fill('#seat-popover .cc-model-input', 'opus');
-  let posted = null;
-  page.on('request', (req) => {
-    if (req.url().includes('/api/command-center/config') && req.method() === 'POST') {
-      posted = req.postData();
-    }
-  });
-  await page.locator('#seat-popover .cc-model-input').press('Tab'); // fires change
-  await sleep(400);
-  console.log('model POST body:', posted);
-  await ctx.close();
-}
-
+await page.setViewportSize({ width: 1440, height: 900 });
+await sleep(200);
+console.log('done sequence 1');
 await browser.close();
 server.kill();
 try { fs.rmSync(stub, { recursive: true, force: true }); } catch {}
