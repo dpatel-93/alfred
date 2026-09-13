@@ -44,7 +44,7 @@ const result = await page.evaluate(async () => {
     return out;
   }
   var before = sample();
-  setFocusSeat('gemini');
+  document.querySelector('#cc-seats .seat[data-seat-id="gemini"] .seat-main').click();
   await new Promise(r => setTimeout(r, 30));
   var justAfter = sample();
   await new Promise(r => setTimeout(r, 700));
@@ -60,11 +60,11 @@ const result = await page.evaluate(async () => {
 console.log('retint result:', JSON.stringify(result));
 await page.screenshot({ path: 'brain/test/tmp_p5_1440_focus-gemini.png' });
 
-await page.evaluate(() => setFocusSeat('grok'));
+await page.click('#cc-seats .seat[data-seat-id="grok"] .seat-main');
 await sleep(600);
 await page.screenshot({ path: 'brain/test/tmp_p5_1440_focus-grok.png' });
 
-await page.evaluate(() => setFocusSeat('claude'));
+await page.click('#cc-seats .seat[data-seat-id="claude"] .seat-main');
 await sleep(600);
 await page.screenshot({ path: 'brain/test/tmp_p5_1440_focus-claude.png' });
 
