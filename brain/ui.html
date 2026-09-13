@@ -1823,6 +1823,7 @@
     <div id="answer-panel" class="frame">
       <div id="answer-header">
         <span id="answer-state">READY</span>
+        <button id="answer-close" class="btn small" title="Dismiss (Esc)" aria-label="Dismiss answer">&times;</button>
       </div>
       <div id="answer-text"></div>
       <div id="answer-sources"></div>
@@ -5944,11 +5945,26 @@
     }, 2000);
   }
 
+  function dismissAnswer() {
+    cancelAnswerFade();
+    answerPanel.classList.remove('show', 'fading');
+  }
+
   answerPanel.addEventListener('mouseenter', cancelAnswerFade);
+  // Re-arm the fade once focus/hover leaves — without this, focusing the
+  // search bar to ask a follow-up question cancels the timer permanently
+  // and the old answer is stuck on screen forever (no other path clears it).
+  answerPanel.addEventListener('mouseleave', function () {
+    if (answerPanel.classList.contains('show') && document.activeElement !== searchInput) startAnswerFadeTimer(12000);
+  });
   searchInput.addEventListener('focus', function () {
     if (answerPanel.classList.contains('show')) cancelAnswerFade();
     loadSearchIndex(); // warm on focus, not at boot — it competes with first paint otherwise
   });
+  searchInput.addEventListener('blur', function () {
+    if (answerPanel.classList.contains('show') && !answerPanel.matches(':hover')) startAnswerFadeTimer(12000);
+  });
+  document.getElementById('answer-close').addEventListener('click', dismissAnswer);
 
   function setAnswerState(state, isError) {
     answerState.textContent = state;
@@ -6258,6 +6274,7 @@
       document.getElementById('cc-ask-btn').click();
     } else if (e.key === 'Escape') {
       if (!composerPicker.hidden) { closeComposerPicker(); return; }
+      if (answerPanel.classList.contains('show')) { dismissAnswer(); return; }
       searchResults.classList.remove('show'); searchMatches = null; searchInput.blur();
     }
     // Shift+Enter: no handler here — the textarea's own default behaviour
