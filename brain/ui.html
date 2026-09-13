@@ -197,6 +197,10 @@
 
   canvas { display: block; position: fixed; inset: 0; z-index: 1; cursor: grab; }
   canvas.dragging { cursor: grabbing; }
+  /* #graph is contained in .brain-canvas now (P4) — absolute within that
+     positioned box, not fixed to the window. ID beats the generic element
+     selector above, which still supplies cursor/z-index/display. */
+  #graph { position: absolute; inset: 0; }
 
   /* --- aura: one breathing gradient wash tinted by --focus, replacing the
          old grid/vignette/scanlines/starfield/gauge/HUD-corner stack. Sits
@@ -216,9 +220,11 @@
     #aura { animation: none; opacity: 0.8; }
   }
 
-  /* Canvas-persistence rule — the force-directed graph keeps rendering (its
-     rAF loop costs nothing extra) behind the Workshop/Protocols surfaces,
-     just ghosted so it reads as texture rather than content. */
+  /* Canvas-persistence rule — the force-directed graph's rAF loop never stops
+     (costs nothing extra) and this class still gets toggled per view, but
+     since P4 contained #graph inside #pane-brain, it only ever paints while
+     that pane is shown (brain/ops) — the legacy dev/auto/directory/library/
+     command surfaces hide the whole pane rather than ghosting through it. */
   #graph.canvas-ghost { opacity: 0.12; pointer-events: none; }
 
   /* --- page title kicker (top-center; "Mission Control" is the whole page's
@@ -367,13 +373,18 @@
     grid-template-columns: var(--bench-w) minmax(0, 1fr) var(--flight-w);
   }
   #bench, #flight { pointer-events: auto; }
-  /* 'ops' (Enterprise) draws straight onto the shared #graph canvas with
-     neither #pane-command nor #pane-brain shown — it has no sheet of its own
-     until P7 threads a second canvas (plan §2.6). The canvas used the full
-     viewport width before this phase; hide #flight so its new 292px column
+  /* 'ops' (Enterprise) draws straight onto the shared #graph canvas — it has
+     no sheet of its own until P7 threads a second canvas (plan §2.6), so it
+     reuses #pane-brain as the canvas's host (with .brain-head hidden, see
+     above) rather than #pane-command. Hide #flight so its 292px column
      doesn't clip the chart's right edge until Enterprise gets a real home. */
   body.ops-canvas #frame { grid-template-columns: var(--bench-w) minmax(0, 1fr) 0; }
   body.ops-canvas #flight { display: none; }
+  /* Brain gets the same full-width treatment (P4/Atelier: the graph is the
+     content here, so the activity rail yields its width rather than sitting
+     mostly empty beside a force-directed graph). */
+  body.no-flight #frame { grid-template-columns: var(--bench-w) minmax(0, 1fr) 0; }
+  body.no-flight #flight { display: none; }
 
   #bench, #flight {
     min-width: 0; overflow-y: auto; overflow-x: hidden;
@@ -405,12 +416,16 @@
     display: flex; flex-direction: column; gap: 16px; padding: 16px;
     pointer-events: auto;
   }
-  /* The Brain canvas stays position:fixed behind everything this phase
-     (P4 moves it into .brain-canvas and fixes its coordinate math) — this
-     pane is a transparent pass-through so the canvas shows through the deck
-     column, with only its own children (the filter strip) clickable. */
-  #pane-brain { background: transparent; }
+  /* #graph now lives inside .brain-canvas, a real child of this pane (P4) —
+     stacked head (filter strip) over canvas, rather than a transparent
+     pass-through over a viewport-fixed canvas. 'ops' (Enterprise) also shows
+     this pane so the shared canvas keeps rendering there until P7 gives it
+     its own surface (see body.ops-canvas hiding .brain-head below). */
+  #pane-brain { background: transparent; display: flex; flex-direction: column; }
   #pane-brain > * { pointer-events: auto; }
+  .brain-head { flex: none; }
+  body.ops-canvas .brain-head { display: none; }
+  .brain-canvas { position: relative; flex: 1 1 auto; min-height: 0; }
   /* #pane-command's own ID-selector `display: flex` above outranks the class
      + attribute selector `.pane[hidden]` (an ID beats a class regardless of
      source order), so a hidden #pane-command stayed laid out and kept
@@ -426,15 +441,17 @@
   .rail-glyph { display: none; text-align: center; font-size: 16px; line-height: 1; padding: 8px 0; color: var(--accent-primary); }
   body.rail-collapsed .rail-glyph { display: block; }
   body.rail-collapsed #status .body,
-  body.rail-collapsed #radial-menu .body,
   body.rail-collapsed #ask-panel .body,
   body.rail-collapsed #interns-panel .body { display: none; }
 
-  /* --- category filter menu (filters the graph by folder) --- */
-  #radial-menu {
+  /* --- category filter menu (filters the graph by folder) — the Brain
+       pane's own head bar (P4). No longer part of the collapsible Bench
+       rail, so it has no glyph/.body split of its own. --- */
+  #radial-menu.brain-head {
     display: flex; flex-direction: row; gap: 8px;
     background: color-mix(in srgb, var(--surface-2) 78%, transparent);
-    padding: 8px 10px; backdrop-filter: blur(4px);
+    padding: 8px 10px 8px 14px; backdrop-filter: blur(4px);
+    border-bottom: 1px solid var(--border);
   }
   .cat-btn {
     width: 34px; height: 34px;
@@ -611,14 +628,21 @@
   #tooltip .tt-folder { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: .1em; }
 
   /* --- note panel --- */
+  /* DESIGN-UI-SYSTEM §2.1c: slide via transform, not an animated `right` —
+     transform is compositor-only (no layout thrash) and lets a static
+     `right` express the drawer's resting offset independent of the slide.
+     `right` shifts left by the flight rail's width whenever that rail is
+     actually on screen, so the drawer never lands underneath it (P4 §3.5). */
   #panel {
-    position: fixed; top: 0; right: -420px; width: 420px; height: 100%; z-index: 25;
+    position: fixed; top: 0; right: 0; width: 420px; height: 100%; z-index: 25;
     background: var(--panel-bg); border-left: 1px solid var(--border);
     box-shadow: -20px 0 40px rgba(0,0,0,0.5), inset 0 0 40px color-mix(in srgb, var(--accent-primary) 3%, transparent);
-    transition: right 0.35s cubic-bezier(.2,.8,.2,1);
+    transform: translateX(100%);
+    transition: transform 0.35s cubic-bezier(.2,.8,.2,1), right 0.35s cubic-bezier(.2,.8,.2,1);
     display: flex; flex-direction: column; backdrop-filter: blur(6px);
   }
-  #panel.open { right: 0; }
+  body:not(.no-flight):not(.ops-canvas) #panel { right: var(--flight-w); }
+  #panel.open { transform: translateX(0); }
   #panel-header {
     padding: 20px 22px 14px; border-bottom: 1px solid color-mix(in srgb, var(--accent-primary) 15%, transparent);
     display: flex; justify-content: space-between; align-items: flex-start;
@@ -1255,7 +1279,6 @@
      deck. The spoken greeting that used to fire on dismissal now fires once
      on normal page load — see fireGreeting() below. -->
 <div id="aura"></div>
-<canvas id="graph"></canvas>
 
 <header id="top">
   <div id="mark" aria-hidden="true">&#9670; ALFRED</div>
@@ -1362,20 +1385,20 @@
   </aside>
 
   <main id="deck">
-    <!-- Brain pane: #graph stays position:fixed behind this transparent
-         pass-through container until P4 moves it into .brain-canvas. The
-         category filter strip (formerly the rail's #radial-menu) is the one
-         interactive child. -->
+    <!-- Brain pane: #graph is contained here now (P4), inside .brain-canvas,
+         sized off this pane's own box via ResizeObserver rather than the
+         window. This pane also hosts 'ops' (Enterprise) — same canvas,
+         swapped dataset — with .brain-head hidden for that view (CSS). -->
     <section id="pane-brain" class="pane">
-      <div id="radial-menu" class="frame">
-        <div class="rail-glyph" aria-hidden="true" title="Filters">&#9638;</div>
-        <div class="body">
+      <div id="radial-menu" class="brain-head">
         <div class="cat-btn" data-folder="Projects" style="--accent:#5ca8ff;">PRJ</div>
         <div class="cat-btn" data-folder="Patterns" style="--accent:#f0b35a;">PAT</div>
         <div class="cat-btn" data-folder="Decisions" style="--accent:#ad8cff;">DEC</div>
         <div class="cat-btn" data-folder="Learning" style="--accent:#63e6b5;">LRN</div>
         <div class="cat-btn" data-folder="Claude-Code" style="--accent:#f18b5b;">CLD</div>
-        </div>
+      </div>
+      <div class="brain-canvas">
+        <canvas id="graph"></canvas>
       </div>
     </section>
 
@@ -1793,12 +1816,36 @@
   var canvas = document.getElementById('graph');
   var ctx = canvas.getContext('2d');
   var W = 0, H = 0;
+  // Sized off the canvas's own host box (.brain-canvas), not the window
+  // (P4) — the canvas is contained in the Brain pane now, not fixed to the
+  // viewport, so its pixel size must track its container's box.
   function resize() {
-    W = canvas.width = window.innerWidth;
-    H = canvas.height = window.innerHeight;
+    var host = canvas.parentNode;
+    var r = host.getBoundingClientRect();
+    W = canvas.width = Math.max(1, Math.round(r.width));
+    H = canvas.height = Math.max(1, Math.round(r.height));
   }
+  // window 'resize' still matters (the window itself changing size is one
+  // way .brain-canvas's box changes) but is not sufficient on its own: the
+  // Bench collapsing ([) or the flight rail hiding (no-flight/ops-canvas)
+  // resize .brain-canvas without the window firing a resize event at all.
+  // ResizeObserver is the one thing that sees a container-only size change.
   window.addEventListener('resize', resize);
+  new ResizeObserver(resize).observe(canvas.parentNode);
   resize();
+
+  // Hit-testing and camera math (worldToScreen/screenToWorld, nodeAtScreen)
+  // all live in the canvas's own local pixel space (0,0 at its top-left,
+  // matching W/H above) — never the page. Every pointer handler that feeds
+  // coordinates into that math must go through this rather than raw
+  // e.clientX/e.clientY, which are page-relative and were only ever correct
+  // by coincidence when the canvas sat at (0,0) filling the whole viewport.
+  // Screen overlays anchored to the page (e.g. the tooltip, `position: fixed`)
+  // still want raw e.clientX/e.clientY — only the canvas-space math wants this.
+  function localXY(e) {
+    var r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
 
   var cam = { x: 0, y: 0, scale: 1 };
   var camAnim = null; // {fromX,fromY,fromScale,toX,toY,toScale,start,dur}
@@ -2337,11 +2384,11 @@
   }
 
   // dev/auto/directory/library still show their own full content (a
-  // .legacy-pane, not a sheet — P7's job); 'command'/'brain' show the new
-  // #pane-command/#pane-brain instead of a '#stage-command' lookup. 'ops' has
-  // neither — it draws straight onto the shared canvas, framed by #bench and
-  // (per body.ops-canvas in CSS) with #flight hidden so it doesn't clip the
-  // chart's right edge.
+  // .legacy-pane, not a sheet — P7's job); 'command'/'brain'/'ops' show the
+  // new #pane-command/#pane-brain instead of a '#stage-command' lookup —
+  // 'ops' reuses #pane-brain as the shared canvas's host (§ P4), just with
+  // .brain-head hidden and (per body.ops-canvas in CSS) #flight hidden too
+  // so neither clips the chart's right edge.
   function showStage(view) {
     ['dev', 'auto', 'directory', 'library'].forEach(function (v) {
       var stageEl = document.getElementById('stage-' + v);
@@ -2350,8 +2397,16 @@
     var paneCommand = document.getElementById('pane-command');
     var paneBrain = document.getElementById('pane-brain');
     if (paneCommand) paneCommand.hidden = (view !== 'command');
-    if (paneBrain) paneBrain.hidden = (view !== 'brain');
+    // 'ops' also shows this pane — it hosts the same #graph canvas, just with
+    // .brain-head hidden (CSS) until P7 gives Enterprise its own surface.
+    if (paneBrain) paneBrain.hidden = (view !== 'brain' && view !== 'ops');
     document.body.classList.toggle('ops-canvas', view === 'ops');
+    // The graph is the content on the Brain place, so the activity rail
+    // yields its width back rather than sitting mostly empty beside it
+    // (plan §4 P4, Atelier's reasoning). 'ops' already gets this via
+    // ops-canvas above; kept separate since the two views hide different
+    // reasons for the same rail collapse.
+    document.body.classList.toggle('no-flight', view === 'brain');
   }
 
   function switchView(view, opts) {
@@ -2374,6 +2429,15 @@
     showStage(view);
     applyCanvasPersistence(view);
 
+    if (view === 'ops' || view === 'brain') {
+      // showStage() just toggled #pane-brain's `hidden` attribute above,
+      // which changes .brain-canvas's box (0x0 <-> real size). The
+      // ResizeObserver on it will catch this asynchronously, but the camera
+      // math immediately below reads W/H synchronously — resize() here
+      // forces the fresh measurement so brainFitScale() and the 'ops' framing
+      // never work off a stale (or hidden-time 1x1) size for even one frame.
+      resize();
+    }
     if (view === 'ops') {
       cam.scale = 0.85; cam.x = 0; cam.y = 0;
       // Without this, nodes/links still hold whatever the previous view left
@@ -4647,39 +4711,48 @@
   function hideTooltip() { tooltip.style.display = 'none'; }
 
   canvas.addEventListener('mousedown', function (e) {
-    mouseScreen = { x: e.clientX, y: e.clientY };
-    var n = nodeAtScreen(e.clientX, e.clientY);
+    var p = localXY(e);
+    mouseScreen = { x: p.x, y: p.y };
+    var n = nodeAtScreen(p.x, p.y);
     if (n) {
       wakePhysics(0.3); // a nudge, not a re-layout — dragging one note should not restage the graph
       draggedNode = n;
-      var w = screenToWorld(e.clientX, e.clientY);
+      var w = screenToWorld(p.x, p.y);
       dragOffset = { x: n.x - w.x, y: n.y - w.y };
       canvas.classList.add('dragging');
     } else {
       panning = true;
-      panStart = { x: e.clientX, y: e.clientY };
+      panStart = { x: p.x, y: p.y };
       camStart = { x: cam.x, y: cam.y };
       canvas.classList.add('dragging');
     }
   });
 
+  // Bound to window, not canvas, so a drag/pan continues to track the
+  // pointer even after it leaves the canvas box — localXY still resolves
+  // correctly outside the canvas's rect (it can go negative/overshoot),
+  // exactly as raw clientX/Y did back when the canvas filled the viewport.
   window.addEventListener('mousemove', function (e) {
-    mouseScreen = { x: e.clientX, y: e.clientY };
+    var p = localXY(e);
+    mouseScreen = { x: p.x, y: p.y };
     if (draggedNode) {
-      var w = screenToWorld(e.clientX, e.clientY);
+      var w = screenToWorld(p.x, p.y);
       draggedNode.x = w.x + dragOffset.x;
       draggedNode.y = w.y + dragOffset.y;
       draggedNode.vx = 0; draggedNode.vy = 0;
     } else if (panning) {
-      cam.x = camStart.x - (e.clientX - panStart.x) / cam.scale;
-      cam.y = camStart.y - (e.clientY - panStart.y) / cam.scale;
+      cam.x = camStart.x - (p.x - panStart.x) / cam.scale;
+      cam.y = camStart.y - (p.y - panStart.y) / cam.scale;
     } else {
-      var n = nodeAtScreen(e.clientX, e.clientY);
+      var n = nodeAtScreen(p.x, p.y);
       if (n !== hoveredNode) {
         hoveredNode = n;
         canvas.style.cursor = n ? 'pointer' : 'grab';
         if (n) sfxHover();
       }
+      // The tooltip is `position: fixed` against the page, not the canvas, so
+      // it wants raw page coordinates (e.clientX/Y) — only the hit-test above
+      // wants canvas-local ones.
       if (n) showTooltip(n, e.clientX, e.clientY); else hideTooltip();
     }
   });
@@ -4691,12 +4764,13 @@
   });
 
   canvas.addEventListener('click', function (e) {
-    if (Math.hypot(e.clientX - mouseScreen.x, e.clientY - mouseScreen.y) > 4) return; // was a drag
+    var p = localXY(e);
+    if (Math.hypot(p.x - mouseScreen.x, p.y - mouseScreen.y) > 4) return; // was a drag
     // "SEE ALL" is hit-tested before nodes: it sits in the right margin where
     // there are no nodes, but checking it first keeps the two from competing.
     for (var tier in orgLaneLabelHit) {
       var r = orgLaneLabelHit[tier];
-      if (e.clientX >= r.x && e.clientX <= r.x + r.w && e.clientY >= r.y && e.clientY <= r.y + r.h) {
+      if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) {
         orgLaneExpanded[tier] = !orgLaneExpanded[tier];
         // Expanding a lane to 40+ nodes only helps if the view pulls back far
         // enough to fit them, so zoom out to meet the wider row — and put the
@@ -4716,17 +4790,18 @@
         return;
       }
     }
-    var n = nodeAtScreen(e.clientX, e.clientY);
+    var n = nodeAtScreen(p.x, p.y);
     if (!n) return;
     if (currentView === 'ops') openAgentPanel(n); else openPanel(n);
   });
 
   canvas.addEventListener('wheel', function (e) {
     e.preventDefault();
-    var before = screenToWorld(e.clientX, e.clientY);
+    var p = localXY(e);
+    var before = screenToWorld(p.x, p.y);
     var factor = e.deltaY < 0 ? 1.1 : 0.9;
     cam.scale = Math.max(0.15, Math.min(6, cam.scale * factor));
-    var after = screenToWorld(e.clientX, e.clientY);
+    var after = screenToWorld(p.x, p.y);
     cam.x += before.x - after.x;
     cam.y += before.y - after.y;
   }, { passive: false });
