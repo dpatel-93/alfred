@@ -356,11 +356,17 @@
      minmax(0, 1fr) on the deck column, not 1fr — without the 0 floor a grid
      item's automatic minimum size is its content, which would push #bench
      off screen at 1024px the same way .cc-term-stage did before that fix. */
+  /* pointer-events: none on #frame itself, mirroring #deck below — #frame is
+     an unpainted grid container, but without this its own box still captures
+     clicks meant for the canvas wherever neither #bench, #flight nor a
+     visible pane happens to cover (the 'ops' case). #bench/#flight opt back
+     into normal click handling since they always have real content. */
   #frame {
     position: fixed; inset: var(--topbar-h) 0 0 0; z-index: 10;
-    display: grid;
+    display: grid; pointer-events: none;
     grid-template-columns: var(--bench-w) minmax(0, 1fr) var(--flight-w);
   }
+  #bench, #flight { pointer-events: auto; }
   /* 'ops' (Enterprise) draws straight onto the shared #graph canvas with
      neither #pane-command nor #pane-brain shown — it has no sheet of its own
      until P7 threads a second canvas (plan §2.6). The canvas used the full
@@ -405,6 +411,13 @@
      column, with only its own children (the filter strip) clickable. */
   #pane-brain { background: transparent; }
   #pane-brain > * { pointer-events: auto; }
+  /* #pane-command's own ID-selector `display: flex` above outranks the class
+     + attribute selector `.pane[hidden]` (an ID beats a class regardless of
+     source order), so a hidden #pane-command stayed laid out and kept
+     swallowing clicks meant for the canvas beneath it in 'ops' — caught via
+     elementFromPoint, not assumed. Same cascade trap the old .stage[hidden]
+     comment already documented; #pane-command just needed its own rule. */
+  #pane-command[hidden], #pane-brain[hidden] { display: none; }
 
   /* --- collapsible rail: `[` toggles body.rail-collapsed, persisted in
        localStorage. Each rail panel keeps a compact glyph visible and hides
