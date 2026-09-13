@@ -207,29 +207,28 @@ if (!(await up())) {
   await page.waitForTimeout(300);
 
   // --- 6. src-modal opens from inside a sheet; nested z-order + Esc order --
-  await page.click('.dock-btn[data-view="dev"]');
-  await page.waitForTimeout(600);
-  // Workshop's cards open the source editor via openSourceEditor(id) on click;
-  // fall back to calling it directly if no clickable row rendered in the fixture.
-  const opened = await page.evaluate(() => {
-    var btn = document.querySelector('#dev-grid [data-open-src], #dev-grid .card, #dev-grid button');
-    if (btn) { btn.click(); return 'clicked'; }
-    if (typeof openSourceEditor === 'function') { openSourceEditor('CLAUDE.md'); return 'direct'; }
-    return 'none';
-  });
-  await page.waitForTimeout(400);
-  let srcOpen = await page.evaluate(() => document.getElementById('src-modal').classList.contains('open'));
-  if (!srcOpen) {
-    // Card click may not map to a real openable source in the fixture vault —
-    // force it directly to still exercise the z-order/Esc-ladder contract.
-    await page.evaluate(() => { if (typeof openSourceEditor === 'function') openSourceEditor('CLAUDE.md'); });
-    await page.waitForTimeout(400);
-    srcOpen = await page.evaluate(() => document.getElementById('src-modal').classList.contains('open'));
+  // Library rows carry the "View / edit source" button (editSourceButton(),
+  // shared with Roster) — Workshop's own cards are GitHub repos, not
+  // editable sources, so Library is the real path to src-modal from a sheet.
+  await page.click('.dock-btn[data-view="library"]');
+  await page.waitForTimeout(700);
+  const rows = page.locator('#library-list .list-row');
+  const rowCount = await rows.count();
+  let srcOpen = false;
+  for (let i = 0; i < rowCount && !srcOpen; i++) {
+    await rows.nth(i).click();
+    await page.waitForTimeout(200);
+    const editBtn = page.locator('#library-preview button:has-text("View / edit source")');
+    if (await editBtn.count()) {
+      await editBtn.first().click();
+      await page.waitForTimeout(400);
+      srcOpen = await page.evaluate(() => document.getElementById('src-modal').classList.contains('open'));
+    }
   }
-  chk('src-modal opens from inside a sheet', srcOpen, `openedVia=${opened}`);
+  chk('src-modal opens from inside a sheet', srcOpen, `rowCount=${rowCount}`);
   const zOrder = await page.evaluate(() => {
     var modalZ = getComputedStyle(document.getElementById('src-modal')).zIndex;
-    var sheetZ = getComputedStyle(document.getElementById('sheet-workshop')).zIndex;
+    var sheetZ = getComputedStyle(document.getElementById('sheet-library')).zIndex;
     return { modalZ: Number(modalZ), sheetZ: Number(sheetZ) };
   });
   chk('src-modal z-index is above the sheet', zOrder.modalZ > zOrder.sheetZ, JSON.stringify(zOrder));
@@ -237,12 +236,12 @@ if (!(await up())) {
   await page.waitForTimeout(300);
   const afterFirstEsc = await page.evaluate(() => ({
     srcOpen: document.getElementById('src-modal').classList.contains('open'),
-    sheetHidden: document.getElementById('sheet-workshop').hidden,
+    sheetHidden: document.getElementById('sheet-library').hidden,
   }));
   chk('first Esc closes src-modal, sheet still open', !afterFirstEsc.srcOpen && !afterFirstEsc.sheetHidden, JSON.stringify(afterFirstEsc));
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
-  const afterSecondEsc = await page.evaluate(() => document.getElementById('sheet-workshop').hidden);
+  const afterSecondEsc = await page.evaluate(() => document.getElementById('sheet-library').hidden);
   chk('second Esc closes the sheet', afterSecondEsc);
 
   // --- 7. Enterprise draws the org chart (fallback pane, not a sheet) ------
@@ -271,15 +270,20 @@ if (!(await up())) {
   await page.waitForTimeout(1000);
   chk('a console opened to test Ctrl+\\ against', openedForTerm >= 1, `opened=${openedForTerm}`);
   if (openedForTerm >= 1) {
-    // Click into the terminal so xterm's hidden textarea holds focus, exactly
-    // the scenario ccHandleGlobalShortcut's own comment calls out.
-    await page.click('#cc-terms .cc-term');
+    // Click into the terminal BODY specifically (not the head bar, which
+    // carries the kill/close buttons) so xterm's hidden textarea holds
+    // focus, exactly the scenario ccHandleGlobalShortcut's own comment
+    // calls out.
+    await page.click('.cc-term.active .cc-term-body');
     await page.waitForTimeout(200);
+    const termCountBefore = await page.evaluate(() => window.__ccDebug ? window.__ccDebug().length : -1);
     const gridBefore = await page.evaluate(() => document.getElementById('cc-terms').classList.contains('cc-grid'));
     await page.keyboard.press('Control+\\');
     await page.waitForTimeout(400);
     const gridAfter = await page.evaluate(() => document.getElementById('cc-terms').classList.contains('cc-grid'));
-    chk('real Ctrl+\\ toggles grid mode while a terminal has focus', gridBefore !== gridAfter, `before=${gridBefore} after=${gridAfter}`);
+    const termCountAfter = await page.evaluate(() => window.__ccDebug ? window.__ccDebug().length : -1);
+    chk('real Ctrl+\\ toggles grid mode while a terminal has focus', gridBefore !== gridAfter,
+      `before=${gridBefore} after=${gridAfter} termsBefore=${termCountBefore} termsAfter=${termCountAfter}`);
     // And the new plain \ (no ctrl) must NOT also fire while focus is in the
     // terminal and ctrl is down — already proven above by the single toggle;
     // additionally confirm plain \ (flight rail) does its own thing outside

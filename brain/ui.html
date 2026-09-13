@@ -2744,6 +2744,11 @@
   // reuses #pane-brain as the shared canvas's host (§ P4) rather than getting
   // a sheet of its own — see the fallback note by #pane-brain (plan §2.6).
   var SHEET_ID = { dev: 'sheet-workshop', auto: 'sheet-protocols', directory: 'sheet-roster', library: 'sheet-library' };
+  // Reached the same way as the 4 real sheets (dock icon/hotkey/palette) and
+  // closed the same way (Esc/scrim-equivalent back to lastPlace) even though
+  // 'ops' has no literal .sheet element — see the fallback note by
+  // #pane-brain (plan §2.6).
+  var SHEET_LIKE_VIEWS = Object.keys(SHEET_ID).concat(['ops']);
   function showStage(view) {
     var anySheetOpen = false;
     Object.keys(SHEET_ID).forEach(function (v) {
@@ -4279,7 +4284,7 @@
       if (srcModal.classList.contains('open')) { closeSourceEditor(); return; }
       if (kbModal.classList.contains('open')) { closeKbHelp(); return; }
       if (document.getElementById('palette').classList.contains('open')) { closePalette(); return; }
-      if (Object.keys(SHEET_ID).indexOf(currentView) !== -1) { closeSheet(); return; }
+      if (SHEET_LIKE_VIEWS.indexOf(currentView) !== -1) { closeSheet(); return; }
       if (document.getElementById('panel').classList.contains('open')) { document.getElementById('panel').classList.remove('open'); return; }
       if (document.getElementById('toast-stack').children.length) {
         document.getElementById('toast-stack').lastElementChild.querySelector('.toast-close').click();
