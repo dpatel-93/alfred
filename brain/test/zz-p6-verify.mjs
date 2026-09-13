@@ -18,6 +18,13 @@ const R = [];
 const chk = (n, c, d = '') => { R.push({ n, ok: !!c, d: String(d) }); console.log((c ? '  OK   ' : '  FAIL ') + n + (c ? '' : ' -> ' + d)); };
 
 const stub = fs.mkdtempSync(path.join(os.tmpdir(), 'alfred-p6verify-'));
+// council-run.mjs's stub mode reads <dir>/<providerId>.txt for each seat's
+// answer and <dir>/synthesis.txt for the chaired verdict (see council.mjs's
+// own suite) — without these, every seat and the synthesis step throw.
+for (const id of ['claude', 'gemini', 'grok', 'codex', 'omniroute', 'ollama', 'dsh']) {
+  fs.writeFileSync(path.join(stub, `${id}.txt`), `${id} says: stub answer.\n`);
+}
+fs.writeFileSync(path.join(stub, 'synthesis.txt'), '## Verdict\nStub verdict.\n');
 const echoScript = 'process.stdout.write("ALFRED_TERM_OK\\n");'
   + 'process.stdin.setEncoding("utf8");'
   + 'process.stdin.on("data",function(d){process.stdout.write("GOT:"+d);});';
