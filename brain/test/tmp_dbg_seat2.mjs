@@ -36,6 +36,7 @@ const seatMoreBtns = page.locator('#cc-seats .seat-more');
 const seatRowCount = await seatMoreBtns.count();
 let openedCount = 0;
 for (let i = 0; i < seatRowCount && openedCount < 2; i++) {
+  console.log("iter", i);
   await seatMoreBtns.nth(i).click();
   const openBtn = page.locator('#seat-popover button:has-text("Open terminal")');
   if (await openBtn.count()) {
