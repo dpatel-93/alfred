@@ -21,7 +21,7 @@ const server = spawn(process.execPath, [path.join(HERE, '..', 'server.mjs')], {
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
 async function up() { const deadline=Date.now()+30000; while(Date.now()<deadline){ try{ if((await fetch('http://127.0.0.1:'+PORT+'/api/status')).ok) return true;}catch{} await sleep(300);} return false; }
 if (!(await up())) { console.log('server did not boot'); process.exit(1); }
-const browser = await chromium.launch();
+const browser = await chromium.launch({ args: ['--no-sandbox'] });
 
 async function freshPage(width) {
   const ctx = await browser.newContext({ viewport: { width, height: 900 } });
