@@ -226,8 +226,20 @@
     0%, 100% { opacity: 0.6; }
     50%      { opacity: 1; }
   }
+  /* prefers-reduced-motion audit (plan P9): every looping/ambient animation
+     in the design system, plus the whole-app --focus re-tint cascade, is
+     disabled or collapsed to near-zero here. State changes (colour, opacity,
+     which class is present) still happen — only the MOTION is suppressed.
+     Kept as one block so the audit surface is a single place to re-check. */
   @media (prefers-reduced-motion: reduce) {
     #aura { animation: none; opacity: 0.8; }
+    /* the seat re-tint cascade (85+ var(--focus) call sites) still recolours
+       instantly; only the 420ms cross-fade is removed. */
+    body { transition-duration: 0.01ms; }
+    .skeleton::before { animation: none; }
+    .cc-progress > i { animation: none; }
+    .card.is-live::before { animation: none; opacity: 1; }
+    .icon-btn.spinning { animation: none; }
   }
 
   /* Canvas-persistence rule — the force-directed graph's rAF loop never stops
@@ -1376,6 +1388,28 @@
   }
   .btn:hover { color: var(--text); border-color: var(--accent-primary); background: color-mix(in srgb, var(--accent-primary) 10%, transparent); }
   .btn:disabled { opacity: .4; cursor: not-allowed; }
+  /* Focus-visible rings (plan P9) — the DESIGN-UI-SYSTEM §0 pattern
+     (:focus-visible only, 2px solid var(--blue)) applied to every control
+     introduced across P1-P8: dock/view tabs, seats, sheet close, filter and
+     route chips, the composer, and generic buttons. --blue is used rather
+     than --accent-primary/--focus so the ring never blends into whatever
+     seat colour the app is currently tinted to. Rows/tabs use a -2px inset
+     offset (they sit flush against a strip edge); free-standing controls use
+     the standard +2px outward offset. */
+  .btn:focus-visible, .icon-btn:focus-visible, .dock-btn:focus-visible,
+  .seat-more:focus-visible, .filter-chip:focus-visible,
+  .cc-grid-toggle:focus-visible {
+    outline: 2px solid var(--blue); outline-offset: 2px;
+  }
+  .view-btn:focus-visible, .seat-main:focus-visible {
+    outline: 2px solid var(--blue); outline-offset: -2px;
+  }
+  .seat-tick input:focus-visible {
+    outline: 2px solid var(--blue); outline-offset: 2px;
+  }
+  .composer-input:focus-visible {
+    outline: 2px solid var(--blue); outline-offset: -2px; border-color: var(--accent-primary);
+  }
   .btn.primary { color: var(--on-accent); background: var(--mint); border-color: var(--mint); }
   .btn.primary:hover { background: color-mix(in srgb, var(--mint) 84%, black); border-color: color-mix(in srgb, var(--mint) 84%, black); }
   .btn.danger { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, transparent); background: color-mix(in srgb, var(--red) 6%, transparent); }
@@ -1801,7 +1835,7 @@
     <div id="route-chips" class="route-chips"></div>
     <div class="composer-row">
       <span class="prompt" aria-hidden="true">&gt;</span>
-      <textarea id="search-input" class="composer-input" rows="1" placeholder="Ask, or / skills  @ seats  ? search" autocomplete="off" spellcheck="true"></textarea>
+      <textarea id="search-input" class="composer-input" rows="1" placeholder="Ask, or / skills  @ seats  ? search" autocomplete="off" spellcheck="true" aria-label="Ask Alfred — or / for skills, @ for seats, ? for search"></textarea>
       <button class="btn primary" id="cc-ask-btn" title="Send to the focused seat, or every ticked seat when &#9678; Council is armed (Enter to send, Shift+Enter for a new line)">&#9673; Send</button>
     </div>
     <div id="composer-picker" class="composer-picker" hidden></div>
@@ -6417,6 +6451,11 @@
       var main = el('button', 'seat-main', [el('span', 'seat-name', [s.label])]);
       main.type = 'button';
       main.title = 'Focus ' + s.label + ' - re-tint the app to its colour';
+      // aria-pressed, not aria-selected: this is a single toggle whose state
+      // (is the app currently tinted to this seat) is independent of any
+      // parent listbox/tablist — the seat-tick checkbox beside it already
+      // owns the "included in the council" selection state.
+      main.setAttribute('aria-pressed', document.body.dataset.focusSeat === s.id ? 'true' : 'false');
       main.appendChild(el('span', 'seat-model', [s.model || s.defaultModel || '']));
       main.addEventListener('click', function () { setFocusSeat(s.id); });
       row.appendChild(main);
@@ -6460,6 +6499,7 @@
       var chip = el('button', 'filter-chip route-chip' + (ccChecked[s.id] ? ' active' : ''), [s.label]);
       chip.type = 'button';
       chip.title = 'Include ' + s.label + ' in the council (same tick as the Bench row)';
+      chip.setAttribute('aria-pressed', ccChecked[s.id] ? 'true' : 'false');
       chip.addEventListener('click', function () {
         ccChecked[s.id] = !ccChecked[s.id];
         renderCcSeats();
@@ -6473,6 +6513,7 @@
     councilChip.title = councilArmed
       ? 'Council armed — Send goes to every ticked seat above'
       : 'Arm the Council — Send goes to every ticked seat, with an optional chaired verdict';
+    councilChip.setAttribute('aria-pressed', councilArmed ? 'true' : 'false');
     councilChip.addEventListener('click', function () {
       councilArmed = !councilArmed;
       try { localStorage.setItem('alfred-council-armed', councilArmed ? '1' : '0'); } catch (e) {}
