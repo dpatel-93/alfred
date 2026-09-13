@@ -230,16 +230,22 @@
      in the design system, plus the whole-app --focus re-tint cascade, is
      disabled or collapsed to near-zero here. State changes (colour, opacity,
      which class is present) still happen — only the MOTION is suppressed.
-     Kept as one block so the audit surface is a single place to re-check. */
+     Kept as one block so the audit surface is a single place to re-check.
+     !important is deliberate and load-bearing, not a specificity shortcut:
+     four of these targets (.skeleton, .cc-progress, .card.is-live,
+     .icon-btn.spinning) are re-declared with their own unguarded @keyframes
+     hundreds of lines further down the file, so an un-flagged override here
+     would lose the cascade to whichever rule happens to come later in source
+     order — verified by a failing Playwright assertion before this was added. */
   @media (prefers-reduced-motion: reduce) {
-    #aura { animation: none; opacity: 0.8; }
+    #aura { animation: none !important; opacity: 0.8; }
     /* the seat re-tint cascade (85+ var(--focus) call sites) still recolours
        instantly; only the 420ms cross-fade is removed. */
-    body { transition-duration: 0.01ms; }
-    .skeleton::before { animation: none; }
-    .cc-progress > i { animation: none; }
-    .card.is-live::before { animation: none; opacity: 1; }
-    .icon-btn.spinning { animation: none; }
+    body { transition-duration: 0.01ms !important; }
+    .skeleton::before { animation: none !important; }
+    .cc-progress > i { animation: none !important; }
+    .card.is-live::before { animation: none !important; opacity: 1 !important; }
+    .icon-btn.spinning { animation: none !important; }
   }
 
   /* Canvas-persistence rule — the force-directed graph's rAF loop never stops

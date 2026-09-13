@@ -4,14 +4,22 @@ Design authority for every surface at `localhost:7777`. Sonnet implements from t
 verbatim. This document describes **how things look and move**; the parallel UX spec
 describes **what surfaces exist and what they do**.
 
-Source of the language: `brain/ui.html` (live HUD) and
-`CE-Project-Portfolio/static/style.css` (the control-room DNA Alfred inherited).
-The galactic dressing pass now landed in `ui.html` — corner brackets, starfield,
-canvas gauges, edge telemetry, orbital arcs — is **part of the system**, not a layer
-to work around. Everything below composes with it.
+Source of the language: `brain/ui.html` (live HUD) is the live source of truth —
+this document trails it, not the other way around, and re-greps rather than
+trusting its own line numbers.
 
-**Prime directive.** This is an instrument panel, not a poster. Glow, arcs, and
-scanlines are *set dressing around readable data*. If a decorative element competes
+**Superseded (2026-09, the Blend redesign, jarvis-overhaul branch).** The
+"galactic dressing" this file used to describe — corner brackets, starfield,
+canvas gauges, edge telemetry, orbital arcs, the notched `.frame` clip-path — was
+deliberately stripped in the redesign's P2 phase and replaced by `#aura`, one
+breathing gradient wash tinted by the current focus colour. Section 1 below
+reflects the tokens that shipped; **the component library in section 2 still
+describes the pre-redesign notch/gauge/starfield system it was written for** and
+has not been re-audited — read `ui.html` itself for anything below section 1,
+rather than trusting the specifics there.
+
+**Prime directive.** This is an instrument panel, not a poster. Glow and the aura
+wash are *set dressing around readable data*. If a decorative element competes
 with a number, the decoration loses. Every ring in this system is drawn from a real
 value.
 
@@ -22,7 +30,11 @@ value.
 1. **Existing token names are load-bearing.** `--bg`, `--surface-1/2/3`, `--border`,
    `--blue`, `--mint`, `--amber`, `--red`, `--violet`, `--orange`, `--gray`, `--text`,
    `--text-dim`, `--panel-bg` are referenced throughout `ui.html` and the JS. Never
-   rename or remove them. Section 1 keeps all of them and adds the rest.
+   rename or remove them — the Blend redesign re-pointed every one of their *values*
+   without touching a name, for exactly this reason (85+ call sites read
+   `--accent-primary` alone). Section 1 keeps all of them and adds the rest: `--bone`,
+   `--focus`, the `--p-*` provider colours, `--bg-2`, `--font-display`, and the
+   `--topbar-h`/`--bench-w`/`--flight-w`/`--sheet-w` layout regions.
 2. **Additive edits only.** New tokens go into the same `:root` block. New components
    go in a clearly commented section. Do not reformat existing CSS.
 3. **`color-mix()` is the house technique** for every tint, glow, and hairline. Do not
@@ -33,154 +45,198 @@ value.
    primary action. blue = informational, selected, the default instrument color. amber =
    warn/stale. red = critical/error/destructive. violet and orange are *category* colors
    only (Decisions, Claude-Code) — never status. gray = idle/disabled/absent.
-   A card is never mint because mint looks nice.
-5. **Mono is the identity.** JetBrains Mono for all chrome, labels, data, and numerics.
-   The one exception is long-form prose (section 2.11).
+   A card is never mint because mint looks nice. **The Bench's `--p-*` provider colours
+   are a second, narrower contract layered on top of this one**: they may tint an
+   *identity* surface only — a seat row, console head, tab, pane border, or composer
+   chip — and must never appear on a `.badge`, a status dot, or a toast, where they
+   would be misread against the mint/blue/amber/red status contract above.
+5. **Type is a deliberate two-family split, not "mono for everything."** The Blend
+   redesign overturned the old mono-only mandate: `--font-display` (Bahnschrift
+   SemiCondensed / Segoe UI Variable Display) carries headings and the wordmark,
+   `--font-ui` (Bahnschrift / Segoe UI Variable Text) is the default for chrome, labels
+   and body text, and `--font-mono` (Cascadia Code / JetBrains Mono fallback) is
+   reserved for the terminal, model names, diffs, tooltip values and anything that
+   needs `font-variant-numeric: tabular-nums` — i.e. "characters must align," not
+   "this is Alfred's identity." `--font-data` is an alias for `--font-mono` for call
+   sites that want to name the *reason* (data/numeric alignment) rather than the
+   *mechanism* (monospace).
 
 ---
 
 ## 1. Design tokens
 
-Paste-ready. Replaces the current `:root` block in `ui.html` in full.
+Paste-ready. This IS the current `:root` block in `ui.html` (lines 1-170 as of the Blend
+redesign) — copied here, not re-derived, so the two never drift silently again.
 
 ```css
+@property --focus {
+  syntax: '<color>'; inherits: true; initial-value: #f0e9dd;
+}
 :root {
   color-scheme: dark;
 
-  /* ---------- Surfaces (existing — do not rename) ---------- */
-  --bg:            #080b10;   /* page canvas, behind everything */
-  --surface-1:     #0b0f16;   /* panel ground */
-  --surface-2:     #101620;   /* raised panel / chrome strips */
-  --surface-3:     #141c27;   /* inset wells, track backgrounds, hover fill */
-  --surface-4:     #192331;   /* nested surface inside a raised panel */
-  --border:        #202b39;   /* decorative hairline — NOT for interactive edges */
-  --border-strong: #2c3a4b;   /* structural divider, table rules */
-  --border-focusable: #556d8f; /* the ONLY border for interactive control edges (3:1+) */
+  /* ---------- Surfaces — the warm graphite room (names unchanged from the old
+     dark-blue ground; only the values moved) ---------- */
+  --bg:            #131218;
+  --bg-2:          #17161d;   /* topbar/sheet ground */
+  --surface-1:     #1c1b23;
+  --surface-2:     #22212b;
+  --surface-3:     #2a2934;
+  --surface-4:     #333240;
+  --border:        #2b2a35;
+  --border-strong: #3a3947;
+  --border-focusable: #56545f;
 
-  /* ---------- Palette (existing — do not rename) ---------- */
-  --blue:   #5ca8ff;   /* primary instrument / info / selected */
-  --blue-strong: #2f8cff;
-  --mint:   #63e6b5;   /* live, healthy, success, primary action */
-  --amber:  #f0b35a;   /* warn, stale, degraded */
-  --red:    #ff6b72;   /* critical, error, destructive */
-  --violet: #ad8cff;   /* category: Decisions */
-  --orange: #f18b5b;   /* category: Claude-Code */
-  --gray:   #93a1b2;   /* idle / disabled / absent — RAISED from #7a8896, see §5 */
+  /* ---------- Alfred's own identity is NEUTRAL. Alfred is the room, not a
+     vendor — the bone diamond in the topbar wordmark, tinted by --focus. ---------- */
+  --bone:          #f0e9dd;
 
-  /* ---------- Text ---------- */
-  --text:       #d9e2ec;  /* primary */
-  --text-soft:  #b9c6d4;  /* secondary body */
-  --text-dim:   #93a1b2;  /* labels, meta, kickers */
-  --text-faint: #7d8b9c;  /* decorative only — never load-bearing information */
-  --on-accent:  #06111a;  /* text on mint/blue/amber solid fills */
+  /* ---------- The Bench — the ONLY saturated colour in the product. May tint
+     identity surfaces (seat row, console head, tab, pane border, composer
+     chip) only — never a .badge, a status dot, or a toast (see §0.4). ---------- */
+  --p-claude:    #e0855c;
+  --p-gemini:    #6fa8ff;
+  --p-grok:      #d3d7e0;
+  --p-codex:     #45c8c0;   /* teal, not the mint-adjacent green it started as — collides with --mint (live/healthy) otherwise */
+  --p-omniroute: #f2c15b;
+  --p-ollama:    #b08cff;
+  --p-dsh:       #4fd6d6;
 
-  /* ---------- Composed surfaces ---------- */
-  --panel-bg:     color-mix(in srgb, var(--surface-1) 93%, transparent);
-  --panel-bg-2:   color-mix(in srgb, var(--surface-2) 82%, transparent);
-  --panel-bg-3:   color-mix(in srgb, var(--surface-2) 96%, transparent); /* modal/expanded */
-  --well-bg:      rgba(0, 0, 0, 0.32);   /* terminal + code inset wells */
-  --scrim-bg:     rgba(2, 5, 8, 0.62);
-  --overlay-bg:   rgba(2, 5, 8, 0.72);
-  --hairline:     color-mix(in srgb, var(--blue) 10%, transparent); /* in-panel rules */
+  /* ---------- FOCUS — written onto <body> by setFocusSeat(); cascades
+     everywhere. --accent-primary and the glow ladder are declared on the
+     `body` rule below (not here) so they recompute against body's own
+     --focus on every write — see the comment there for why :root can't own
+     them. ---------- */
+  --focus:     var(--bone);
+  --focus-rgb: 240, 233, 221;   /* for rgba() where color-mix is awkward (canvas, shadows) */
+  --alfred-cyan: var(--p-gemini);
 
-  /* ---------- Type ---------- */
-  --font-mono: 'JetBrains Mono', 'Cascadia Mono', 'Consolas', monospace;
-  --font-ui:   'Aptos', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+  /* ---------- Palette (existing names — do not rename; re-toned for the warm ground) ---------- */
+  --mint:   #5fd39a;   /* live, healthy, success, primary action */
+  --amber:  #f2c15b;   /* warn, stale, degraded */
+  --red:    #ff7a80;   /* critical, error, destructive */
+  --blue:   #6fa8ff;   /* info / selected — also the fixed focus-ring colour, see §5.2 */
+  --blue-strong: #4f8ff0;
+  --violet: #b08cff;   /* category: Decisions */
+  --orange: #e0855c;   /* category: Claude-Code */
+  --gray:   #908b9b;   /* idle / disabled / absent — contrast-gated at 4.81:1 on --surface-2 */
 
-  --fs-micro: 9px;    /* canvas gauge captions only */
-  --fs-mini:  10px;   /* badges, pills, dense meta */
-  --fs-xs:    11px;   /* kickers, secondary labels */
-  --fs-sm:    12px;   /* table cells, list meta */
+  /* ---------- Text — warm off-white, never blue-white ---------- */
+  --text:       #ece8e3;
+  --text-soft:  #c6c1cc;
+  --text-dim:   #a8a3b0;   /* contrast-gated at 6.93:1 on --surface-1 (needs >=4.5:1) */
+  --text-faint: #726e7c;   /* decorative only — contrast-gated at 3.76:1 on --bg (needs >=3:1) */
+  --on-accent:  #15141a;
+
+  /* ---------- Composed surfaces (names unchanged) ---------- */
+  --panel-bg:     color-mix(in srgb, var(--surface-1) 88%, transparent);
+  --panel-bg-2:   color-mix(in srgb, var(--surface-1) 72%, transparent);
+  --panel-bg-3:   var(--bg-2);
+  --well-bg:      rgba(0, 0, 0, 0.28);
+  --scrim-bg:     rgba(8, 7, 11, 0.62);
+  --overlay-bg:   rgba(8, 7, 11, 0.72);
+  --hairline:     var(--border);   /* was a focus tint — a hairline is structure, not accent */
+
+  /* ---------- Type — a deliberate display/UI/mono split, Windows-native,
+     zero external font loads (see §0.5) ---------- */
+  --font-display: 'Bahnschrift SemiCondensed', 'Bahnschrift', 'Segoe UI Variable Display',
+                  'Aptos Display', system-ui, sans-serif;
+  --font-ui:      'Bahnschrift', 'Segoe UI Variable Text', 'Segoe UI', 'Aptos',
+                  system-ui, sans-serif;
+  --font-mono:    'Cascadia Code', 'Cascadia Mono', 'JetBrains Mono', Consolas, monospace;
+  --font-data:    var(--font-mono);   /* alias: "characters must align" */
+
+  --fs-micro: 9px;
+  --fs-mini:  10px;
+  --fs-xs:    11px;
+  --fs-sm:    12px;
   --fs-base:  13px;   /* DEFAULT — body, inputs, list titles, terminal */
-  --fs-md:    15px;   /* panel titles, expanded terminal */
-  --fs-lg:    18px;   /* section headings */
-  --fs-xl:    22px;   /* secondary stat values */
-  --fs-2xl:   30px;   /* hero stat values */
-  --fs-hero:  clamp(26px, 5vw, 50px);  /* landing wordmark only */
+  --fs-md:    15px;
+  --fs-lg:    18px;
+  --fs-xl:    22px;
+  --fs-2xl:   30px;
+  --fs-hero:  clamp(26px, 5vw, 50px);
 
   --lh-tight: 1.25;
   --lh-base:  1.5;
   --lh-prose: 1.65;
 
-  --track-ui:     0.04em;  /* body-ish mono at rest */
-  --track-kicker: 0.12em;  /* UPPERCASE section labels */
-  --track-label:  0.18em;  /* edge telemetry, vertical readouts */
-  --track-hero:   0.35em;  /* page title, landing subtitle */
+  --track-ui:     0.04em;
+  --track-kicker: 0.12em;
+  --track-label:  0.18em;
+  --track-hero:   0.35em;
 
-  /* ---------- Spacing (4px base) ---------- */
-  --sp-1:  2px;
-  --sp-2:  4px;
-  --sp-3:  6px;
-  --sp-4:  8px;
-  --sp-5:  10px;
-  --sp-6:  12px;
-  --sp-7:  16px;
-  --sp-8:  20px;
-  --sp-9:  24px;
-  --sp-10: 32px;
-  --sp-11: 40px;
+  /* ---------- Spacing (4px base, unchanged) ---------- */
+  --sp-1:  2px;  --sp-2:  4px;  --sp-3:  6px;  --sp-4:  8px;  --sp-5:  10px;
+  --sp-6:  12px; --sp-7:  16px; --sp-8:  20px; --sp-9:  24px; --sp-10: 32px; --sp-11: 40px;
 
-  /* ---------- Radius (angular language — small radii only) ---------- */
-  --r-0:    0;       /* .frame panels: geometry comes from clip-path, not radius */
-  --r-xs:   2px;     /* pills, chips, badges */
-  --r-sm:   3px;     /* buttons, inputs, small wells */
-  --r-md:   6px;     /* cards that are NOT notched frames */
+  /* ---------- Radius — soft geometry, notch neutralised ---------- */
+  --r-0:    0;
+  --r-xs:   3px;
+  --r-sm:   6px;     /* was 3px pre-redesign */
+  --r-md:   9px;     /* was 6px pre-redesign */
+  --r-lg:   14px;    /* sheets */
   --r-pill: 999px;
-  --notch:  12px;    /* .frame corner cut — one value, system-wide */
-  --notch-sm: 8px;   /* .frame.frame-sm cut for cards under ~220px wide */
+  --notch:    0;     /* .frame's clip-path is neutralised (P2), not deleted — 30+ call sites keep the class */
+  --notch-sm: 0;
 
-  /* ---------- Elevation / z-layers ---------- */
-  --z-starfield:  -1;
-  --z-grid:        0;
-  --z-graph:       1;
-  --z-vignette:    5;
-  --z-scanlines:   6;
-  --z-brackets:    7;
-  --z-telemetry:   8;
-  --z-gauges:      15;
-  --z-chrome:      20;   /* rail, command bar, page title */
-  --z-drawer:      25;
-  --z-tooltip:     30;
-  --z-console:     40;   /* expanded terminal */
-  --z-toast:       60;
-  --z-scrim:       100;
-  --z-modal:       110;
-  --z-landing:     200;
+  /* ---------- Elevation / z-layers (unchanged) ---------- */
+  --z-starfield: -1; --z-grid: 0; --z-graph: 1; --z-vignette: 5; --z-scanlines: 6;
+  --z-brackets: 7; --z-telemetry: 8; --z-gauges: 15; --z-chrome: 20; --z-drawer: 25;
+  --z-tooltip: 30; --z-console: 40; --z-toast: 60; --z-scrim: 100; --z-modal: 110; --z-landing: 200;
 
-  /* ---------- Glow ladder ----------
-     Usage: set --glow-color on the element, then apply the ladder value.
-     box-shadow: var(--glow-2);  with  --glow-color: var(--mint); */
-  --glow-color: var(--blue);
+  /* ---------- Glow ladder — keyed to --focus; the full ladder (--glow-1/2/3/
+     inset/text-1/text-2) is declared on `body` below alongside --focus itself,
+     for the same reactivity reason noted above. ---------- */
   --glow-0: none;
+
+  --shadow-panel:  0 8px 28px rgba(0, 0, 0, 0.45);
+  --shadow-modal:  0 32px 90px rgba(0, 0, 0, 0.62);
+  --shadow-drawer: -20px 0 40px rgba(0, 0, 0, 0.5);
+
+  /* ---------- Motion ---------- */
+  --t-instant: 80ms;
+  --t-fast:    120ms;
+  --t-base:    200ms;
+  --t-slow:    350ms;
+  --t-focus:   420ms;   /* the whole-app re-tint cascade when setFocusSeat() writes a new --focus */
+  --t-reveal:  900ms;
+  --ease-out:      cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-emphasis: cubic-bezier(0.5, 0, 0.25, 1);
+  --ease-linear:   linear;
+
+  /* ---------- Layout regions ---------- */
+  --topbar-h:      54px;
+  --bench-w:       244px;
+  --bench-w-tight:  58px;
+  --flight-w:      292px;   /* In Flight activity rail */
+  --sheet-w:      1180px;
+  --rail-w:        var(--bench-w);        /* legacy alias — still read by grid-template-columns */
+  --rail-w-narrow: var(--bench-w-tight);
+  --drawer-w:      420px;
+  --gutter:        14px;
+}
+body {
+  --focus: var(--bone);   /* the cascade root setFocusSeat() actually writes to */
+  transition: --focus var(--t-focus) var(--ease-out);   /* registered as <color> above, so this really interpolates */
+  --accent-primary:     var(--focus);     /* 85+ call sites read this one alone — the redesign's highest-leverage line */
+  --accent-primary-hot: color-mix(in srgb, var(--focus) 72%, white);
+  --alfred-amber:       var(--focus);
+  --alfred-amber-hot:   var(--accent-primary-hot);
+  --glow-color: var(--focus);
   --glow-1: 0 0 8px  color-mix(in srgb, var(--glow-color) 22%, transparent);
   --glow-2: 0 0 14px color-mix(in srgb, var(--glow-color) 35%, transparent);
   --glow-3: 0 0 24px color-mix(in srgb, var(--glow-color) 45%, transparent);
   --glow-inset: inset 0 0 12px color-mix(in srgb, var(--glow-color) 6%, transparent);
   --glow-text-1: 0 0 6px  color-mix(in srgb, var(--glow-color) 50%, transparent);
   --glow-text-2: 0 0 10px color-mix(in srgb, var(--glow-color) 70%, transparent);
-
-  --shadow-panel: 0 20px 70px rgba(0, 0, 0, 0.5);
-  --shadow-modal: 0 0 50px rgba(0, 0, 0, 0.7);
-  --shadow-drawer: -20px 0 40px rgba(0, 0, 0, 0.5);
-
-  /* ---------- Motion ---------- */
-  --t-instant: 80ms;
-  --t-fast:    130ms;   /* hover, press, tint swaps */
-  --t-base:    200ms;   /* state changes, tab swaps */
-  --t-slow:    350ms;   /* drawer slide, panel open */
-  --t-reveal:  900ms;   /* HUD fade-in on entry */
-  --ease-out:      cubic-bezier(0.2, 0.8, 0.2, 1);   /* the house easing */
-  --ease-emphasis: cubic-bezier(0.5, 0, 0.25, 1);    /* landing zoom-out only */
-  --ease-linear:   linear;                            /* ambient loops only */
-
-  /* ---------- Layout regions ---------- */
-  --rail-w:        250px;
-  --rail-w-narrow: 56px;
-  --drawer-w:      420px;
-  --cmdbar-w:      580px;
-  --gutter:        18px;   /* fixed inset of chrome from viewport edge */
 }
 ```
+
+Note what did **not** change: every pre-redesign token *name* survives (§0.1) —
+`--blue`/`--mint`/`--amber`/`--red`/`--violet`/`--orange`/`--gray` keep their exact
+semantic roles from §1.2 below, just re-toned for the warmer, lighter ground. The
+status contract in §1.2 and the category convention in §1.1 are unchanged.
 
 ### 1.1 Category accent convention
 

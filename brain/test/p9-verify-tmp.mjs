@@ -181,7 +181,13 @@ if (!(await up())) {
     await page.screenshot({ path: path.join(SHOT_DIR, `p9-${width}-composer.png`) });
     await page.fill('#search-input', '').catch(() => {});
 
-    // Region rects: no overlap, all nonzero, roughly sum to viewport
+    // Region rects: no overlap, all nonzero, roughly sum to viewport.
+    // Back on Command first — Brain (P4) and Enterprise (P7) both
+    // deliberately auto-hide #flight (body.no-flight/ops-canvas), so
+    // checking "all four regions are visible" only makes sense on the one
+    // place that shows all of them at once.
+    await page.click('[data-view="command"]');
+    await sleep(300);
     const rects = await page.evaluate(() => {
       function r(id) { var e = document.getElementById(id); return e ? e.getBoundingClientRect() : null; }
       return { top: r('top'), bench: r('bench'), deck: r('deck'), flight: r('flight') };
