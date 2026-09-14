@@ -725,6 +725,33 @@
   #seat-popover .cc-lane-foot { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   #seat-popover .cc-lane-foot .btn.big { flex: 1 1 100%; min-height: 34px; }
 
+  /* --- External terminal dock (top-left, beside #mark): a dedicated
+       checklist independent of the council ticks (#cc-seats) — picking
+       seats here only decides what "Open Terminals" launches side-by-side
+       in a real Windows Terminal window, and never opens an in-page tab or
+       arms the council. Same fixed-popover idiom as #seat-popover. --- */
+  #ext-term-dock { position: relative; flex: none; }
+  #ext-term-btn {
+    background: none; border: 1px solid var(--border-focusable); border-radius: var(--r-sm);
+    color: var(--text-dim); cursor: pointer; font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: .04em; padding: 5px 9px; white-space: nowrap;
+    transition: color .13s ease, border-color .13s ease, background .13s ease;
+  }
+  #ext-term-btn:hover { color: var(--text); border-color: var(--accent-primary); }
+  #ext-term-btn.active { color: var(--accent-primary); border-color: var(--accent-primary); background: color-mix(in srgb, var(--accent-primary) 12%, transparent); }
+  #ext-term-menu {
+    position: fixed; z-index: 45; width: 200px;
+    background: var(--surface-2); border: 1px solid var(--border-strong, var(--border));
+    border-radius: var(--r-md); box-shadow: var(--shadow-panel);
+    padding: 8px; display: none; flex-direction: column; gap: 6px;
+  }
+  #ext-term-menu.open { display: flex; }
+  #ext-term-menu .ext-term-row { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+  #ext-term-menu .ext-term-row input { margin: 0; accent-color: var(--mint); }
+  #ext-term-menu .ext-term-row.idle { opacity: .45; }
+  #ext-term-menu .ext-term-foot { display: flex; gap: 6px; padding-top: 4px; border-top: 1px solid var(--hairline); }
+  #ext-term-menu .ext-term-foot .btn { flex: 1 1 auto; }
+
   /* --- Interns: glanceable summary strip (VRAM/resident proxy + counts),
        expanding in place to the real Installed/Cloud/Available markup —
        moved verbatim, not reimplemented (plan §3.1). --- */
@@ -1654,6 +1681,13 @@
 
 <header id="top">
   <div id="mark" aria-hidden="true">&#9670; ALFRED</div>
+  <!-- Pick any combo of seats — 1, several, or all — and open them side by
+       side in a real Windows Terminal window. Independent of the council
+       ticks on the composer's seat strip below: this checklist only decides
+       what "Open Terminals" launches externally. -->
+  <div id="ext-term-dock">
+    <button id="ext-term-btn" type="button" aria-haspopup="true" aria-expanded="false" title="Pick seats to open side by side in a new Windows Terminal window">&#9002; Open Terminals</button>
+  </div>
   <nav id="views" role="tablist" aria-label="Command views">
     <button class="view-btn active" data-view="brain" role="tab" aria-selected="true" aria-controls="pane-brain">Brain</button>
     <button class="view-btn" data-view="command" role="tab" aria-selected="false" aria-controls="pane-command">Command</button>
@@ -1799,7 +1833,7 @@
          .bench-seats with a horizontal, scrollable strip instead of a
          vertical stack — ~7 seats fit one row without wrapping. -->
     <div id="cc-seats" class="composer-seats"></div>
-    <div class="panel-help">Tick a seat for the council — ticking also opens or focuses its terminal. &#8943; for model, sign-in and native-window controls.</div>
+    <div class="panel-help">Click a seat to open or focus its terminal. Tick a seat for the council. &#8943; for model, sign-in and native-window controls.</div>
     <div class="composer-row">
       <span class="prompt" aria-hidden="true">&gt;</span>
       <textarea id="search-input" class="composer-input" rows="1" placeholder="Ask, or / skills  @ seats  ? search" autocomplete="off" spellcheck="true" aria-label="Ask Alfred — or / for skills, @ for seats, ? for search"></textarea>
@@ -1820,7 +1854,10 @@
          wrapper and default-collapsed state changed. -->
     <div id="composer-tools" class="composer-tools">
       <span id="cc-summary" class="panel-help"></span>
-      <button class="btn small" id="cc-open-btn" title="Open every ticked seat at once in a fresh Windows Terminal window, equal columns">&#9002; Open all</button>
+      <!-- "Open all" moved to the top-left #ext-term-btn checklist (its own
+           seat selection, independent of the council ticks below) so opening
+           a side-by-side external window is never tangled with council
+           membership. -->
       <button class="filter-chip" id="cc-refresh" title="Re-check which seats are installed and signed in">&#8635; Refresh</button>
       <div class="intern-summary" id="interns-panel">
         <div class="vram-bar"><i id="intern-vram-fill" style="width:0%"></i></div>
@@ -1978,6 +2015,10 @@
      whichever Bench seat row's "..." was clicked. Kept outside #bench so
      Bench's own overflow-y:auto never clips it. -->
 <div id="seat-popover" role="dialog" aria-label="Seat controls"></div>
+
+<!-- External terminal checklist (top-left #ext-term-btn): its own selection
+     state, independent of the council's #cc-seats ticks. -->
+<div id="ext-term-menu" role="dialog" aria-label="Choose seats to open externally"></div>
 
 <div id="toast-stack" class="toast-stack" role="status" aria-live="polite"></div>
 
@@ -6406,6 +6447,12 @@
   // per-use approval providers.json demands for seats that leave the machine.
   var ccSeats = [];
   var ccChecked = {};
+  // Separate selection for the top-left "Open Terminals" checklist — which
+  // seats to launch side by side in an external Windows Terminal window.
+  // Deliberately its own state, not ccChecked: ticking a seat into the
+  // council should never also queue it for an external window, or vice
+  // versa. Never persisted across reloads — nothing pre-selected on load.
+  var ccExtChecked = {};
   var ccPollTimer = null;
   // Seats whose surface is "web" (e.g. DeepSeek Harness) run a real HTTP UI in
   // a browser tab, not an in-page terminal pane. The PTY still has to exist —
@@ -6522,6 +6569,83 @@
   });
   window.addEventListener('resize', function () { closeSeatPopover(); });
 
+  // --- External terminal checklist (top-left #ext-term-btn) --------------
+  // Pick any combo — one seat, several, or all of them — and open exactly
+  // those side by side in a fresh Windows Terminal window via the same
+  // /api/command-center/open the old bottom-bar "Open all" button used, just
+  // driven by its own checklist (ccExtChecked) instead of the council ticks.
+  var extTermMenuEl = document.getElementById('ext-term-menu');
+  var extTermBtn = document.getElementById('ext-term-btn');
+  var extTermOpen = false;
+
+  function closeExtTermMenu() {
+    if (!extTermOpen) return;
+    extTermOpen = false;
+    extTermMenuEl.classList.remove('open');
+    extTermBtn.setAttribute('aria-expanded', 'false');
+    extTermBtn.classList.remove('active');
+  }
+
+  function positionExtTermMenu() {
+    var r = extTermBtn.getBoundingClientRect();
+    extTermMenuEl.style.left = r.left + 'px';
+    extTermMenuEl.style.top = (r.bottom + 6) + 'px';
+  }
+
+  function renderExtTermMenu() {
+    extTermMenuEl.textContent = '';
+    if (!ccSeats.length) {
+      extTermMenuEl.appendChild(el('div', 'panel-help', ['No seats found.']));
+      return;
+    }
+    ccSeats.forEach(function (s) {
+      var row = el('label', 'ext-term-row' + (s.ready ? '' : ' idle'), []);
+      var box = document.createElement('input');
+      box.type = 'checkbox'; box.disabled = !s.ready; box.checked = !!ccExtChecked[s.id];
+      box.addEventListener('change', function () { ccExtChecked[s.id] = box.checked; });
+      row.appendChild(box);
+      row.appendChild(el('span', null, [s.label]));
+      extTermMenuEl.appendChild(row);
+    });
+    var foot = el('div', 'ext-term-foot', []);
+    var go = el('button', 'btn small primary', ['Open']);
+    go.type = 'button';
+    go.addEventListener('click', function () {
+      var ids = ccSeats.filter(function (s) { return s.ready && ccExtChecked[s.id]; }).map(function (s) { return s.id; });
+      if (!ids.length) return toast('Pick at least one ready seat first.', 'warn');
+      bridgePost('/api/command-center/open', { providers: ids }).then(function (r) {
+        if (!r.ok) return toast(r.data.error || 'Could not open the terminals.', 'critical');
+        var n = r.data.seats.length;
+        toast('Opened ' + n + ' lane' + (n === 1 ? '' : 's') + ' in a new window: ' + r.data.seats.join(', '), 'success', { title: 'Open Terminals' });
+      });
+      closeExtTermMenu();
+    });
+    foot.appendChild(go);
+    extTermMenuEl.appendChild(foot);
+  }
+
+  extTermBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (extTermOpen) { closeExtTermMenu(); return; }
+    closeSeatPopover();
+    document.querySelectorAll('.composer-tool[open]').forEach(function (d) { d.open = false; });
+    renderExtTermMenu();
+    extTermMenuEl.classList.add('open');
+    extTermOpen = true;
+    extTermBtn.setAttribute('aria-expanded', 'true');
+    extTermBtn.classList.add('active');
+    positionExtTermMenu();
+  });
+  document.addEventListener('click', function (e) {
+    if (!extTermOpen) return;
+    if (extTermMenuEl.contains(e.target) || extTermBtn.contains(e.target)) return;
+    closeExtTermMenu();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && extTermOpen) closeExtTermMenu();
+  });
+  window.addEventListener('resize', function () { closeExtTermMenu(); });
+
   function renderCcSeats() {
     var wrap = document.getElementById('cc-seats');
     wrap.textContent = '';
@@ -6538,13 +6662,15 @@
       row.dataset.seatId = s.id;
       row.style.setProperty('--accent', seatAccentVar(s.id));
 
+      // Council membership only — no longer a side-effecting "open a
+      // terminal" trigger. Opening/focusing a terminal is the seat button's
+      // own click (below), so ticking never surprises you with a new pane.
       var tick = el('label', 'seat-tick', []);
       var box = document.createElement('input');
       box.type = 'checkbox'; box.disabled = !s.ready; box.checked = !!ccChecked[s.id];
-      box.title = 'Include ' + s.label + ' in the council and in "Open all"';
+      box.title = 'Include ' + s.label + ' in the council';
       box.addEventListener('change', function () {
         ccChecked[s.id] = box.checked; ccRenderAsking(); renderRouteChips();
-        if (box.checked) ccOpenOrFocusSeatTerminal(s);
       });
       tick.appendChild(box);
       row.appendChild(tick);
@@ -6553,16 +6679,22 @@
       bulb.title = state.text;
       row.appendChild(bulb);
 
+      // Click-to-open: this button is the bottom bar's terminal switch —
+      // click Claude, its tab opens/focuses; click Gemini next, its tab
+      // opens/focuses beside it. Nothing opens on page load, only on click.
       var main = el('button', 'seat-main', [el('span', 'seat-name', [s.label])]);
       main.type = 'button';
-      main.title = 'Focus ' + s.label + ' - re-tint the app to its colour';
+      main.title = s.ready ? 'Open or focus ' + s.label + '’s terminal' : s.label + ' is not ready yet';
       // aria-pressed, not aria-selected: this is a single toggle whose state
       // (is the app currently tinted to this seat) is independent of any
       // parent listbox/tablist — the seat-tick checkbox beside it already
       // owns the "included in the council" selection state.
       main.setAttribute('aria-pressed', document.body.dataset.focusSeat === s.id ? 'true' : 'false');
       main.appendChild(el('span', 'seat-model', [s.model || s.defaultModel || '']));
-      main.addEventListener('click', function () { setFocusSeat(s.id); });
+      main.addEventListener('click', function () {
+        setFocusSeat(s.id);
+        ccOpenOrFocusSeatTerminal(s);
+      });
       row.appendChild(main);
 
       var moreBtn = el('button', 'seat-more', ['⋯']);
@@ -7173,14 +7305,21 @@
       .then(function (r) { return r.json(); })
       .then(function (d) {
         ccSeats = d.seats || [];
+        // Nothing is ticked for the council by default (a seat being ready
+        // is not the same as the operator wanting it in the council) — the
+        // operator ticks in, deliberately. Only the ready flag flips a tick
+        // back off, for a seat that goes unready after being ticked.
         ccSeats.forEach(function (s) {
-          if (!(s.id in ccChecked)) ccChecked[s.id] = !!s.ready;
+          if (!(s.id in ccChecked)) ccChecked[s.id] = false;
           if (!s.ready) ccChecked[s.id] = false;
+          if (!(s.id in ccExtChecked)) ccExtChecked[s.id] = false;
+          if (!s.ready) ccExtChecked[s.id] = false;
         });
         renderCcSeats();
         ccRenderSummary(d);
         ccRenderAsking();
         renderRouteChips();
+        renderExtTermMenu();
         ccReattachTerminals();
         ccSyncWebPanels();
       });
@@ -7209,16 +7348,10 @@
   }
 
   document.getElementById('cc-refresh').addEventListener('click', function () { refreshCommandCenter(true); });
-
-  document.getElementById('cc-open-btn').addEventListener('click', function () {
-    var ids = ccSelected();
-    if (!ids.length) return toast('Tick at least one ready seat first.', 'warn');
-    bridgePost('/api/command-center/open', { providers: ids }).then(function (r) {
-      if (!r.ok) return toast(r.data.error || 'Could not open the terminals.', 'critical');
-      var n = r.data.seats.length;
-      toast('Opened ' + n + ' lane' + (n === 1 ? '' : 's') + ' in a new window: ' + r.data.seats.join(', '), 'success', { title: 'Command Center' });
-    });
-  });
+  // "Open all" (this same /api/command-center/open call, driven by ccSelected()
+  // i.e. the council ticks) moved to the top-left #ext-term-btn checklist,
+  // which drives the same endpoint off its own ccExtChecked selection instead
+  // — see renderExtTermMenu() above.
 
   function renderCouncil(run) {
     var statusEl = document.getElementById('cc-run-status');
