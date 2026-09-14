@@ -43,6 +43,7 @@ const SUITES = [
   { name: 'source', file: 'source.mjs', browser: false },
   { name: 'greeting', file: 'greeting.mjs', browser: false },
   { name: 'morning-brief', file: 'morning-brief.mjs', browser: false },
+  { name: 'world-pulse', file: 'world-pulse.mjs', browser: false },
   { name: 'github', file: 'github.mjs', browser: false },
   { name: 'spend', file: 'spend.mjs', browser: false },
   { name: 'retrieval', file: 'retrieval.mjs', browser: false },

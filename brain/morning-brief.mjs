@@ -1,14 +1,19 @@
 // --- morning-brief.mjs -------------------------------------------------------
 // Composes the "morning brief" a button triggers on demand: Alfred's own status
-// (the same content the startup greeting reports) followed by the dp brief —
-// the AI-summarized daily digest DP_dailybrief's GitHub Action produces and
-// commits back to its repo as output/latest-brief.json.
+// (the same content the startup greeting reports), then the dp brief — the
+// AI-summarized daily digest DP_dailybrief's GitHub Action produces and commits
+// back to its repo as output/latest-brief.json — then a world-pulse section
+// sourced live from Grok (see world-pulse.mjs) for broad, non-personalized
+// "what is the world talking about" trending news the dp digest doesn't cover.
 //
 // Pure, like greeting.mjs, and for the same reason: a missing GitHub
 // connection, a stale brief (today's Action run hasn't landed yet, or failed),
-// and an empty brief all matter and none of them are reachable from a live
-// server on a morning when everything actually worked.
+// an empty brief, and an unreachable/misbehaving Grok all matter and none of
+// them are reachable from a live server on a morning when everything actually
+// worked.
 // -------------------------------------------------------------------------
+
+import { worldPulseParagraphs } from './world-pulse.mjs';
 
 // The Action runs on an 8am EST cron. Age rather than calendar-date equality,
 // so a check a few hours either side of midnight in either timezone (the
@@ -53,9 +58,12 @@ export function splitIntoParagraphs(text) {
  * @param {?object} o.dpBrief    { date, mode, articleCount, digest, spokenText } from
  *   output/latest-brief.json, `{ error }` if the fetch/parse failed, or null/undefined
  *   if there is no GitHub connection to fetch it with at all.
+ * @param {?object} o.worldPulse  A fetchWorldPulse() result — `{ categories }`,
+ *   `{ error }`, or omitted/null to skip the section entirely (an older caller,
+ *   or one that deliberately doesn't want it).
  * @param {Date} o.now
  */
-export function composeMorningBriefParagraphs({ statusText, dpBrief, now }) {
+export function composeMorningBriefParagraphs({ statusText, dpBrief, worldPulse, now }) {
   const paragraphs = [];
   const status = String(statusText || '').trim();
   if (status) paragraphs.push(status);
@@ -64,25 +72,31 @@ export function composeMorningBriefParagraphs({ statusText, dpBrief, now }) {
 
   if (!dpBrief) {
     paragraphs.push('I could not reach GitHub for the daily brief — connect a GitHub account from the Workshop and try again.');
-    return paragraphs;
-  }
-  if (dpBrief.error) {
+  } else if (dpBrief.error) {
     paragraphs.push(`The daily brief could not be read: ${dpBrief.error}`);
-    return paragraphs;
+  } else {
+    const text = String(dpBrief.spokenText || dpBrief.digest || '').trim();
+    if (!text) {
+      paragraphs.push('The daily brief file was empty.');
+    } else {
+      const ageHours = briefAgeHours(dpBrief.date, now);
+      if (ageHours > STALE_BRIEF_HOURS) {
+        const rounded = Math.max(1, Math.round(ageHours));
+        paragraphs.push(`Heads up — the newest brief I have is from about ${rounded} hours ago, not this morning's run.`);
+      }
+      paragraphs.push(...splitIntoParagraphs(text));
+    }
   }
 
-  const text = String(dpBrief.spokenText || dpBrief.digest || '').trim();
-  if (!text) {
-    paragraphs.push('The daily brief file was empty.');
-    return paragraphs;
+  // Independent of whether the dp brief above succeeded — a Grok outage and a
+  // GitHub outage are unrelated failures and neither should hide the other.
+  if (worldPulse) {
+    if (worldPulse.error) {
+      paragraphs.push(`The world-pulse update wasn't available just now: ${worldPulse.error}`);
+    } else {
+      paragraphs.push(...worldPulseParagraphs(worldPulse));
+    }
   }
-
-  const ageHours = briefAgeHours(dpBrief.date, now);
-  if (ageHours > STALE_BRIEF_HOURS) {
-    const rounded = Math.max(1, Math.round(ageHours));
-    paragraphs.push(`Heads up — the newest brief I have is from about ${rounded} hours ago, not this morning's run.`);
-  }
-  paragraphs.push(...splitIntoParagraphs(text));
 
   return paragraphs;
 }

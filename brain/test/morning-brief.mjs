@@ -90,6 +90,24 @@ chk('falls back to digest when spokenText is missing (older file shape)',
 chk('an empty status still produces a brief rather than a leading blank',
   !composeMorningBrief({ statusText: '', dpBrief: null, now: NOON }).startsWith(' '));
 
+// --- worldPulse in composeMorningBriefParagraphs -----------------------------
+
+const WORLD_PULSE_OK = { categories: { geopolitics: 'Talks continued.', markets: 'Markets held steady.' } };
+
+const withWorldPulse = composeMorningBriefParagraphs({ statusText: STATUS, dpBrief: null, worldPulse: WORLD_PULSE_OK, now: NOON });
+chk('a successful world pulse is appended after the dp-brief section',
+  withWorldPulse.some((p) => p.includes('Talks continued.')), JSON.stringify(withWorldPulse));
+chk('the dp-brief failure message still appears even though world pulse succeeded — independent sections',
+  withWorldPulse.some((p) => p.includes('could not reach GitHub')), JSON.stringify(withWorldPulse));
+
+const withWorldPulseError = composeMorningBriefParagraphs({ statusText: STATUS, dpBrief: null, worldPulse: { error: 'grok: not logged in' }, now: NOON });
+chk('a failed world pulse says so in plain terms rather than vanishing silently',
+  withWorldPulseError.some((p) => p.includes('grok: not logged in')), JSON.stringify(withWorldPulseError));
+
+const withoutWorldPulse = composeMorningBriefParagraphs({ statusText: STATUS, dpBrief: null, now: NOON });
+chk('omitting worldPulse entirely produces the exact same output as before this feature existed',
+  JSON.stringify(withoutWorldPulse) === JSON.stringify(composeMorningBriefParagraphs({ statusText: STATUS, dpBrief: null, worldPulse: null, now: NOON })));
+
 // --- splitIntoParagraphs / composeMorningBriefParagraphs ---------------------
 
 const blankLineText = 'First paragraph, one sentence.\n\nSecond paragraph, another sentence.';
@@ -125,12 +143,29 @@ const vault = path.join(os.tmpdir(), stamp);
 fs.mkdirSync(path.join(vault, 'Projects'), { recursive: true });
 fs.writeFileSync(path.join(vault, 'Projects', 'Probe.md'), '# Probe\n\nA note that exists.\n', 'utf8');
 
+// world-pulse.mjs calls out to the real `grok` CLI (via provider-run.mjs) for
+// a live X/web search — approval-gated, rate-limited, real quota. This suite
+// must never make that call, same reasoning as run.mjs forcing OLLAMA_URL to
+// a closed port for the brain suite. Point the server's copy of world-pulse.mjs
+// at a stub script that returns a fixed, deterministic reply instead — this
+// still exercises the full pipeline (spawn, parse, compose) without ever
+// touching the network.
+const grokStubPath = path.join(vault, 'grok-stub.mjs');
+const GROK_STUB_REPLY = JSON.stringify({
+  geopolitics: 'A stubbed geopolitics story, for test determinism only.',
+  techAI: 'A stubbed tech story.',
+  markets: 'A stubbed markets story.',
+  scienceCulture: 'A stubbed science story.',
+});
+fs.writeFileSync(grokStubPath, `process.stdout.write(${JSON.stringify(GROK_STUB_REPLY)});\n`, 'utf8');
+
 const child = spawn(process.execPath, [SERVER], {
   env: {
     ...process.env,
     ALFRED_VAULT: vault,
     ALFRED_INDEX: path.join(vault, 'test-index.json'),
     ALFRED_GREETING_STATE: path.join(vault, 'greeting-state.json'),
+    ALFRED_PROVIDER_RUN_PATH: grokStubPath,
     PORT: String(PORT),
   },
   stdio: ['ignore', 'pipe', 'pipe'],
@@ -193,6 +228,18 @@ try {
     chk('joining the paragraphs reproduces the flat text field',
       typeof body.paragraphs === 'object' && body.paragraphs.join(' ') === body.text);
     chk('speak:false means no audio URL either', body.audioUrl === null, JSON.stringify(body.audioUrl));
+
+    // The server was pointed at a stub grok (see ALFRED_PROVIDER_RUN_PATH
+    // above) that always answers with a fixed, deterministic reply — this
+    // exercises the whole live pipeline (spawn → parse → compose) without
+    // ever making a real Grok call.
+    chk('worldPulse carries the stubbed categories, not an error',
+      body.worldPulse && !body.worldPulse.error && body.worldPulse.categories?.markets === 'A stubbed markets story.',
+      JSON.stringify(body.worldPulse));
+    chk('the world-pulse section is folded into the spoken text',
+      /stubbed geopolitics story/.test(body.text || ''), body.text);
+    chk('the world-pulse section carries its unverified-source disclaimer',
+      /Grok.s live search/.test(body.text || ''), body.text);
 
     const method = await fetch(`${BASE}/api/morning-brief`, { headers });
     chk('GET is not a way in', method.status === 404 || method.status === 405, `got ${method.status}`);

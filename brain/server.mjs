@@ -15,6 +15,7 @@ import pty from 'node-pty';
 import { buildIndex, linkKey, noteKey, resolveVaultDir, SKIP_DIRS } from './index-vault.mjs';
 import { composeGreeting, parseMcpList, recentNoteTitles } from './greeting.mjs';
 import { composeMorningBriefParagraphs } from './morning-brief.mjs';
+import { fetchWorldPulse } from './world-pulse.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -5580,13 +5581,30 @@ async function fetchDpBrief() {
   }
 }
 
+// Grok has standing operator approval for exactly this one feature (approved
+// 2026-09-14 — see world-pulse.mjs's header), so this calls it without asking
+// per run. Cached for WORLD_PULSE_TTL_MS so clicking the brief button twice in
+// a row doesn't spend a second live X/web search for substantially the same
+// "what's trending right now" answer.
+const WORLD_PULSE_TTL_MS = 30 * 60 * 1000;
+let worldPulseCache = { at: 0, result: null };
+
+async function cachedWorldPulse() {
+  if (worldPulseCache.result && Date.now() - worldPulseCache.at < WORLD_PULSE_TTL_MS) {
+    return worldPulseCache.result;
+  }
+  const result = await fetchWorldPulse();
+  worldPulseCache = { at: Date.now(), result };
+  return result;
+}
+
 async function buildMorningBrief() {
   // false: this is a status readout, not a first-contact greeting — it must
   // not consume the "have we met" flag the real greeting relies on.
   const { text: statusText } = await buildGreeting(false);
-  const dpBrief = await fetchDpBrief();
-  const paragraphs = composeMorningBriefParagraphs({ statusText, dpBrief, now: new Date() });
-  return { text: paragraphs.join(' '), paragraphs, dpBrief };
+  const [dpBrief, worldPulse] = await Promise.all([fetchDpBrief(), cachedWorldPulse()]);
+  const paragraphs = composeMorningBriefParagraphs({ statusText, dpBrief, worldPulse, now: new Date() });
+  return { text: paragraphs.join(' '), paragraphs, dpBrief, worldPulse };
 }
 
 // --- Browser-playable brief audio --------------------------------------------
