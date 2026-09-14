@@ -1525,6 +1525,13 @@
   .modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 18px 22px 12px; border-bottom: 1px solid var(--hairline); }
   .modal-head h2 { margin: 0; font-size: 15px; color: var(--accent-primary); text-shadow: 0 0 6px color-mix(in srgb, var(--accent-primary) 50%, transparent); }
   .modal-body { flex: 1; overflow-y: auto; padding: 16px 22px; font-size: 12px; color: var(--text-soft); }
+
+  /* --- Morning Brief modal ------------------------------------------------
+     Reuses .modal/.scrim like the Field Manual and the gauges — only the
+     audio player and the paragraph list differ. */
+  #brief-audio { width: 100%; margin-bottom: 14px; }
+  .brief-paragraphs p { margin: 0 0 10px; line-height: 1.5; }
+  .brief-paragraphs p:last-child { margin-bottom: 0; }
   /* --- Protocols pyramid ------------------------------------------------
      Instruction scope drawn as a funnel: the widest band at the top applies
      everywhere, and each band below it is narrower because it applies to less.
@@ -4176,6 +4183,29 @@
     kbScrim.classList.add('open'); kbModal.classList.add('open');
   }
 
+  // The morning brief reuses the same Field Manual dialog too — an audio
+  // player up top (when the server managed to render one) plus the brief's
+  // text as real paragraphs instead of one joined wall of text.
+  function openMorningBriefModal(data) {
+    document.getElementById('kb-modal-title').textContent = 'Morning Brief';
+    kbBody.textContent = '';
+    if (data.audioUrl) {
+      var audio = el('audio', null, []);
+      audio.id = 'brief-audio';
+      audio.controls = true;
+      audio.autoplay = true;
+      audio.src = data.audioUrl;
+      kbBody.appendChild(audio);
+    } else {
+      kbBody.appendChild(el('p', 'panel-help', ['not read aloud — check `/speak status`']));
+    }
+    var wrap = el('div', 'brief-paragraphs', []);
+    var paragraphs = (data.paragraphs && data.paragraphs.length) ? data.paragraphs : [data.text];
+    paragraphs.forEach(function (p) { wrap.appendChild(el('p', null, [p])); });
+    kbBody.appendChild(wrap);
+    kbScrim.classList.add('open'); kbModal.classList.add('open');
+  }
+
   // --- settings ---------------------------------------------------------
   // Same dialog as the Field Manual and the gauges. The key is write-only from
   // the UI's point of view: the server never sends it back, only a masked tail,
@@ -4488,32 +4518,17 @@
       say('fetching…');
       bridgePost('/api/morning-brief', {}).then(function (r) {
         btn.disabled = false;
+        say('');
         if (!r.ok || !r.data || !r.data.text) {
           var msg = (r.data && r.data.error) || 'could not build the morning brief';
           say(msg);
           return toast(msg, 'critical', { title: 'Morning Brief' });
         }
-        // The server already spoke this — handleMorningBrief() routes it
-        // through the same neural voice (alfred-speak.mjs / msedge-tts) the
-        // startup greeting uses, via a detached process on this machine's own
-        // speakers. Speaking it again here, in the browser's robotic
-        // built-in voice, used to run BOTH at once — that clash was the
-        // "horrible" voice, not the neural one. Text always shows either way
-        // (r.data.text below); only whether it was actually spoken depends on
-        // r.data.route, so say so when it wasn't.
-        say(r.data.route === 'silent' ? 'not read aloud — check `/speak status`' : '');
-        // A full daily digest is too long for a toast (no scrolling, fixed
-        // size) — show it in the answer panel instead, which already has a
-        // scrollable body, a close button, and Esc-to-dismiss.
-        cancelAnswerFade();
-        setAnswerState('MORNING BRIEF');
-        answerSources.textContent = '';
-        answerText.textContent = r.data.text;
-        answerPanel.classList.add('show');
-        // No auto-fade timer here (unlike a normal Q&A answer) — a brief
-        // read aloud can run well past the usual 12s window, and the panel
-        // disappearing mid-speech would be worse than just leaving it open
-        // until the close button/Esc is used.
+        // A full daily digest, plus an audio player, needs a real dialog —
+        // not the answer panel (a 12s-fade Q&A strip) and not a toast (no
+        // scrolling). The Field Manual dialog already has a scrollable body,
+        // a close button and Esc-to-dismiss, so the brief reuses it.
+        openMorningBriefModal(r.data);
       }).catch(function () { btn.disabled = false; say('could not reach the server'); });
     });
   })();

@@ -14,7 +14,7 @@ import { WebSocketServer } from 'ws';
 import pty from 'node-pty';
 import { buildIndex, linkKey, noteKey, resolveVaultDir, SKIP_DIRS } from './index-vault.mjs';
 import { composeGreeting, parseMcpList, recentNoteTitles } from './greeting.mjs';
-import { composeMorningBrief } from './morning-brief.mjs';
+import { composeMorningBriefParagraphs } from './morning-brief.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -5585,18 +5585,80 @@ async function buildMorningBrief() {
   // not consume the "have we met" flag the real greeting relies on.
   const { text: statusText } = await buildGreeting(false);
   const dpBrief = await fetchDpBrief();
-  const text = composeMorningBrief({ statusText, dpBrief, now: new Date() });
-  return { text, dpBrief };
+  const paragraphs = composeMorningBriefParagraphs({ statusText, dpBrief, now: new Date() });
+  return { text: paragraphs.join(' '), paragraphs, dpBrief };
+}
+
+// --- Browser-playable brief audio --------------------------------------------
+// The startup greeting speaks through this machine's own speakers, which is
+// fine for a greeting nobody but the person sitting here will ever hear. The
+// on-demand brief is different: it's read from wherever the browser is, so it
+// renders to a file and hands the browser a URL instead of spawning a local
+// speaker — same TTS helper, different destination, and no risk of the
+// server's neural voice and a second voice clashing (see the removed
+// ui.html client-side-speech attempt this replaces).
+
+const BRIEF_AUDIO_TTL_MS = 10 * 60 * 1000;
+let briefAudio = { at: 0, text: '', file: '' };
+
+/** Render the brief text to mp3, reusing a fresh render for the same text. */
+async function renderBriefAudio(text) {
+  const cfg = speakConfig();
+  if (cfg.enabled === false) throw new Error('speech is disabled (`/speak off`)');
+  if (!fs.existsSync(TTS_HELPER)) throw new Error('tts helper not installed');
+  if (briefAudio.text === text && Date.now() - briefAudio.at < BRIEF_AUDIO_TTL_MS && fs.existsSync(briefAudio.file)) {
+    return briefAudio.file;
+  }
+
+  const file = path.join(os.tmpdir(), `alfred-morning-brief-${process.pid}.mp3`);
+  const textFile = path.join(os.tmpdir(), `alfred-morning-brief-${process.pid}.txt`);
+  fs.writeFileSync(textFile, text, 'utf8');
+  const args = [TTS_HELPER, '--text-file', textFile, '--out', file,
+    '--voice', cfg.edgeVoice || 'en-GB-RyanNeural', '--rate', String(cfg.rate ?? 0)];
+  try {
+    await new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, args, { stdio: 'ignore', windowsHide: true });
+      child.on('error', reject);
+      child.on('close', (code) => {
+        if (code === 0 && fs.existsSync(file)) resolve();
+        else reject(new Error(`tts exited ${code}`));
+      });
+    });
+  } finally {
+    try { fs.unlinkSync(textFile); } catch { /* best effort */ }
+  }
+  briefAudio = { at: Date.now(), text, file };
+  return file;
+}
+
+// GET /api/morning-brief/audio?token=... — an <audio src> cannot set a custom
+// header, so like the terminal WebSocket upgrade, the token rides in the
+// query string instead. Loopback-only, same rotating per-boot token.
+function handleMorningBriefAudio(req, res) {
+  if (!briefAudio.file || !fs.existsSync(briefAudio.file) || Date.now() - briefAudio.at > BRIEF_AUDIO_TTL_MS) {
+    return sendJson(res, 404, { error: 'no morning-brief audio rendered yet' });
+  }
+  res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-store' });
+  fs.createReadStream(briefAudio.file).pipe(res);
 }
 
 // POST /api/morning-brief [token]. Same shape and same gate as /api/greeting —
-// a side effect (speech) plus an outbound GitHub read, both bridge-only.
+// a side effect (rendering audio) plus an outbound GitHub read, both bridge-only.
 async function handleMorningBrief(req, res) {
   let body = {};
   try { body = await readJsonBody(req); } catch { /* empty body is the normal case */ }
   const brief = await buildMorningBrief();
-  const route = body.speak === false ? false : speakGreeting(brief.text);
-  sendJson(res, 200, { ...brief, spoke: Boolean(route), route: route || 'silent' });
+  let audioUrl = null;
+  if (body.speak !== false) {
+    try {
+      await renderBriefAudio(brief.text);
+      audioUrl = `/api/morning-brief/audio?token=${SESSION_TOKEN}`;
+    } catch {
+      // Text still renders in the modal without audio — same "degrade to
+      // silent, never to broken" rule the greeting follows.
+    }
+  }
+  sendJson(res, 200, { ...brief, audioUrl, spoke: Boolean(audioUrl), route: audioUrl ? 'browser' : 'silent' });
 }
 
 // --- Server ---
@@ -5686,6 +5748,17 @@ async function main() {
       }
 
       if (req.method !== 'GET') return sendJson(res, 405, { error: 'method not allowed' });
+
+      // Same reasoning as the terminal WebSocket upgrade: the token rides in
+      // the query string because the browser's <audio> element cannot set a
+      // custom header. Checked here, ahead of the header-based authorize()
+      // block below, since this route is never header-authorized.
+      if (url.pathname === '/api/morning-brief/audio') {
+        if (!isLoopbackAddress(req.socket.remoteAddress) || !tokenMatches(url.searchParams.get('token'))) {
+          return sendText(res, 403, 'forbidden');
+        }
+        return handleMorningBriefAudio(req, res);
+      }
 
       // Bridge reads. These expose chat transcripts and agent output, so unlike
       // the vault observe endpoints they are token-gated too. Reindex progress

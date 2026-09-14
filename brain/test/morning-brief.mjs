@@ -19,7 +19,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { composeMorningBrief, briefAgeHours } from '../morning-brief.mjs';
+import { composeMorningBrief, composeMorningBriefParagraphs, splitIntoParagraphs, briefAgeHours } from '../morning-brief.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SERVER = path.join(HERE, '..', 'server.mjs');
@@ -89,6 +89,34 @@ chk('falls back to digest when spokenText is missing (older file shape)',
 
 chk('an empty status still produces a brief rather than a leading blank',
   !composeMorningBrief({ statusText: '', dpBrief: null, now: NOON }).startsWith(' '));
+
+// --- splitIntoParagraphs / composeMorningBriefParagraphs ---------------------
+
+const blankLineText = 'First paragraph, one sentence.\n\nSecond paragraph, another sentence.';
+chk('existing blank-line breaks are honored as separate paragraphs',
+  splitIntoParagraphs(blankLineText).length === 2, JSON.stringify(splitIntoParagraphs(blankLineText)));
+
+const oneBlobText = Array.from({ length: 12 }, (_, i) => `This is sentence number ${i + 1} of the digest.`).join(' ');
+const blobParagraphs = splitIntoParagraphs(oneBlobText);
+chk('a single unbroken blob gets grouped into more than one paragraph',
+  blobParagraphs.length > 1, JSON.stringify(blobParagraphs));
+chk('grouping a blob does not lose or reorder its content',
+  blobParagraphs.join(' ').replace(/\s+/g, ' ') === oneBlobText.replace(/\s+/g, ' '));
+
+chk('a short blob with no blank lines still comes back as at least one paragraph',
+  splitIntoParagraphs('One short sentence.').length === 1);
+
+const freshParagraphs = composeMorningBriefParagraphs({
+  statusText: STATUS,
+  dpBrief: { date: FRESH_DATE, mode: 'daily', digest: '**bold** digest', spokenText: 'Good morning. Spoken version here.' },
+  now: NOON,
+});
+chk('composeMorningBriefParagraphs returns an array, not a single string',
+  Array.isArray(freshParagraphs), JSON.stringify(freshParagraphs));
+chk('the status line is its own paragraph, not merged with the rest',
+  freshParagraphs[0] === STATUS, JSON.stringify(freshParagraphs));
+chk('joining the paragraphs reproduces what composeMorningBrief returns',
+  freshParagraphs.join(' ') === fresh, `${freshParagraphs.join(' ')}\n!==\n${fresh}`);
 
 // --- The live endpoint ------------------------------------------------------
 
@@ -160,9 +188,26 @@ try {
         body.dpBrief !== null && typeof body.dpBrief === 'object', JSON.stringify(body.dpBrief).slice(0, 200));
     }
     chk('still opens with the real status line', /skills?,|skill ready|skills ready/.test(body.text || '') || /Good (morning|afternoon|evening)/.test(body.text || ''), body.text);
+    chk('carries paragraphs as a real array, not just the joined text',
+      Array.isArray(body.paragraphs) && body.paragraphs.length > 0, JSON.stringify(body.paragraphs).slice(0, 200));
+    chk('joining the paragraphs reproduces the flat text field',
+      typeof body.paragraphs === 'object' && body.paragraphs.join(' ') === body.text);
+    chk('speak:false means no audio URL either', body.audioUrl === null, JSON.stringify(body.audioUrl));
 
     const method = await fetch(`${BASE}/api/morning-brief`, { headers });
     chk('GET is not a way in', method.status === 404 || method.status === 405, `got ${method.status}`);
+
+    // Browser-playable audio: the endpoint's own gate (query token, since an
+    // <audio src> cannot carry a header) and its "nothing rendered yet"
+    // response, without triggering a real TTS synthesis call in this suite.
+    const audioNoToken = await fetch(`${BASE}/api/morning-brief/audio`);
+    chk('morning-brief audio is gated too', audioNoToken.status === 403, `got ${audioNoToken.status}`);
+
+    const audioBadToken = await fetch(`${BASE}/api/morning-brief/audio?token=not-the-real-token`);
+    chk('a wrong token does not get in either', audioBadToken.status === 403, `got ${audioBadToken.status}`);
+
+    const audioNoneRendered = await fetch(`${BASE}/api/morning-brief/audio?token=${token}`);
+    chk('with speak:false above, no audio has been rendered yet', audioNoneRendered.status === 404, `got ${audioNoneRendered.status}`);
   }
 } finally {
   child.stdout?.destroy();

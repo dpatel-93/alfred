@@ -22,7 +22,32 @@ export function briefAgeHours(dpBriefDateIso, now) {
   return (now.getTime() - then) / 3600000;
 }
 
+// The dp digest/spokenText arrives as one AI-written block of prose. Shown
+// as a single joined string it reads as a wall of text, so the modal wants
+// it broken into paragraphs: honor blank-line breaks already in the source,
+// and if there are none, group sentences into ~280-char chunks rather than
+// handing back one unbroken block.
+export function splitIntoParagraphs(text) {
+  const byBlankLine = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  if (byBlankLine.length > 1) return byBlankLine;
+
+  const sentences = text.replace(/\n+/g, ' ').match(/[^.!?]+[.!?]+(?:\s+|$)/g) || [text];
+  const groups = [];
+  let current = '';
+  for (const s of sentences) {
+    if (current && (current + s).length > 280) { groups.push(current.trim()); current = ''; }
+    current += s;
+  }
+  if (current.trim()) groups.push(current.trim());
+  return groups.length ? groups : [text];
+}
+
 /**
+ * Same content as composeMorningBrief, kept as an array so a caller that
+ * renders to HTML (the modal) can show real paragraphs instead of one
+ * joined string. composeMorningBrief below is this, joined — every existing
+ * caller that wants a flat string for speech keeps working unchanged.
+ *
  * @param {object} o
  * @param {string} o.statusText  Alfred's own status line(s) — reuse buildGreeting's text.
  * @param {?object} o.dpBrief    { date, mode, articleCount, digest, spokenText } from
@@ -30,34 +55,38 @@ export function briefAgeHours(dpBriefDateIso, now) {
  *   if there is no GitHub connection to fetch it with at all.
  * @param {Date} o.now
  */
-export function composeMorningBrief({ statusText, dpBrief, now }) {
-  const lines = [];
+export function composeMorningBriefParagraphs({ statusText, dpBrief, now }) {
+  const paragraphs = [];
   const status = String(statusText || '').trim();
-  if (status) lines.push(status);
+  if (status) paragraphs.push(status);
 
-  lines.push('Now, your daily brief.');
+  paragraphs.push('Now, your daily brief.');
 
   if (!dpBrief) {
-    lines.push('I could not reach GitHub for the daily brief — connect a GitHub account from the Workshop and try again.');
-    return lines.join(' ');
+    paragraphs.push('I could not reach GitHub for the daily brief — connect a GitHub account from the Workshop and try again.');
+    return paragraphs;
   }
   if (dpBrief.error) {
-    lines.push(`The daily brief could not be read: ${dpBrief.error}`);
-    return lines.join(' ');
+    paragraphs.push(`The daily brief could not be read: ${dpBrief.error}`);
+    return paragraphs;
   }
 
   const text = String(dpBrief.spokenText || dpBrief.digest || '').trim();
   if (!text) {
-    lines.push('The daily brief file was empty.');
-    return lines.join(' ');
+    paragraphs.push('The daily brief file was empty.');
+    return paragraphs;
   }
 
   const ageHours = briefAgeHours(dpBrief.date, now);
   if (ageHours > STALE_BRIEF_HOURS) {
     const rounded = Math.max(1, Math.round(ageHours));
-    lines.push(`Heads up — the newest brief I have is from about ${rounded} hours ago, not this morning's run.`);
+    paragraphs.push(`Heads up — the newest brief I have is from about ${rounded} hours ago, not this morning's run.`);
   }
-  lines.push(text);
+  paragraphs.push(...splitIntoParagraphs(text));
 
-  return lines.join(' ');
+  return paragraphs;
+}
+
+export function composeMorningBrief(args) {
+  return composeMorningBriefParagraphs(args).join(' ');
 }
