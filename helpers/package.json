@@ -5,6 +5,7 @@
   "description": "Runtime dependencies for the Alfred helper scripts. Only talk-back needs one: msedge-tts, which fetches Microsoft's neural voices. Everything else here is standard library on purpose. Install with `npm install` in this directory; if it is missing, talk-back falls back to the built-in system voice and says so rather than going silent.",
   "type": "module",
   "dependencies": {
+    "@google/stitch-sdk": "^0.3.5",
     "msedge-tts": "^2.0.7"
   }
 }
