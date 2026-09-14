@@ -966,7 +966,17 @@
     transition: transform 0.35s cubic-bezier(.2,.8,.2,1), right 0.35s cubic-bezier(.2,.8,.2,1);
     display: flex; flex-direction: column; backdrop-filter: blur(6px);
   }
-  body:not(.no-flight):not(.ops-canvas):not(.flight-collapsed):not(.grid-hide-flight):not(.flight-idle):not(.sheet-open) #panel { right: var(--flight-w); }
+  /* .open-scoped deliberately: closed rests on the base right:0 above, so
+     translateX(100%) always parks it fully off-screen. Without the .open
+     qualifier this rule still matched a CLOSED panel too — the Flight rail's
+     idle/active state flips independent of whether anyone opened a note, and
+     each flip animated `right` from 0 to 292px (--flight-w) under the
+     transition below, dragging exactly that many px of the closed panel's
+     right edge (its bottom-most section — Connected Notes — since panel-body
+     has flex:1) onto screen with nothing loaded into it. Reproduced live: the
+     Flight rail going idle-to-active while on a non-Brain view was enough,
+     no note ever opened. */
+  body:not(.no-flight):not(.ops-canvas):not(.flight-collapsed):not(.grid-hide-flight):not(.flight-idle):not(.sheet-open) #panel.open { right: var(--flight-w); }
   #panel.open { transform: translateX(0); }
   #panel-header {
     padding: 20px 22px 14px; border-bottom: 1px solid color-mix(in srgb, var(--accent-primary) 15%, transparent);
