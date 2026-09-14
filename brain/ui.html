@@ -4483,7 +4483,15 @@
           say(msg);
           return toast(msg, 'critical', { title: 'Morning Brief' });
         }
-        say('');
+        // The server already spoke this — handleMorningBrief() routes it
+        // through the same neural voice (alfred-speak.mjs / msedge-tts) the
+        // startup greeting uses, via a detached process on this machine's own
+        // speakers. Speaking it again here, in the browser's robotic
+        // built-in voice, used to run BOTH at once — that clash was the
+        // "horrible" voice, not the neural one. Text always shows either way
+        // (r.data.text below); only whether it was actually spoken depends on
+        // r.data.route, so say so when it wasn't.
+        say(r.data.route === 'silent' ? 'not read aloud — check `/speak status`' : '');
         // A full daily digest is too long for a toast (no scrolling, fixed
         // size) — show it in the answer panel instead, which already has a
         // scrollable body, a close button, and Esc-to-dismiss.
@@ -4496,7 +4504,6 @@
         // read aloud can run well past the usual 12s window, and the panel
         // disappearing mid-speech would be worse than just leaving it open
         // until the close button/Esc is used.
-        speakAloud(r.data.text);
       }).catch(function () { btn.disabled = false; say('could not reach the server'); });
     });
   })();
@@ -6048,17 +6055,6 @@
   function dismissAnswer() {
     cancelAnswerFade();
     answerPanel.classList.remove('show', 'fading');
-    if (window.speechSynthesis) window.speechSynthesis.cancel();
-  }
-
-  // Server-side TTS (Kokoro/edge-tts) was removed years ago to cut an 80MB
-  // ONNX dependency (see server.mjs's history note) — this uses the
-  // browser's own built-in voice instead. Zero dependencies, but voice
-  // quality/availability depends on what the OS/browser has installed.
-  function speakAloud(text) {
-    if (!text || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel(); // a new brief always replaces whatever was mid-sentence
-    window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
   }
 
   answerPanel.addEventListener('mouseenter', cancelAnswerFade);
