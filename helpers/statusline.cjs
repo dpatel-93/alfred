@@ -96,6 +96,33 @@ process.stdin.on('end', () => {
     rl = C(five >= 90 ? '1;31' : '33', `5h ${Math.round(five)}%`);
   }
 
+  // context-mode plugin segment — shells out to ITS OWN statusline renderer
+  // (already ANSI-coloured, so it is appended verbatim, never re-wrapped in
+  // C()) and forwards the exact same stdin payload Claude Code gave us, since
+  // that JSON carries the session_id context-mode's per-session KPI needs.
+  // Resolved by globbing the plugin cache rather than a pinned version path,
+  // so `ctx upgrade` bumping the version folder never breaks this line. Wholly
+  // best-effort: uninstalled, mid-upgrade, or slow all degrade to "" silently
+  // — this segment must never be the reason the statusline goes blank.
+  let ctxMode = '';
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const os = require('os');
+    const cacheDir = path.join(os.homedir(), '.claude', 'plugins', 'cache', 'context-mode', 'context-mode');
+    const versions = fs.readdirSync(cacheDir)
+      .filter((v) => fs.existsSync(path.join(cacheDir, v, 'bin', 'statusline.mjs')))
+      .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+    if (versions.length) {
+      const script = path.join(cacheDir, versions[0], 'bin', 'statusline.mjs');
+      ctxMode = require('child_process').execFileSync(process.execPath, [script], {
+        input: raw,
+        timeout: 1500,
+        stdio: ['pipe', 'pipe', 'ignore'],
+      }).toString().trim();
+    }
+  } catch { /* plugin absent/upgrading/slow — statusline must not depend on it */ }
+
   const parts = [
     C('36', model),
     C('33', dir),
@@ -104,6 +131,7 @@ process.stdin.on('end', () => {
     cost,
     rl,
     style && C('35', style),
+    ctxMode,
   ].filter(Boolean);
 
   process.stdout.write(parts.join(` ${C('90', '|')} `));
