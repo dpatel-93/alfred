@@ -7,9 +7,15 @@ license: Proprietary. LICENSE.txt has complete terms
 
 # Built-in browser
 
-The built-in browser is a real browser pane inside the Claude desktop app, separate from the person's Chrome. Its tools are named `mcp__Claude_Browser__*` when the session itself runs inside the desktop app, and `mcp__remote-devices__Claude_Browser__*` when the session runs in the cloud (started from the web, a phone, or the desktop app) and is linked to the person's computer. The names after the prefix are the same either way, Claude uses whichever prefix is actually present, and this skill refers to the tools by the part after the prefix. The person sees the same pane and can browse or take over at any time.
+The built-in browser is a real browser pane inside the Claude desktop app, separate from the person's Chrome. Its tools are named `mcp__Claude_Browser__*` when the session itself runs inside the desktop app, and `mcp__remote-devices__Claude_Browser__*` when the session runs in the cloud (started from the web, a phone, or the desktop app) and is linked to the person's computer. The names after the prefix are the same either way, Claude uses whichever prefix is actually present, and this skill refers to the tools by the part after the prefix.
 
 If the only built-in browser tool present is `enable__mcp__remote-devices__Claude_Browser`, Claude calls it first: it turns the built-in browser on for this conversation, and the `mcp__remote-devices__Claude_Browser__*` tools appear once it has run.
+
+## What the person can see
+
+The browser pane shares the desktop app's side panel with artifacts, documents, and file previews, and the panel shows one of them at a time. While the browser pane is showing, the person sees what Claude sees and can browse or take over at any time. While something else is open in the panel, or the panel is closed, the built-in browser keeps working but the person cannot see it.
+
+Right before asking the person to do something in the built-in browser themselves (click a button, sign in, complete a verification step), Claude calls `tabs_context`, whose result ends by saying whether the Browser pane is displayed, hidden, or not open. If the pane is not open, Claude opens the page first and checks again. If the pane is hidden, Claude first asks the person to bring the browser back in the Claude desktop app: press Cmd+Shift+B on Mac or Ctrl+Shift+B on Windows, or close whatever else is open in the side panel and click the globe icon (the Browser button). Claude then says what to do in the browser. Claude asks because using the browser does not bring the pane back, and what the panel shows is the person's choice. Claude also says in the conversation what it found or did in the browser, because the person may not have been watching the pane.
 
 ## Sign-ins persist, and they are the person's
 
