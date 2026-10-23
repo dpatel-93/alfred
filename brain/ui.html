@@ -3154,6 +3154,13 @@
   var dayOpen = {};         // collapsed cards the operator has opened, by title
   var lastBrainVersion = null;
 
+  // First paint: placeholder cards until the feed arrives, so the pane is never blank.
+  if (dayBodyEl) {
+    dayBodyEl.appendChild(el('div', 'day-grid', [1, 2, 3].map(function () {
+      return el('div', 'day-col', [skeletonCard(), skeletonCard()]);
+    })));
+  }
+
   function arr(x) { return Array.isArray(x) ? x : []; }
 
   function dayLabel(iso, long) { // '2026-10-25' -> 'Sat Oct 25' (long: 'Saturday, October 25')
