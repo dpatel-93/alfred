@@ -1,80 +1,51 @@
 #!/usr/bin/env node
 // --- brain-open-items.mjs ---------------------------------------------------
-// SessionStart hook: surfaces the open reminders and tracked items that other
-// AIs (or earlier sessions) left in a shared brain, so a reminder captured on
-// the phone is still in front of Claude at the desk until someone closes it.
+// SessionStart hook: puts the shared brain's open items and the signals left
+// for this agent in front of the session, so a reminder captured on the phone
+// is still visible at the desk until the user closes it (Second Brain
+// MANIFESTO §6-§7). Read-only; run brain-librarian.mjs first so expiries and
+// closes are already applied.
 //
-// Reads every Shared/<track>/*.md (Health excluded: medical data is read on
-// demand, never pushed into every session) and prints the lines under each
-// "## Open items" heading. Read-only. Prints nothing when no shared brain is
-// configured, so it is safe on machines that do not use one.
-//
-// Brain location: ALFRED_SHARED_BRAIN, else "Shared brain path" in
-// ~/.claude/alfred-profile.md.
+// Brain: ALFRED_SHARED_BRAIN, else "Shared brain path" in the profile.
+// Agent names for Inbox matching: ALFRED_INBOX_NAMES (comma list),
+// default claude,claude-code,librarian,all.
 //
 //   node brain-open-items.mjs
 // ---------------------------------------------------------------------------
 
 import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
+import { sharedBrainPath, collectOpenItems, easternNow } from './brain-librarian.mjs';
 
 // --- Configuration ---
-const PROFILE_PATH = path.join(os.homedir(), '.claude', 'alfred-profile.md');
-const SKIP_TRACKS = new Set(['health']);
-const MAX_ITEMS = 40;
+const NAMES = (process.env.ALFRED_INBOX_NAMES || 'claude,claude-code,librarian,all')
+  .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+const MAX_UNDATED = 12;
 
-function sharedBrainPath() {
-  if (process.env.ALFRED_SHARED_BRAIN) return process.env.ALFRED_SHARED_BRAIN;
-  try {
-    const m = fs.readFileSync(PROFILE_PATH, 'utf8').match(/^\s*-\s*\*\*Shared brain path[^*]*\*\*:\s*(.+)$/m);
-    const v = m && m[1].replace(/\s*\(.*?\)\s*$/, '').trim();
-    return v && !/^\(?not specified\)?$/i.test(v) ? v : null;
-  } catch { return null; }
-}
+const line = (i) => `    - ${i.title}${i.due ? ` (due ${i.due})` : ''} · ${i.kind}${i.scope ? `, ${i.scope}` : ''} · ${i.file}`;
 
-// Lines under "## Open items" up to the next level-2 heading.
-function openItems(markdown) {
-  const out = [];
-  let inside = false;
-  for (const line of markdown.split(/\r?\n/)) {
-    if (/^##\s+/.test(line)) { inside = /^##\s+open items\b/i.test(line); continue; }
-    if (inside && /^\s*[-*]\s+\S/.test(line)) out.push(line.trim());
-  }
-  return out;
-}
-
-// --- Main ---
 function main() {
   const brain = sharedBrainPath();
-  const shared = brain && path.join(brain, 'Shared');
-  if (!shared || !fs.existsSync(shared)) return;
-
-  const sections = [];
-  for (const track of fs.readdirSync(shared, { withFileTypes: true })) {
-    if (!track.isDirectory() || SKIP_TRACKS.has(track.name.toLowerCase())) continue;
-    const dir = path.join(shared, track.name);
-    for (const file of fs.readdirSync(dir)) {
-      if (!file.endsWith('.md') || /superseded/i.test(file)) continue;
-      const items = openItems(fs.readFileSync(path.join(dir, file), 'utf8'));
-      if (items.length) sections.push({ rel: `Shared/${track.name}/${file}`, items });
-    }
+  if (!brain || !fs.existsSync(brain)) return;
+  const now = easternNow();
+  const o = collectOpenItems(brain, now);
+  const mine = o.signals.filter((s) => NAMES.includes(s.to));
+  const out = [`[SecondBrain] ${now.stamp}: open items from the shared brain (any AI may have added these).`];
+  if (o.today.length) out.push('  Due today:', ...o.today.map(line));
+  if (o.overdue.length) out.push('  Overdue:', ...o.overdue.map(line));
+  if (o.carryOver.length) out.push('  Yesterday\'s errands not done (ask once whether to carry over):', ...o.carryOver.map(line));
+  if (o.upcoming.length) out.push('  Next 7 days:', ...o.upcoming.map(line));
+  if (o.undated.length) {
+    out.push(`  Open, no date (${o.undated.length}):`, ...o.undated.slice(0, MAX_UNDATED).map(line));
+    if (o.undated.length > MAX_UNDATED) out.push(`    …and ${o.undated.length - MAX_UNDATED} more in Reminders/`);
   }
-  if (!sections.length) return;
-
-  const lines = ['[SecondBrain] Open items in the shared brain (any AI may have added these):'];
-  let shown = 0;
-  for (const s of sections) {
-    lines.push(`${s.rel}:`);
-    for (const item of s.items) {
-      if (shown++ >= MAX_ITEMS) break;
-      lines.push(`  ${item}`);
-    }
+  if (mine.length) {
+    out.push(`  Signals for you (${mine.length}): handle per MANIFESTO §6, then reply or file them:`,
+      ...mine.map((s) => `    - ${s.type} from ${s.from}${s.ageDays > 7 ? ` (${s.ageDays} days old)` : ''} · ${s.file}`));
   }
-  if (shown > MAX_ITEMS) lines.push(`  ...and ${shown - MAX_ITEMS} more`);
-  lines.push('Mention reminders that are due or relevant. Closing an item edits Shared/: ask the user first,',
-    'then move the line to that file\'s Closed section and log it in Shared/CHANGELOG.md (MANIFESTO §6).');
-  console.log(lines.join('\n'));
+  if (out.length === 1) return;
+  out.push('  Mention what is due. Close a reminder only when the user says it is done (edit it if you',
+    '  created it, else a `close` signal). Capture what matters as you work (MANIFESTO §8).');
+  console.log(out.join('\n'));
 }
 
 try { main(); } catch (err) {

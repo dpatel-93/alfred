@@ -43,7 +43,8 @@ const NO_RULES = path.join(ROOT, 'no-redact-rules.json');
 
 function run(base, cmd, extraEnv = {}) {
   const r = spawnSync(process.execPath, [HOOK, cmd], {
-    env: { ...process.env, ALFRED_VAULT: VAULT, ALFRED_MEMORY_BASE: base, ALFRED_REDACT_RULES: NO_RULES, ...extraEnv },
+    env: { ...process.env, ALFRED_VAULT: VAULT, ALFRED_MEMORY_BASE: base, ALFRED_REDACT_RULES: NO_RULES,
+      ALFRED_SYNC_STATE: `${base}.sync-state.json`, ...extraEnv },
     encoding: 'utf8',
   });
   return (r.stdout || '') + (r.stderr || '');
@@ -194,7 +195,7 @@ fs.mkdirSync(RVAULT, { recursive: true });
 fs.writeFileSync(RULES, JSON.stringify({
   replace: [{ find: '\\bBruce Wayne\\b', flags: 'g', with: 'the user' }],
 }), 'utf8');
-const rEnv = { ALFRED_VAULT: RVAULT, ALFRED_REDACT_RULES: RULES, ALFRED_SESSIONS: RSESS };
+const rEnv = { ALFRED_VAULT: RVAULT, ALFRED_REDACT_RULES: RULES, ALFRED_SESSIONS: RSESS, ALFRED_SYNC_STATE: path.join(ROOT, 'r.sync-state.json') };
 
 const secretMem = `---
 name: identity
@@ -232,6 +233,27 @@ chk('the session note has the brain header and no name',
   dayNote.includes('- **Owner:** Alfred') && dayNote.includes('Global/identity') && !dayNote.includes('Bruce'));
 chk('no SessionLog.md inside the vault when a sessions folder is set',
   !fs.existsSync(path.join(RVAULT, 'Claude-Code', 'SessionLog.md')));
+
+// --- No conflict clutter from this machine's own updates --------------------
+
+console.log('\nConflict copies');
+const cDir = path.join(RVAULT, 'Claude-Code', 'Memory', 'Global');
+const conflicts = () => fs.readdirSync(cDir).filter((f) => f.includes('.conflict-')).length;
+const cBefore = conflicts();
+const later = new Date(Date.now() + 300_000);
+fs.writeFileSync(path.join(rMem, 'identity.md'), secretMem.replace('works at', 'now works at'), 'utf8');
+fs.utimesSync(path.join(rMem, 'identity.md'), later, later);
+run(RBASE, 'sync', rEnv);
+chk('updating a memory this machine wrote leaves no conflict copy', conflicts() === cBefore, `${conflicts()} vs ${cBefore}`);
+const vf = path.join(cDir, 'identity.md');
+fs.writeFileSync(vf, read(vf) + '\nEdited by another machine.\n', 'utf8');
+const mid = new Date(Date.now() + 400_000);
+fs.utimesSync(vf, mid, mid);
+fs.writeFileSync(path.join(rMem, 'identity.md'), secretMem.replace('works at', 'moved to'), 'utf8');
+const last = new Date(Date.now() + 500_000);
+fs.utimesSync(path.join(rMem, 'identity.md'), last, last);
+run(RBASE, 'sync', rEnv);
+chk('a vault copy changed elsewhere is preserved as a conflict copy', conflicts() === cBefore + 1, `${conflicts()} vs ${cBefore + 1}`);
 
 // --- Safety ----------------------------------------------------------------
 
