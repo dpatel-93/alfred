@@ -9,10 +9,10 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WebSocketServer } from 'ws';
 import pty from 'node-pty';
-import { buildIndex, linkKey, noteKey, resolveVaultDir, SKIP_DIRS } from './index-vault.mjs';
+import { buildIndex, linkKey, noteKey, resolveVaultDir, SKIP_DIRS, vaultExcludes, isExcludedPath } from './index-vault.mjs';
 import { composeGreeting, parseMcpList, recentNoteTitles } from './greeting.mjs';
 import { composeMorningBriefParagraphs } from './morning-brief.mjs';
 import { fetchWorldPulse } from './world-pulse.mjs';
@@ -1100,15 +1100,19 @@ async function scanProjectGit(dir) {
 function matchBrainNote(projectName) {
   let notes;
   try { notes = loadIndex().notes; } catch { return null; }
+  // A Projects folder may sit below the root when the brain is a larger shared
+  // folder (Second Brain: Memory/Alfred/vault/Projects/), so match it at any
+  // depth rather than only at the top.
   const exactPath = 'Projects/' + projectName + '.md';
-  let note = notes.find((n) => n.path === exactPath);
+  const inProjects = (p) => /(^|\/)Projects\/[^/]+\.md$/.test(p);
+  let note = notes.find((n) => n.path === exactPath) || notes.find((n) => n.path.endsWith('/' + exactPath));
   const aliases = projectNoteAliases();
   if (!note && aliases[projectName]) {
     note = notes.find((n) => n.path === aliases[projectName]);
   }
   if (!note) {
     const target = projectName.toLowerCase();
-    note = notes.find((n) => n.folder === 'Projects' && n.title.toLowerCase() === target);
+    note = notes.find((n) => inProjects(n.path) && n.title.toLowerCase() === target);
   }
   return note ? { path: note.path, title: note.title, mtime: note.mtime } : null;
 }
@@ -2010,13 +2014,15 @@ function maskKey(k) {
 function countMarkdown(dir, budget = 20000) {
   let n = 0;
   const stack = [dir];
+  const excludes = vaultExcludes();
   while (stack.length && n < budget) {
     const current = stack.pop();
     let entries;
     try { entries = fs.readdirSync(current, { withFileTypes: true }); } catch { continue; }
     for (const e of entries) {
       if (e.isDirectory()) {
-        if (!e.name.startsWith('.') && !SKIP_DIRS.has(e.name)) stack.push(path.join(current, e.name));
+        const full = path.join(current, e.name);
+        if (!e.name.startsWith('.') && !SKIP_DIRS.has(e.name) && !isExcludedPath(dir, full, excludes)) stack.push(full);
       } else if (e.name.toLowerCase().endsWith('.md')) {
         n++;
       }
@@ -2037,6 +2043,34 @@ function vaultState() {
     noteCount: exists ? countMarkdown(dir) : 0,
     source: envVar ? 'env' : (loadLocalConfig().vaultPath ? 'config' : 'default'),
   };
+}
+
+// --- Personal assistant panel (Brain tab, right half) ---
+// The shared brain's day-to-day view: brief, reminders, errands, routines. The
+// helper lives in helpers/ beside the librarian it reuses; imported lazily so a
+// checkout without it degrades to "no brain" instead of failing to boot.
+// Token-gated: this is personal content, not vault structure.
+const ASSISTANT_MODULE = path.join(__dirname, '..', 'helpers', 'brain-assistant.mjs');
+
+async function handleAssistant(req, res) {
+  try {
+    const { assistantFeed } = await import(pathToFileURL(ASSISTANT_MODULE).href);
+    return sendJson(res, 200, assistantFeed());
+  } catch (err) {
+    return sendJson(res, 200, { brain: false, error: String(err.message || err).slice(0, 200) });
+  }
+}
+
+// The panel's reader: one file from the shared brain, contained to it, so a
+// click works whatever the graph's vaultPath happens to be.
+async function handleAssistantNote(req, res, url) {
+  try {
+    const { brainNote, sharedBrainPath } = await import(pathToFileURL(ASSISTANT_MODULE).href);
+    const { status, ...body } = brainNote(sharedBrainPath(), url.searchParams.get('path') || '');
+    return sendJson(res, status, body);
+  } catch (err) {
+    return sendJson(res, 500, { error: String(err.message || err).slice(0, 200) });
+  }
 }
 
 function handleSettingsGet(req, res) {
@@ -5790,10 +5824,13 @@ async function main() {
           || url.pathname === '/api/interns/catalog'
           || url.pathname === '/api/github/status' || url.pathname === '/api/workshop'
           || url.pathname === '/api/command-center/seats' || url.pathname === '/api/council'
-          || url.pathname === '/api/terminals'
+          || url.pathname === '/api/terminals' || url.pathname === '/api/assistant'
+          || url.pathname === '/api/assistant/note'
           || councilGet || agentOutput) {
         if (!authorize(req, res)) return;
         if (url.pathname === '/api/terminals') return handleTerminalList(req, res);
+        if (url.pathname === '/api/assistant') return await handleAssistant(req, res);
+        if (url.pathname === '/api/assistant/note') return await handleAssistantNote(req, res, url);
         if (url.pathname === '/api/command-center/seats') return await handleCommandCenterSeats(req, res, url);
         if (url.pathname === '/api/council') return handleCouncilList(req, res);
         if (councilGet) return handleCouncilGet(req, res, councilGet[1]);

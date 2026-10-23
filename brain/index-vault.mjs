@@ -75,8 +75,28 @@ function logUsage({ model, promptEvalCount, durationMs }) {
   }
 }
 
+// Folders the operator keeps out of the index, as vault-relative paths in
+// ~/.alfred/config.json "vaultExclude" (e.g. ["Shared/Health"]). SKIP_DIRS
+// matches a folder name anywhere; this matches one specific path, which is
+// what a brain shared with other AIs needs — its Health folder is private to
+// that folder, not to every folder that happens to be called Health.
+// Read per call, like the vault path, so a settings edit needs no restart.
+function vaultExcludes() {
+  try {
+    const v = JSON.parse(fs.readFileSync(LOCAL_CONFIG, 'utf8')).vaultExclude;
+    if (!Array.isArray(v)) return [];
+    return v.filter((s) => typeof s === 'string' && s.trim())
+      .map((s) => s.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').toLowerCase());
+  } catch { return []; }
+}
+
+function isExcludedPath(root, fullPath, excludes = vaultExcludes()) {
+  const rel = path.relative(root, fullPath).replace(/\\/g, '/').toLowerCase();
+  return excludes.some((e) => rel === e || rel.startsWith(e + '/'));
+}
+
 // --- Vault walking ---
-function walkVault(dir) {
+function walkVault(dir, root = dir, excludes = vaultExcludes()) {
   const results = [];
   let entries;
   try {
@@ -88,8 +108,8 @@ function walkVault(dir) {
     if (entry.name.startsWith('.')) continue;
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (SKIP_DIRS.has(entry.name)) continue;
-      results.push(...walkVault(fullPath));
+      if (SKIP_DIRS.has(entry.name) || isExcludedPath(root, fullPath, excludes)) continue;
+      results.push(...walkVault(fullPath, root, excludes));
     } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
       results.push(fullPath);
     }
@@ -321,4 +341,7 @@ if (isMain) {
   });
 }
 
-export { buildIndex, parseWikiLinks, linkKey, noteKey, topLevelFolder, resolveVaultDir, INDEX_PATH, SKIP_DIRS };
+export {
+  buildIndex, parseWikiLinks, linkKey, noteKey, topLevelFolder, resolveVaultDir, INDEX_PATH, SKIP_DIRS,
+  vaultExcludes, isExcludedPath,
+};
