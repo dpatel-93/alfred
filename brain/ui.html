@@ -601,56 +601,201 @@
      positioned overlays above the bar rather than growing it, so this only
      had to grow by the new rows' own height, not their popover content. */
   #pane-brain { padding-bottom: 260px; }
-  /* --- Personal assistant (Brain tab, right half) ----------------------------
-     The shared brain's day-to-day view beside the graph. It is a sibling of
-     .brain-canvas inside .brain-split, so P4's ResizeObserver re-fits the graph
-     to the left half by itself; nothing here touches the canvas or its click
-     math. Hidden in 'ops', which borrows this pane for the full-width canvas. */
+  /* The Brain tab is the graph at full width: the Today panel moved to the Day view. The
+     .brain-split wrapper stays so P4's ResizeObserver on .brain-canvas is unchanged. */
   .brain-split { flex: 1 1 auto; min-height: 0; display: flex; }
-  .brain-split > .brain-canvas { flex: 1 1 50%; min-width: 0; }
-  .assistant {
-    flex: 0 0 50%; min-width: 0; overflow-y: auto;
+  .brain-split > .brain-canvas { flex: 1 1 100%; min-width: 0; }
+  /* --- DAY view (the default landing) -----------------------------------------
+     The personal dashboard that starts and ends the day. Grok's automations write
+     the shared brain; this is the glass over it. Tokens only, color-mix() for every
+     tint. Status colours keep their contract: red overdue, amber due-today/pending,
+     blue upcoming, mint done/ready, gray idle. The bench strip's --p-* provider
+     colour tints only the seat pill's border (an identity surface), never its bulb. */
+  #pane-day {
+    background: transparent; pointer-events: auto;
     display: flex; flex-direction: column; gap: var(--sp-7);
-    padding: var(--sp-7) var(--sp-8);
-    background: var(--panel-bg); border-left: 1px solid var(--border);
-    backdrop-filter: blur(4px);
+    padding: var(--sp-8) var(--sp-9) var(--composer-live-h, 260px);
+    overflow: hidden;
   }
-  body.ops-canvas .assistant { display: none; }
-  .assistant-head { display: flex; align-items: baseline; gap: var(--sp-5); flex-wrap: wrap; }
-  .assistant-head h2 { margin: 0; font-family: var(--font-display); font-size: 16px; font-weight: 600; color: var(--text); }
-  .assistant-meta { flex: 1 1 auto; color: var(--text-dim); font-size: 11px; }
-  .assistant-body { display: flex; flex-direction: column; gap: var(--sp-8); }
-  .assistant-sec { display: flex; flex-direction: column; gap: var(--sp-3); }
-  .assistant-sec > h3, .assistant-sec > summary {
-    margin: 0; font-size: 10px; font-weight: 600; letter-spacing: .12em;
+  #pane-day[hidden] { display: none; }
+  .day-sr {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+  .day-head { flex: none; display: flex; align-items: flex-end; flex-wrap: wrap; gap: var(--sp-5) var(--sp-8); }
+  .day-headline { flex: 1 1 320px; min-width: 0; }
+  .day-date {
+    margin: 0; font-family: var(--font-display); font-weight: 600;
+    font-size: clamp(24px, 2.4vw, 34px); line-height: var(--lh-tight); letter-spacing: .01em;
+    color: var(--text);
+  }
+  .day-summary { margin: var(--sp-2) 0 0; color: var(--text-dim); font-size: var(--fs-sm); }
+  .day-summary.warn { color: var(--amber); }
+  .day-tools { display: flex; align-items: center; gap: var(--sp-4); flex: none; }
+
+  .bench { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); flex: none; }
+  .bench-seat {
+    --seat: var(--gray);
+    display: inline-flex; align-items: center; gap: var(--sp-3);
+    min-height: 28px; padding: 3px 10px;
+    border: 1px solid color-mix(in srgb, var(--seat) 38%, var(--border));
+    border-radius: var(--r-pill);
+    background: color-mix(in srgb, var(--surface-2) 80%, transparent);
+    color: var(--text-soft); font-size: var(--fs-xs); font-weight: 600; letter-spacing: var(--track-ui);
+    transition: border-color var(--t-fast) var(--ease-out), background var(--t-fast) var(--ease-out);
+  }
+  .bench-seat:hover { background: color-mix(in srgb, var(--surface-3) 85%, transparent); }
+  .bench-seat.absent { color: var(--text-dim); }
+  .bench-bulb { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--gray); }
+  .bench-seat.ready .bench-bulb {
+    background: var(--mint); box-shadow: 0 0 6px color-mix(in srgb, var(--mint) 55%, transparent);
+  }
+  .bench-seat.needs .bench-bulb {
+    background: var(--amber); box-shadow: 0 0 6px color-mix(in srgb, var(--amber) 55%, transparent);
+  }
+  .bench-soon {
+    color: var(--amber); font-size: var(--fs-mini); font-weight: 600;
+    letter-spacing: var(--track-kicker); text-transform: uppercase;
+  }
+  .bench-seat .btn { min-height: 20px; padding: 1px 8px; font-size: var(--fs-micro); }
+
+  .signin-banner {
+    flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-4) var(--sp-7);
+    padding: var(--sp-5) var(--sp-7);
+    border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent);
+    border-left-width: 3px; border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--amber) 8%, var(--surface-1));
+    color: var(--text); font-size: var(--fs-sm);
+  }
+  .signin-banner[hidden] { display: none; }
+  .signin-banner .sb-text { flex: 1 1 260px; min-width: 0; }
+  .signin-banner .sb-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); }
+  .signin-banner .sb-auto {
+    display: inline-flex; align-items: center; gap: var(--sp-3); cursor: pointer;
+    color: var(--text-dim); font-size: var(--fs-xs);
+  }
+  .signin-banner .sb-auto input { accent-color: var(--blue); }
+
+  .day-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .day-grid {
+    flex: 1 1 auto; min-height: 0; display: grid; gap: var(--sp-7);
+    grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr);
+  }
+  .day-col {
+    min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+    display: flex; flex-direction: column; gap: var(--sp-6); padding-right: var(--sp-2);
+  }
+  @media (max-width: 1099px) {
+    .day-body { overflow-y: auto; }
+    .day-grid { flex: none; grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
+    .day-col { overflow: visible; }
+  }
+
+  .day-card {
+    --accent: var(--border-strong);
+    flex: none; display: flex; flex-direction: column; gap: var(--sp-4);
+    padding: var(--sp-6) var(--sp-7);
+    background: var(--panel-bg); border: 1px solid var(--border);
+    border-top: 2px solid color-mix(in srgb, var(--accent) 70%, var(--border));
+    border-radius: var(--r-md); backdrop-filter: blur(4px);
+  }
+  .day-card.overdue { --accent: var(--red); }
+  .day-card-title, details.day-card > summary {
+    margin: 0; display: flex; align-items: baseline; gap: var(--sp-3);
+    font-size: var(--fs-mini); font-weight: 600; letter-spacing: var(--track-kicker);
     text-transform: uppercase; color: var(--text-dim);
   }
-  .assistant-sec > summary { cursor: pointer; }
-  details.assistant-sec[open] > summary { margin-bottom: var(--sp-3); }
-  .assistant-item {
+  details.day-card > summary { cursor: pointer; list-style: none; }
+  details.day-card > summary::-webkit-details-marker { display: none; }
+  details.day-card > summary::before { content: "\25B8"; font-size: var(--fs-mini); }
+  details.day-card[open] > summary::before { content: "\25BE"; }
+  details.day-card[open] > summary { margin-bottom: var(--sp-4); }
+  .day-count { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-soft); }
+  .day-card-actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+  .day-empty, .day-sub { margin: 0; color: var(--text-dim); font-size: var(--fs-sm); }
+  .day-sub { font-size: var(--fs-xs); }
+  .day-group {
+    margin: var(--sp-3) 0 0; font-family: var(--font-mono); font-size: var(--fs-mini);
+    letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text-dim);
+  }
+  .day-group:first-child { margin-top: 0; }
+  .day-list { display: flex; flex-direction: column; gap: var(--sp-3); }
+
+  .day-item {
     --accent: var(--gray);
-    display: flex; align-items: center; gap: var(--sp-4); width: 100%; text-align: left;
-    padding: 8px 10px; border: 0; border-radius: var(--r-sm);
+    display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3) var(--sp-4);
+    padding: var(--sp-4) var(--sp-5); border-radius: var(--r-sm);
     background: color-mix(in srgb, var(--surface-2) 78%, transparent);
     box-shadow: inset 3px 0 0 var(--accent);
-    color: var(--text); font: inherit; font-size: 12.5px; cursor: pointer;
+    color: var(--text); font-size: 12.5px;
+    transition: background var(--t-fast) var(--ease-out);
   }
-  .assistant-item:hover { background: color-mix(in srgb, var(--surface-3) 85%, transparent); }
-  .assistant-item .ai-title { flex: 1 1 auto; min-width: 0; }
-  .assistant-item .ai-when {
-    color: var(--text-dim); font-size: 11px; white-space: nowrap;
-    font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  .day-item:hover { background: color-mix(in srgb, var(--surface-3) 85%, transparent); }
+  .day-item.overdue { --accent: var(--red); }
+  .day-item.today { --accent: var(--amber); }
+  .day-item.soon, .day-item.routine { --accent: var(--blue); }
+  .day-item.done { --accent: var(--mint); color: var(--text-soft); }
+  .day-item[aria-busy="true"] { opacity: .6; }
+  .day-kind {
+    flex: none; padding: 1px 5px; border: 1px solid color-mix(in srgb, var(--text-dim) 32%, transparent);
+    border-radius: var(--r-xs); color: var(--text-dim);
+    font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--track-ui); text-transform: uppercase;
   }
-  .assistant-item.overdue { --accent: var(--red); }
-  .assistant-item.today { --accent: var(--amber); }
-  .assistant-item.routine { --accent: var(--mint); }
-  .assistant-item.soon { --accent: var(--blue); }
-  .assistant-item.brief { --accent: var(--violet); flex-direction: column; align-items: flex-start; gap: 2px; }
-  .assistant-item.brief .ai-text { color: var(--text-soft); font-size: 12px; }
-  .assistant-empty, .assistant-sub { margin: 0; color: var(--text-dim); font-size: 12px; }
-  @media (max-width: 900px) {
-    .brain-split { flex-direction: column; }
-    .assistant { flex: 0 0 45%; border-left: 0; border-top: 1px solid var(--border); }
+  .day-title {
+    flex: 1 1 12ch; min-width: 0; margin: 0; padding: 0; border: 0; background: none;
+    color: inherit; font: inherit; text-align: left; cursor: pointer; overflow-wrap: anywhere;
+  }
+  .day-title:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .day-when {
+    flex: none; color: var(--text-dim); font-family: var(--font-mono); font-size: var(--fs-xs);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .day-actions { display: flex; align-items: center; gap: var(--sp-2); margin-left: auto; flex: none; }
+  .btn.day-act { min-height: 24px; padding: 2px 8px; } /* two classes: .btn is declared later in the sheet */
+  .day-act.done { color: var(--mint); border-color: color-mix(in srgb, var(--mint) 45%, transparent); }
+  .day-act.done:hover {
+    color: var(--mint); border-color: var(--mint); background: color-mix(in srgb, var(--mint) 12%, transparent);
+  }
+  .day-pending { margin-left: auto; flex: none; }
+  .day-snooze { flex: 1 1 100%; display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); padding-top: var(--sp-2); }
+  .day-snooze[hidden] { display: none; }
+  .day-date-input {
+    min-height: 24px; padding: 2px 8px; border: 1px solid var(--border-focusable); border-radius: var(--r-xs);
+    background: var(--surface-2); color: var(--text); font-family: var(--font-mono); font-size: var(--fs-xs);
+  }
+  .day-brief-item {
+    display: flex; flex-direction: column; gap: var(--sp-1);
+    padding: var(--sp-3) var(--sp-5); border-left: 2px solid var(--border-strong);
+  }
+  .day-brief-item strong { font-size: var(--fs-base); font-weight: 600; color: var(--text); }
+  .day-brief-item span { color: var(--text-soft); font-size: var(--fs-sm); line-height: var(--lh-base); }
+
+  .day-project, .day-signal {
+    display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-1); width: 100%;
+    padding: var(--sp-4) var(--sp-5); border: 0; border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--surface-2) 78%, transparent);
+    color: var(--text); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer;
+    transition: background var(--t-fast) var(--ease-out);
+  }
+  .day-project:hover, .day-signal:hover { background: color-mix(in srgb, var(--surface-3) 85%, transparent); }
+  .day-project { box-shadow: inset 3px 0 0 var(--blue); }
+  .day-signal { box-shadow: inset 3px 0 0 var(--amber); }
+  .day-project .dp-name { font-weight: 600; }
+  .day-project .dp-meta, .day-signal .ds-meta {
+    color: var(--text-dim); font-family: var(--font-mono); font-size: var(--fs-xs);
+  }
+  .day-project .dp-stands, .day-project .dp-next {
+    color: var(--text-soft); font-size: var(--fs-sm); line-height: var(--lh-base);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .day-project .dp-next { color: var(--text-dim); }
+
+  .day-title:focus-visible, .day-act:focus-visible, .day-project:focus-visible, .day-signal:focus-visible,
+  details.day-card > summary:focus-visible, .day-date-input:focus-visible, .signin-banner .sb-auto input:focus-visible {
+    outline: 2px solid var(--blue); outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bench-seat, .day-item, .day-project, .day-signal { transition-duration: .01ms !important; }
   }
   /* #pane-command has no such race (nothing here does P4's coordinate math),
      so it gets a live reserve instead of a guessed static one — the actual
@@ -1529,7 +1674,7 @@
      the standard +2px outward offset. */
   .btn:focus-visible, .icon-btn:focus-visible, .dock-btn:focus-visible,
   .seat-more:focus-visible, .filter-chip:focus-visible,
-  .cc-grid-toggle:focus-visible, .assistant-item:focus-visible, .assistant-sec > summary:focus-visible {
+  .cc-grid-toggle:focus-visible {
     outline: 2px solid var(--blue); outline-offset: 2px;
   }
   .view-btn:focus-visible, .seat-main:focus-visible {
@@ -1758,9 +1903,11 @@
   <div id="ext-term-dock">
     <button id="ext-term-btn" type="button" aria-haspopup="true" aria-expanded="false" title="Pick seats to open side by side in a new Windows Terminal window">&#9002; Open Terminals</button>
   </div>
-  <nav id="views" role="tablist" aria-label="Command views">
-    <button class="view-btn active" data-view="brain" role="tab" aria-selected="true" aria-controls="pane-brain">Brain</button>
-    <button class="view-btn" data-view="command" role="tab" aria-selected="false" aria-controls="pane-command">Command</button>
+  <nav id="views" role="tablist" aria-label="Views">
+    <!-- Day is the default landing; the Command view still exists (hash #command, key 3) but is
+         no longer a tab: Alfred now opens real console windows instead of hosting terminals here. -->
+    <button class="view-btn active" data-view="day" role="tab" aria-selected="true" aria-controls="pane-day">Day</button>
+    <button class="view-btn" data-view="brain" role="tab" aria-selected="false" aria-controls="pane-brain">Brain</button>
   </nav>
   <!-- Sheet launchers (plan §2.1/P7): each opens its named sheet via
        switchView's existing internal view name (dev/auto/directory/library/
@@ -1805,6 +1952,25 @@
        the foot of the Deck (see #cc-seats/#composer-tools there). -->
 
   <main id="deck">
+    <!-- Day pane (the default landing): the shared brain's day-to-day view — Grok's
+         brief, what is due, the week, projects, and the end-of-day wrap-up — with
+         the bench strip (who is signed in) beside the date. Filled by renderDay()
+         and renderBench(); every node is built with el()/textContent. -->
+    <section id="pane-day" class="pane day" hidden aria-label="Day">
+      <div class="day-head">
+        <div class="day-headline">
+          <h1 id="day-date" class="day-date">Today</h1>
+          <p id="day-summary" class="day-summary" aria-live="polite">Loading&hellip;</p>
+        </div>
+        <div class="day-tools">
+          <button id="day-refresh" class="btn" type="button" title="Re-read the shared brain now">Refresh</button>
+        </div>
+        <div id="bench" class="bench" role="group" aria-label="AI seats"></div>
+      </div>
+      <div id="signin-banner" class="signin-banner" role="status" hidden></div>
+      <div id="day-body" class="day-body"></div>
+    </section>
+
     <!-- Brain pane: #graph is contained here now (P4), inside .brain-canvas,
          sized off this pane's own box via ResizeObserver rather than the
          window. This pane also hosts 'ops' (Enterprise) — same canvas,
@@ -1821,16 +1987,6 @@
         <div class="brain-canvas">
           <canvas id="graph"></canvas>
         </div>
-        <!-- Personal assistant: Grok's brief, reminders, errands and routines
-             from the shared brain. Filled by pollAssistant(). -->
-        <aside id="assistant" class="assistant" aria-label="Personal assistant">
-          <div class="assistant-head">
-            <h2>Today</h2>
-            <span id="assistant-meta" class="assistant-meta" aria-live="polite">Loading…</span>
-            <button id="assistant-refresh" class="btn" type="button" title="Re-read the shared brain now">Refresh</button>
-          </div>
-          <div id="assistant-body" class="assistant-body"></div>
-        </aside>
       </div>
     </section>
 
@@ -2963,6 +3119,656 @@
   }
 
   // ============================================================
+  // DAY view (the default landing): the shared brain's day-to-day view, the
+  // thing the operator opens to start and to end the day. Grok's automations
+  // write the brain (synced through Google Drive); this is the glass over it:
+  // Grok's brief, what is due, the week, projects, the end-of-day wrap-up, and
+  // beside the date the bench strip (is Claude / Grok signed in?).
+  // The brain's files are the truth. A row action goes through
+  // /api/assistant/action and the reply carries the fresh feed, so the page
+  // re-renders from one round trip; /api/status carries a brainVersion that
+  // moves when something else (Grok, the Librarian) changes the brain, and the
+  // view re-reads then instead of waiting out its timer. Built with el()/
+  // textContent only: the brain is written by other AIs, so none of it is ever
+  // parsed as HTML.
+  // ============================================================
+  var DAY_POLL_MS = 2 * 60 * 1000;
+  var BENCH_POLL_MS = 60 * 1000;
+  var BENCH_WATCH_MS = 20 * 1000;            // after a sign-in window opens, look this often...
+  var BENCH_WATCH_MAX_MS = 5 * 60 * 1000;    // ...for this long, then give up quietly
+  var SIGNIN_AUTO_KEY = 'alfred-signin-autoopen';
+  var SIGNIN_OPENED_PREFIX = 'alfred-signin-opened-';
+  var ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+  var dayBodyEl = document.getElementById('day-body');
+  var daySummaryEl = document.getElementById('day-summary');
+  var dayDateEl = document.getElementById('day-date');
+  var benchEl = document.getElementById('bench');
+  var bannerEl = document.getElementById('signin-banner');
+
+  var dayFeed = null;       // last good feed
+  var daySig = '';          // fingerprint of what is on screen, so an unchanged poll rebuilds nothing
+  var daySeq = 0;           // request order, so a slow poll cannot repaint over a newer action reply
+  var dayApplied = 0;
+  var dayBusy = {};         // file -> true while an action on it is in flight
+  var dayOpen = {};         // collapsed cards the operator has opened, by title
+  var lastBrainVersion = null;
+
+  function arr(x) { return Array.isArray(x) ? x : []; }
+
+  function dayLabel(iso, long) { // '2026-10-25' -> 'Sat Oct 25' (long: 'Saturday, October 25')
+    if (!ISO_DATE.test(String(iso || ''))) return String(iso || '');
+    var text = new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', long
+      ? { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }
+      : { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+    return long ? text : text.replace(',', '');
+  }
+
+  function addDaysIso(iso, n) {
+    var d = new Date(iso + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function briefTime(updated) { // '2026-10-23 07:10' -> '7:10 AM'
+    var m = /(\d{1,2}):(\d{2})/.exec(String(updated || ''));
+    if (!m) return '';
+    var h = parseInt(m[1], 10);
+    var ap = h >= 12 ? 'PM' : 'AM';
+    return ((h % 12) || 12) + ':' + m[2] + ' ' + ap;
+  }
+
+  function daySummaryText(d) {
+    var parts = [arr(d.today).length + ' due today'];
+    if (arr(d.overdue).length) parts.push(d.overdue.length + ' overdue');
+    if (arr(d.carryOver).length) parts.push(d.carryOver.length + ' to carry over');
+    parts.push(arr(d.upcoming).length + ' this week');
+    var b = d.brief;
+    if (!b) parts.push('no brief yet');
+    else if (b.isToday) parts.push('brief from ' + (briefTime(b.updated) || 'today'));
+    else parts.push('latest brief ' + dayLabel(b.date));
+    return parts.join(' · ');
+  }
+
+  function dayOpenFile(file, title) {
+    openPanel({ title: title || file, folder: String(file).split('/')[0], brainFile: file });
+  }
+
+  function dayActionMessage(action, d, item) {
+    var title = d.title || item.title;
+    if (action === 'close') {
+      if (d.via === 'signal') return d.applied ? 'Closed via signal: ' + title : 'Sent to Grok: close ' + title;
+      return 'Closed: ' + title;
+    }
+    if (action === 'carryover') {
+      return d.pending === 'amend' ? 'Sent to Grok: carry over ' + title : 'Carried over: ' + title;
+    }
+    if (d.pending === 'amend') return 'Sent to Grok: move ' + title + ' to ' + d.due;
+    return 'Moved ' + title + ' to ' + (d.due || 'tomorrow');
+  }
+
+  function setRowBusy(row, busy) {
+    if (busy) row.setAttribute('aria-busy', 'true'); else row.removeAttribute('aria-busy');
+    Array.prototype.forEach.call(row.querySelectorAll('button, input'), function (c) {
+      if (!c.classList.contains('day-title')) c.disabled = busy;
+    });
+  }
+
+  function applyDayFeed(feed) {
+    dayApplied = ++daySeq;
+    renderDay(feed, true);
+  }
+
+  function dayAct(item, action, due, row) {
+    if (dayBusy[item.file]) return;
+    dayBusy[item.file] = true;
+    setRowBusy(row, true);
+    var payload = { file: item.file, action: action };
+    if (due) payload.due = due;
+    bridgePost('/api/assistant/action', payload).then(function (r) {
+      delete dayBusy[item.file];
+      if (!r.ok) {
+        setRowBusy(row, false);
+        toast((r.data && r.data.error) || 'Could not apply that.', 'critical', { title: 'Day' });
+        return;
+      }
+      var d = r.data || {};
+      toast(dayActionMessage(action, d, item), d.pending ? 'info' : 'success');
+      if (d.feed) applyDayFeed(d.feed); else pollAssistant();
+    }).catch(function () {
+      delete dayBusy[item.file];
+      setRowBusy(row, false);
+      toast('Could not reach Alfred.', 'critical', { title: 'Day' });
+    });
+  }
+
+  function dayButton(label, cls, tip, item, onClick) {
+    var b = el('button', 'btn day-act' + (cls ? ' ' + cls : ''), [label]);
+    b.type = 'button';
+    b.title = tip;
+    b.setAttribute('aria-label', tip + ': ' + item.title);
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  // mode: 'full' = Done / Tomorrow / Snooze, 'lite' = Done / Snooze, 'carry' = Carry over.
+  // Appends the button group (and, when snoozing is offered, its date line) to the row.
+  function dayActions(item, row, mode) {
+    var wrap = el('div', 'day-actions', []);
+    if (mode === 'carry') {
+      wrap.appendChild(dayButton('Carry over', '', 'Carry over into today', item,
+        function () { dayAct(item, 'carryover', null, row); }));
+      row.appendChild(wrap);
+      return;
+    }
+    wrap.appendChild(dayButton('✓ Done', 'done', 'Mark done', item,
+      function () { dayAct(item, 'close', null, row); }));
+    if (mode === 'full') {
+      wrap.appendChild(dayButton('→ Tomorrow', '', 'Move to tomorrow', item,
+        function () { dayAct(item, 'tomorrow', null, row); }));
+    }
+    var more = dayButton('⋯', '', 'Snooze to a date', item, function () {
+      snooze.hidden = !snooze.hidden;
+      more.setAttribute('aria-expanded', snooze.hidden ? 'false' : 'true');
+      if (!snooze.hidden) input.focus();
+    });
+    more.setAttribute('aria-expanded', 'false');
+    wrap.appendChild(more);
+    row.appendChild(wrap); // before the snooze line, which wraps onto its own row beneath
+
+    var snooze = el('div', 'day-snooze', []);
+    snooze.hidden = true;
+    var today = (dayFeed && dayFeed.date) || new Date().toISOString().slice(0, 10);
+    var input = el('input', 'day-date-input', []);
+    input.type = 'date';
+    input.min = today;
+    input.value = addDaysIso(today, 2);
+    input.setAttribute('aria-label', 'Snooze until: ' + item.title);
+    var go = el('button', 'btn day-act', ['Snooze']);
+    go.type = 'button';
+    go.addEventListener('click', function () {
+      if (!ISO_DATE.test(input.value)) return toast('Pick a date to snooze to.', 'warn', { title: 'Day' });
+      dayAct(item, 'snooze', input.value, row);
+    });
+    var cancel = el('button', 'btn day-act', ['Cancel']);
+    cancel.type = 'button';
+    function closeSnooze() { snooze.hidden = true; more.setAttribute('aria-expanded', 'false'); more.focus(); }
+    cancel.addEventListener('click', closeSnooze);
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); go.click(); }
+      else if (e.key === 'Escape') { e.stopPropagation(); closeSnooze(); } // before the global Esc ladder sees it
+    });
+    [input, go, cancel].forEach(function (n) { snooze.appendChild(n); });
+    row.appendChild(snooze);
+  }
+
+  // o: { cls, when, actions: 'full' | 'lite' | 'carry' | 'none' }
+  function dayItemRow(item, o) {
+    o = o || {};
+    var row = el('div', 'day-item' + (o.cls ? ' ' + o.cls : ''), []);
+    if (item.kind) row.appendChild(el('span', 'day-kind', [item.kind]));
+    var title = el('button', 'day-title', [item.title || item.file]);
+    title.type = 'button';
+    title.title = 'Open ' + item.file;
+    title.addEventListener('click', function () { dayOpenFile(item.file, item.title); });
+    row.appendChild(title);
+    if (item.scope === 'work') row.appendChild(el('span', 'badge info', ['work']));
+    if (o.when) row.appendChild(el('span', 'day-when', [o.when]));
+    if (item.pending) {
+      var tag = el('span', 'badge warn day-pending', ['pending']);
+      tag.title = 'A change is waiting for ' + (item.author || 'its owner') + ' to apply';
+      row.appendChild(tag);
+    } else if (o.actions && o.actions !== 'none') {
+      dayActions(item, row, o.actions);
+    }
+    if (dayBusy[item.file]) setRowBusy(row, true); // a repaint mid-flight must not re-arm the buttons
+    return row;
+  }
+
+  function dayRows(items, optsFor) {
+    return el('div', 'day-list', items.map(function (i) {
+      return dayItemRow(i, typeof optsFor === 'function' ? optsFor(i) : optsFor);
+    }));
+  }
+
+  function dayEmpty(text) { return el('p', 'day-empty', [text]); }
+
+  // opts: { cls, count, collapsed, body: [nodes] }
+  function dayCard(title, opts) {
+    opts = opts || {};
+    var head = [title, opts.count != null ? el('span', 'day-count', [String(opts.count)]) : null];
+    var card = el(opts.collapsed ? 'details' : 'section', 'day-card' + (opts.cls ? ' ' + opts.cls : ''),
+      [el(opts.collapsed ? 'summary' : 'h2', opts.collapsed ? null : 'day-card-title', head)]);
+    if (opts.collapsed) {
+      card.open = !!dayOpen[title];
+      card.addEventListener('toggle', function () { dayOpen[title] = card.open; });
+    }
+    arr(opts.body).forEach(function (n) { if (n) card.appendChild(n); });
+    return card;
+  }
+
+  function dayColumn(label, cards) {
+    var col = el('div', 'day-col', cards);
+    col.setAttribute('role', 'region');
+    col.setAttribute('aria-label', label);
+    return col;
+  }
+
+  function dayTodayColumn(d) {
+    var cards = [];
+    var overdue = arr(d.overdue), today = arr(d.today), carry = arr(d.carryOver);
+    var routines = arr(d.routines && d.routines.today);
+    if (overdue.length) {
+      cards.push(dayCard('Overdue', { cls: 'overdue', count: overdue.length, body: [dayRows(overdue, function (i) {
+        return { cls: 'overdue', when: 'was due ' + dayLabel(i.due), actions: 'full' };
+      })] }));
+    }
+    cards.push(dayCard('Due today', { count: today.length,
+      body: [today.length ? dayRows(today, { cls: 'today', actions: 'full' }) : dayEmpty('Nothing due today.')] }));
+    if (carry.length) {
+      cards.push(dayCard('Carry over', { count: carry.length, body: [
+        el('p', 'day-sub', ["Yesterday's errands that expired. Bring them into today, or let them go."]),
+        dayRows(carry, { cls: 'overdue', when: 'missed yesterday', actions: 'carry' }),
+      ] }));
+    }
+    cards.push(dayCard('Routines today', { count: routines.length,
+      body: [routines.length ? dayRows(routines, function (r) {
+        return { cls: 'routine', when: String(r.schedule || '').split(/[;(]/)[0].trim(), actions: 'none' };
+      }) : dayEmpty('No routines today.')] }));
+    return dayColumn('Today', cards);
+  }
+
+  function dayBriefCard(d) {
+    var b = d.brief;
+    var body = [];
+    if (!b) {
+      body.push(dayEmpty('No brief yet.'));
+      return dayCard("Grok's morning brief", { body: body });
+    }
+    if (!b.isToday) body.push(el('p', 'day-sub', ['From ' + dayLabel(b.date) + '. Nothing newer yet.']));
+    var top = arr(b.top);
+    if (top.length) {
+      top.forEach(function (t) {
+        body.push(el('div', 'day-brief-item', [el('strong', null, [t.title || '']), t.text ? el('span', null, [t.text]) : null]));
+      });
+    } else {
+      body.push(dayEmpty('The brief has no top items.'));
+    }
+    var acts = el('div', 'day-card-actions', []);
+    var open = el('button', 'btn', ['Open full brief']);
+    open.type = 'button';
+    open.addEventListener('click', function () { dayOpenFile(b.file, b.title || "Grok's morning brief"); });
+    var listen = el('button', 'btn', ['Listen']);
+    listen.type = 'button';
+    listen.title = 'Read the brief aloud';
+    listen.addEventListener('click', function () {
+      var mb = document.getElementById('morning-brief-btn');
+      if (mb) mb.click();
+    });
+    acts.appendChild(open);
+    acts.appendChild(listen);
+    body.push(acts);
+    return dayCard("Grok's morning brief", { body: body });
+  }
+
+  function dayWeekCard(d) {
+    var upcoming = arr(d.upcoming);
+    var body = [];
+    if (!upcoming.length) body.push(dayEmpty('Nothing in the next 7 days.'));
+    var order = [], byDay = {};
+    upcoming.forEach(function (i) {
+      var k = i.due || '';
+      if (!byDay[k]) { byDay[k] = []; order.push(k); }
+      byDay[k].push(i);
+    });
+    order.sort().forEach(function (k) {
+      body.push(el('h3', 'day-group', [k ? dayLabel(k) : 'No date']));
+      body.push(dayRows(byDay[k], { cls: 'soon', actions: 'full' }));
+    });
+    if (!(d.calendar && d.calendar.connected)) body.push(el('p', 'day-sub', ['Calendar: not connected yet.']));
+    return dayCard('This week', { count: upcoming.length, body: body });
+  }
+
+  function dayBriefColumn(d) {
+    var later = arr(d.later);
+    return dayColumn("Brief and week", [
+      dayBriefCard(d),
+      dayWeekCard(d),
+      dayCard('Later', { collapsed: true, count: later.length,
+        body: [later.length ? dayRows(later, function (i) {
+          return { when: dayLabel(i.due), actions: 'lite' };
+        }) : dayEmpty('Nothing scheduled further out.')] }),
+    ]);
+  }
+
+  function dayProjectRow(p) {
+    var b = el('button', 'day-project', [el('span', 'dp-name', [p.name || p.title])]);
+    b.type = 'button';
+    var meta = [p.status, p.track].filter(Boolean).join(' · ');
+    if (meta) b.appendChild(el('span', 'dp-meta', [meta]));
+    if (p.stands) b.appendChild(el('span', 'dp-stands', [p.stands]));
+    if (p.next) b.appendChild(el('span', 'dp-next', ['Next: ' + p.next]));
+    b.title = 'Open ' + p.file;
+    b.addEventListener('click', function () { dayOpenFile(p.file, p.title || p.name); });
+    return b;
+  }
+
+  function daySignalRow(s) {
+    var b = el('button', 'day-signal', [el('span', null, [s.title || s.file])]);
+    b.type = 'button';
+    b.appendChild(el('span', 'ds-meta', [(s.type || 'signal') + ' ' + (s.from || '?') + '→' + (s.to || '?')
+      + (s.ageDays != null ? ' · ' + s.ageDays + 'd' : '')]));
+    b.title = 'Open ' + s.file;
+    b.addEventListener('click', function () { dayOpenFile(s.file, s.title); });
+    return b;
+  }
+
+  function tidyUp(btn) {
+    btn.disabled = true;
+    bridgePost('/api/assistant/librarian', {}).then(function (r) {
+      btn.disabled = false;
+      if (!r.ok) return toast((r.data && r.data.error) || 'The Librarian could not run.', 'critical', { title: 'Day' });
+      var n = arr(r.data && r.data.actions).length;
+      toast('Librarian: ' + n + (n === 1 ? ' action' : ' actions'), 'success');
+      if (r.data.feed) applyDayFeed(r.data.feed); else pollAssistant();
+    }).catch(function () {
+      btn.disabled = false;
+      toast('Could not reach Alfred.', 'critical', { title: 'Day' });
+    });
+  }
+
+  function dayEndOfDayCard(d) {
+    var done = arr(d.doneToday), open = arr(d.today);
+    var body = [el('h3', 'day-group', ['Done today (' + done.length + ')'])];
+    body.push(done.length ? dayRows(done, { cls: 'done', actions: 'none' }) : dayEmpty('Nothing closed yet today.'));
+    body.push(el('h3', 'day-group', ['Still open today (' + open.length + ')']));
+    body.push(open.length ? dayRows(open, { cls: 'today', actions: 'full' }) : dayEmpty('Nothing left due today.'));
+    var tidy = el('button', 'btn', ['Tidy up (run the Librarian)']);
+    tidy.type = 'button';
+    tidy.title = 'Close what is done, file expired errands and refresh the index';
+    tidy.addEventListener('click', function () { tidyUp(tidy); });
+    body.push(el('div', 'day-card-actions', [tidy]));
+    return dayCard('End of day', { body: body });
+  }
+
+  function dayOpenColumn(d) {
+    var todos = arr(d.todos), watching = arr(d.watching), projects = arr(d.projects), signals = arr(d.signals);
+    var cards = [
+      dayCard('To-dos', { count: todos.length,
+        body: [todos.length ? dayRows(todos, { actions: 'lite' }) : dayEmpty('No open to-dos.')] }),
+      dayCard('Watching', { collapsed: true, count: watching.length,
+        body: [watching.length ? dayRows(watching, { actions: 'lite' }) : dayEmpty('Nothing being watched.')] }),
+      dayCard('Projects', { count: projects.length,
+        body: projects.length ? projects.map(dayProjectRow) : [dayEmpty('No active projects.')] }),
+    ];
+    if (signals.length) cards.push(dayCard('Signals waiting', { count: signals.length, body: signals.map(daySignalRow) }));
+    cards.push(dayEndOfDayCard(d));
+    return dayColumn('Open and wrap-up', cards);
+  }
+
+  function renderDay(d, force) {
+    if (!dayBodyEl || !d) return;
+    dayFeed = d;
+    var today = ISO_DATE.test(String(d.date || '')) ? d.date : new Date().toISOString().slice(0, 10);
+    dayDateEl.textContent = dayLabel(today, true);
+    daySummaryEl.classList.remove('warn');
+    daySummaryEl.textContent = d.brain ? daySummaryText(d) : 'Shared brain not found';
+    daySummaryEl.title = d.generatedAt ? 'Read ' + d.generatedAt : '';
+
+    var sig = JSON.stringify(d, function (k, v) { return k === 'generatedAt' ? undefined : v; });
+    if (!force && sig === daySig) return;
+    daySig = sig;
+
+    var cols = Array.prototype.slice.call(dayBodyEl.querySelectorAll('.day-col'));
+    var colScroll = cols.map(function (c) { return c.scrollTop; });
+    var bodyScroll = dayBodyEl.scrollTop;
+    dayBodyEl.textContent = '';
+    if (!d.brain) {
+      dayBodyEl.appendChild(stateBlock('empty', 'Shared brain not found',
+        'Set "Shared brain path" in alfred-profile.md to the Google Drive "Second Brain" folder.'));
+      return;
+    }
+    var grid = el('div', 'day-grid', [dayTodayColumn(d), dayBriefColumn(d), dayOpenColumn(d)]);
+    dayBodyEl.appendChild(grid);
+    Array.prototype.forEach.call(grid.querySelectorAll('.day-col'), function (c, i) { c.scrollTop = colScroll[i] || 0; });
+    dayBodyEl.scrollTop = bodyScroll;
+  }
+
+  function dayLoadFailed() {
+    daySummaryEl.classList.add('warn');
+    if (dayFeed) {
+      daySummaryEl.textContent = 'Could not reach the shared brain; showing the last read.';
+      return;
+    }
+    daySummaryEl.textContent = 'Could not reach the shared brain.';
+    dayBodyEl.textContent = '';
+    dayBodyEl.appendChild(stateBlock('error', 'Could not load your day',
+      'Alfred could not read the shared brain. It will try again shortly.', pollAssistant));
+  }
+
+  function pollAssistant() {
+    if (!dayBodyEl) return Promise.resolve();
+    var mine = ++daySeq;
+    return bridgeFetch('/api/assistant')
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (d) {
+        if (mine < dayApplied) return; // an action reply already painted something newer
+        dayApplied = mine;
+        renderDay(d);
+      })
+      .catch(dayLoadFailed);
+  }
+
+  // /api/status (every 10s) carries a counter that moves when the brain changes on
+  // disk. Recorded on every view; re-read right away only when the Day pane is the
+  // one on screen, since entering Day always polls immediately anyway.
+  function noteBrainVersion(v) {
+    if (typeof v !== 'number') return;
+    var changed = lastBrainVersion !== null && v !== lastBrainVersion;
+    lastBrainVersion = v;
+    if (changed && currentView === 'day') pollAssistant();
+  }
+
+  // --- The bench strip and the sign-in banner --------------------------------
+  // One pill per seat from /api/bench. Claude and Grok are the two this whole
+  // dashboard leans on, so when either is signed out the banner says so and the
+  // first sign-in window opens by itself, once per server boot.
+  var benchData = null;
+  var benchSig = '';
+  var benchFirst = true;     // the first bench result after this page load
+  var benchInflight = null;
+  var benchWatch = null;     // { ids, until, timer } while a sign-in window is open
+  var signinOpened = null;   // seat id whose sign-in window was opened from here
+
+  function benchShort(s) { return String(s.label || s.id).split(/[\s(]/)[0]; }
+
+  function signinAutoOpenOn() {
+    try { return localStorage.getItem(SIGNIN_AUTO_KEY) !== '0'; } catch (e) { return true; }
+  }
+
+  function benchSeatTip(s) {
+    var d = s.detail || {};
+    var name = benchShort(s);
+    if (!s.installed) return name + ' is not installed';
+    if (s.id === 'claude') {
+      if (!s.signedIn) return 'Claude is signed out';
+      var bits = [d.subscription, d.authMethod].filter(Boolean);
+      return 'Claude signed in' + (bits.length ? ' — ' + bits.join(' · ') : '');
+    }
+    if (s.id === 'grok') {
+      if (!s.signedIn) return 'Grok signed out — sign-in lapses every 7 days';
+      var age = typeof d.ageDays === 'number'
+        ? (d.ageDays < 1 ? 'today' : d.ageDays + (d.ageDays === 1 ? ' day ago' : ' days ago')) : '';
+      return 'Grok signed in' + (age ? ' ' + age : '')
+        + (d.expiresSoon ? ' — sign-in lapses every 7 days, renew it soon' : '');
+    }
+    return name + (s.signedIn ? ' ready' : ' needs a sign-in') + (s.specialism ? ' — ' + s.specialism : '');
+  }
+
+  function daySignIn(seat, btn) {
+    return ccSignIn(seat, btn).then(function (ok) {
+      if (ok) {
+        signinOpened = seat.id;
+        startBenchWatch(seat.id);
+        if (benchData) renderBanner(benchData);
+      }
+      return ok;
+    });
+  }
+
+  function benchSeatNode(s) {
+    var state = s.installed ? (s.signedIn ? 'ready' : 'needs') : 'absent';
+    var node = el('div', 'bench-seat ' + state, []);
+    node.style.setProperty('--seat', seatAccentVar(s.id));
+    node.title = benchSeatTip(s);
+    node.appendChild(el('span', 'bench-bulb', []));
+    node.appendChild(el('span', null, [benchShort(s)]));
+    node.appendChild(el('span', 'day-sr', [state === 'ready' ? 'ready' : state === 'needs' ? 'signed out' : 'not installed']));
+    if (s.id === 'grok' && s.signedIn && s.detail && s.detail.expiresSoon) {
+      node.appendChild(el('span', 'bench-soon', ['expires soon']));
+    }
+    if (s.installed && !s.signedIn && s.canSignIn) {
+      var btn = el('button', 'btn', ['Sign in']);
+      btn.type = 'button';
+      btn.title = 'Open the ' + benchShort(s) + ' sign-in';
+      btn.setAttribute('aria-label', 'Sign in to ' + benchShort(s));
+      btn.addEventListener('click', function () { daySignIn(s, btn); });
+      node.appendChild(btn);
+    }
+    return node;
+  }
+
+  function renderBanner(d) {
+    var seats = arr(d.seats);
+    var need = arr(d.needsSignIn).map(function (id) {
+      return seats.filter(function (s) { return s.id === id; })[0];
+    }).filter(Boolean);
+    bannerEl.textContent = '';
+    if (!need.length) { bannerEl.hidden = true; return; }
+    var names = need.map(benchShort);
+    var opened = need.filter(function (s) { return s.id === signinOpened; })[0];
+    var list = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0];
+    var text = opened
+      ? "Sign-in window opened for " + benchShort(opened) + ". This updates when you're done."
+      : list + (names.length > 1 ? ' are' : ' is') + " signed out. Alfred can't use "
+        + (names.length > 1 ? 'them' : 'it') + ' until you sign in.';
+    bannerEl.appendChild(el('span', 'sb-text', [text]));
+    var actions = el('div', 'sb-actions', []);
+    need.forEach(function (s) {
+      var b = el('button', 'btn', ['Sign in ' + benchShort(s)]);
+      b.type = 'button';
+      b.addEventListener('click', function () { daySignIn(s, b); });
+      actions.appendChild(b);
+    });
+    var auto = el('label', 'sb-auto', []);
+    var box = el('input', null, []);
+    box.type = 'checkbox';
+    box.checked = signinAutoOpenOn();
+    box.addEventListener('change', function () {
+      try { localStorage.setItem(SIGNIN_AUTO_KEY, box.checked ? '1' : '0'); } catch (e) { /* localStorage unavailable */ }
+    });
+    auto.appendChild(box);
+    auto.appendChild(document.createTextNode('Auto-open sign-in at startup'));
+    actions.appendChild(auto);
+    bannerEl.appendChild(actions);
+    bannerEl.hidden = false;
+  }
+
+  function startBenchWatch(id) {
+    if (!benchWatch) benchWatch = { ids: {}, until: 0, timer: null };
+    benchWatch.ids[id] = true;
+    benchWatch.until = Date.now() + BENCH_WATCH_MAX_MS;
+    if (benchWatch.timer) return;
+    benchWatch.timer = setInterval(function () {
+      if (!benchWatch || Date.now() > benchWatch.until) return stopBenchWatch();
+      fetchBench(true);
+    }, BENCH_WATCH_MS);
+  }
+
+  function stopBenchWatch() {
+    if (benchWatch && benchWatch.timer) clearInterval(benchWatch.timer);
+    benchWatch = null;
+  }
+
+  function checkBenchWatch(d) {
+    if (!benchWatch) return;
+    arr(d.seats).forEach(function (s) {
+      if (benchWatch && benchWatch.ids[s.id] && s.signedIn) {
+        delete benchWatch.ids[s.id];
+        if (signinOpened === s.id) signinOpened = null;
+        toast(benchShort(s) + ' is signed in.', 'success', { title: 'Bench' });
+      }
+    });
+    if (benchWatch && !Object.keys(benchWatch.ids).length) stopBenchWatch();
+  }
+
+  // One auto-open per server boot, however many seats are signed out; the key
+  // holds the boot time, so a restarted server earns a fresh one. Older boots'
+  // keys are swept so localStorage does not grow a key per restart.
+  function maybeAutoOpenSignIn(d) {
+    var need = arr(d.needsSignIn);
+    if (!need.length || !signinAutoOpenOn()) return;
+    var key = SIGNIN_OPENED_PREFIX + d.serverStarted;
+    try {
+      if (localStorage.getItem(key)) return;
+      Object.keys(localStorage).forEach(function (k) {
+        if (k.indexOf(SIGNIN_OPENED_PREFIX) === 0 && k !== key) localStorage.removeItem(k);
+      });
+      localStorage.setItem(key, '1');
+    } catch (e) { /* no storage: at most one auto-open per page load, below */ }
+    var seat = arr(d.seats).filter(function (s) { return s.id === need[0]; })[0];
+    if (!seat) return;
+    ccSignIn(seat).then(function (ok) {
+      if (!ok) return;
+      signinOpened = seat.id;
+      startBenchWatch(seat.id);
+      if (benchData) renderBanner(benchData);
+    }).catch(function () { /* the banner's own button is still there */ });
+  }
+
+  function renderBench(d) {
+    if (!d || !benchEl) return;
+    benchData = d;
+    var sig = JSON.stringify(d.seats || []) + '|' + (signinOpened || '');
+    if (sig !== benchSig) {
+      benchSig = sig;
+      benchEl.textContent = '';
+      arr(d.seats).forEach(function (s) { benchEl.appendChild(benchSeatNode(s)); });
+    }
+    checkBenchWatch(d);
+    renderBanner(d);
+    if (benchFirst) { benchFirst = false; maybeAutoOpenSignIn(d); }
+  }
+
+  function fetchBench(refresh) {
+    if (!benchEl) return Promise.resolve();
+    if (benchInflight && !refresh) return benchInflight;
+    var p = bridgeFetch('/api/bench' + (refresh ? '?refresh=1' : ''))
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(renderBench)
+      .catch(function () { /* keep the last strip; the next poll tries again */ })
+      .then(function () { if (benchInflight === p) benchInflight = null; });
+    benchInflight = p;
+    return p;
+  }
+
+  function pollBenchTick() { return fetchBench(false); }
+
+  (function wireAssistantRefresh() {
+    var btn = document.getElementById('day-refresh');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      Promise.all([pollAssistant(), fetchBench(true)]).then(function () { btn.disabled = false; });
+    });
+  })();
+
+  // The bench is checked at startup on every landing view, not only Day: the
+  // sign-in nudge is about the app being usable, not about which page is open.
+  // Deferred a tick so the token constant further down the script is assigned.
+  Promise.resolve().then(function () { return fetchBench(false); });
+
+  // ============================================================
   // View-scoped poll scheduler.
   // One shared table instead of five surfaces each inventing their own
   // setInterval: switching views cancels the old view's timers before
@@ -2979,7 +3785,7 @@
   // "Command" for all of them (switchView's navActive computation below) —
   // the redirect this phase is a nav-highlight, not a real sheet-open (P7).
   var LEGACY_VIEW = { dev: 'workshop', auto: 'protocols', ops: 'enterprise', directory: 'roster', library: 'library' };
-  var VALID_VIEWS = ['brain', 'command'].concat(Object.keys(LEGACY_VIEW));
+  var VALID_VIEWS = ['day', 'brain', 'command'].concat(Object.keys(LEGACY_VIEW));
   var viewGeneration = 0;
   var activePollTimers = [];
 
@@ -3005,107 +3811,6 @@
   // roster). Resolved once per startViewPolls() call, which already re-runs
   // on every switchView (including into/out of 'ops'), so the interval
   // swap takes effect the moment the view actually changes.
-  // ============================================================
-  // Personal assistant (Brain tab, right half): the shared brain's
-  // day-to-day view — Grok's morning brief, reminders, errands and the
-  // user's routines. Read-only: the brain's files are the truth, so
-  // anything Grok, Claude or the Librarian closes drops off on the next
-  // read. Re-read every 30 min on the Brain view, on returning to the tab,
-  // and on Refresh. Built with textContent only — the brain is written by
-  // other AIs, so none of it is ever parsed as HTML.
-  // ============================================================
-  var ASSISTANT_POLL_MS = 30 * 60 * 1000;
-  var assistantBody = document.getElementById('assistant-body');
-  var assistantMeta = document.getElementById('assistant-meta');
-
-  function shortDate(iso) { // '2026-10-25' -> 'Sun, Oct 25'
-    return new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US',
-      { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
-  }
-
-  function assistantItem(cls, title, when, file, scope) {
-    var b = el('button', 'assistant-item ' + cls, [el('span', 'ai-title', [title])]);
-    b.type = 'button';
-    if (scope === 'work') b.appendChild(el('span', 'badge info', ['work']));
-    if (when) b.appendChild(el('span', 'ai-when', [when]));
-    if (file) {
-      b.title = 'Open ' + file;
-      b.addEventListener('click', function () { openPanel({ title: title, folder: file.split('/')[0], brainFile: file }); });
-    }
-    return b;
-  }
-
-  function assistantSection(title, items, empty, collapsed) {
-    var sec = el(collapsed ? 'details' : 'section', 'assistant-sec',
-      [el(collapsed ? 'summary' : 'h3', null, [title + (collapsed ? ' (' + items.length + ')' : '')])]);
-    if (!items.length && empty) sec.appendChild(el('p', 'assistant-empty', [empty]));
-    items.forEach(function (i) { sec.appendChild(i); });
-    return sec;
-  }
-
-  function renderAssistant(d) {
-    assistantBody.textContent = '';
-    if (!d || !d.brain) {
-      assistantMeta.textContent = 'Shared brain not found';
-      assistantBody.appendChild(el('p', 'assistant-empty',
-        ['Set "Shared brain path" in alfred-profile.md to the Google Drive "Second Brain" folder.']));
-      return;
-    }
-    assistantMeta.textContent = shortDate(d.date) + ' · read ' + d.generatedAt.slice(11);
-    var item = function (cls, when) {
-      return function (i) { return assistantItem(cls, i.title, when(i), i.file, i.scope); };
-    };
-    var now = d.overdue.map(item('overdue', function (i) { return 'was due ' + shortDate(i.due); }))
-      .concat(d.carryOver.map(item('overdue', function () { return 'missed yesterday'; })))
-      .concat(d.today.map(item('today', function (i) { return i.kind; })));
-    assistantBody.appendChild(assistantSection('Due today', now, 'Nothing due today.'));
-    assistantBody.appendChild(assistantSection('Routines today',
-      d.routines.today.map(item('routine', function (i) { return i.schedule.split(/[;(]/)[0].trim(); })),
-      'No routines today.'));
-
-    var briefItems = [];
-    var b = d.brief;
-    if (b) {
-      briefItems = b.top.map(function (t) {
-        var row = assistantItem('brief', t.title, null, b.file);
-        if (t.text) row.appendChild(el('span', 'ai-text', [t.text]));
-        return row;
-      });
-    }
-    var briefSec = assistantSection('Grok morning brief', briefItems, b ? 'The brief has no top items.' : 'No brief yet.');
-    if (b) {
-      briefSec.insertBefore(el('p', 'assistant-sub', [(b.isToday ? '' : 'Latest brief, from ') + shortDate(b.date)
-        + (b.updated ? ' · ' + b.updated.replace(/^\d{4}-\d{2}-\d{2}\s*/, '') : '')]), briefSec.children[1] || null);
-    }
-    assistantBody.appendChild(briefSec);
-
-    assistantBody.appendChild(assistantSection('Coming up this week',
-      d.upcoming.map(item('soon', function (i) { return shortDate(i.due); })), 'Nothing in the next 7 days.'));
-    assistantBody.appendChild(assistantSection('Open to-dos', d.todos.map(item('', function () { return ''; })),
-      'No open to-dos.'));
-    assistantBody.appendChild(assistantSection('Watching and later',
-      d.watching.map(item('', function () { return 'watch'; }))
-        .concat(d.later.map(item('', function (i) { return shortDate(i.due); }))), null, true));
-    assistantBody.appendChild(assistantSection('Calendar', [], d.calendar.connected ? '' : 'Not connected yet.'));
-  }
-
-  function pollAssistant() {
-    if (!assistantBody) return Promise.resolve();
-    return bridgeFetch('/api/assistant')
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(renderAssistant)
-      .catch(function () { assistantMeta.textContent = 'Could not reach the shared brain; showing the last read.'; });
-  }
-
-  (function wireAssistantRefresh() {
-    var btn = document.getElementById('assistant-refresh');
-    if (!btn) return;
-    btn.addEventListener('click', function () {
-      btn.disabled = true;
-      pollAssistant().then(function () { btn.disabled = false; });
-    });
-  })();
-
   var GLOBAL_POLLS = [
     { fn: pollStatus, ms: 10000 },
     { fn: pollCommandCenter, ms: 60000 },
@@ -3113,7 +3818,8 @@
   ];
 
   var POLLS = {
-    brain: [{ fn: pollAssistant, ms: ASSISTANT_POLL_MS }],
+    day:   [{ fn: pollAssistant, ms: DAY_POLL_MS }, { fn: pollBenchTick, ms: BENCH_POLL_MS }],
+    brain: [],
     dev:   [{ fn: pollWorkshop, ms: 120000 }],
     auto:  [{ fn: pollProtocols, ms: 30000 }],
     ops:   [{ fn: pollUsage, ms: 60000 }],
@@ -3172,7 +3878,7 @@
   // 0.12 opacity and stops accepting pointer events so the new content grid
   // reads as the surface, not a canvas the user could still drag underneath.
   function applyCanvasPersistence(view) {
-    canvas.classList.toggle('canvas-ghost', view === 'dev' || view === 'auto' || view === 'directory' || view === 'library' || view === 'command');
+    canvas.classList.toggle('canvas-ghost', view === 'dev' || view === 'auto' || view === 'directory' || view === 'library' || view === 'command' || view === 'day');
   }
 
   // dev/auto/directory/library now show as a floating .sheet over #sheet-scrim
@@ -3205,6 +3911,8 @@
     document.body.classList.toggle('sheet-open', anySheetOpen);
     var paneCommand = document.getElementById('pane-command');
     var paneBrain = document.getElementById('pane-brain');
+    var paneDay = document.getElementById('pane-day');
+    if (paneDay) paneDay.hidden = (view !== 'day');
     if (paneCommand) paneCommand.hidden = (view !== 'command');
     // 'ops' also shows this pane — it hosts the same #graph canvas, just with
     // .brain-head hidden (CSS) until Enterprise gets a real surface of its own.
@@ -3215,7 +3923,7 @@
     // (plan §4 P4, Atelier's reasoning). 'ops' already gets this via
     // ops-canvas above; kept separate since the two views hide different
     // reasons for the same rail collapse.
-    document.body.classList.toggle('no-flight', view === 'brain');
+    document.body.classList.toggle('no-flight', view === 'brain' || view === 'day');
     // Dock icons highlight their own sheet (not navActive's command-collapse —
     // Library/Roster/Protocols/Enterprise/Workshop each get their own icon).
     document.querySelectorAll('.dock-btn').forEach(function (b) {
@@ -3223,28 +3931,28 @@
     });
   }
 
-  // Whichever of the two real places (Command/Brain) was active before a
+  // Whichever of the real places (Day/Brain/Command) was active before a
   // sheet opened — Esc and each sheet's close button return here, exactly
   // "the prior state" rather than a hardcoded default (plan §P7 verification 1).
-  var lastPlace = 'brain';
+  var lastPlace = 'day';
   function closeSheet() { switchView(lastPlace); }
 
   function switchView(view, opts) {
     opts = opts || {};
-    if (VALID_VIEWS.indexOf(view) === -1) view = 'brain';
+    if (VALID_VIEWS.indexOf(view) === -1) view = 'day';
     if (view === currentView && !opts.force) return;
     wakePhysics(); // a different dataset and a different attractor per node
     // Recorded BEFORE currentView is overwritten below, and only when leaving
     // a real place (not another sheet) — closing a sheet must return to
     // Brain/Command, never to whichever sheet happened to be open before it.
-    if (currentView === 'brain' || currentView === 'command') lastPlace = currentView;
+    if (currentView === 'day' || currentView === 'brain' || currentView === 'command') lastPlace = currentView;
     currentView = view;
     folderFilter = null; // a BRAIN-view folder filter has no meaning against org tiers or the new stages
     hoveredNode = null;
-    // The #top nav has only 2 tabs now (Command/Brain — plan §2.1/§2.3); the
-    // 5 retired names have no tab of their own, so they light up "Command"
-    // rather than leaving the nav with nothing active.
-    var navActive = LEGACY_VIEW.hasOwnProperty(view) ? 'command' : view;
+    // The #top nav has two tabs (Day/Brain); the sheets and the Command view have no tab of
+    // their own, so a sheet lights up the place it floats over (lastPlace) rather than
+    // leaving the nav with nothing active.
+    var navActive = LEGACY_VIEW.hasOwnProperty(view) ? lastPlace : view;
     document.querySelectorAll('.view-btn').forEach(function (b) {
       var active = b.dataset.view === navActive;
       b.classList.toggle('active', active);
@@ -3315,7 +4023,7 @@
   function paletteAction(label, hint, run) { return { label: label, hint: hint, run: run }; }
   function getPaletteItems() {
     return [
-      paletteAction('Command', '1', function () { switchView('command'); }),
+      paletteAction('Day', '1', function () { switchView('day'); }),
       paletteAction('Brain', '2', function () { switchView('brain'); }),
       paletteAction('Library', 'L', function () { switchView('library'); }),
       paletteAction('Operative Roster', 'R', function () { switchView('directory'); }),
@@ -3386,13 +4094,13 @@
   });
   paletteScrim.addEventListener('click', closePalette);
 
-  // View survives reload / back-button per §4.1. currentView already reads
-  // 'brain' from its declaration above, but switchView's early-return guard
-  // compares against it — nulling it out here forces the very first call to
-  // actually run its setup (stage visibility, canvas class, poll start) even
-  // when the resolved view is the same 'brain' default.
+  // View survives reload / back-button per §4.1. switchView's early-return guard
+  // compares against currentView — nulling it out here forces the very first call
+  // to actually run its setup (stage visibility, canvas class, poll start) even
+  // when the resolved view is the same as the declaration's default. With no
+  // hash the app opens on Day.
   var initialHashView = location.hash.replace('#', '');
-  var initialView = VALID_VIEWS.indexOf(initialHashView) !== -1 ? initialHashView : 'brain';
+  var initialView = VALID_VIEWS.indexOf(initialHashView) !== -1 ? initialHashView : 'day';
   currentView = null;
   switchView(initialView, { skipHash: true });
 
@@ -4305,7 +5013,7 @@
   // focus is in a text input (except Esc, which always applies).
   // ============================================================
   var KB_MAP = [
-    ['1 / 2', 'Command / Brain'],
+    ['1 / 2', 'Day / Brain'],
     ['L / R / P / E / W', 'Open the Library / Roster / Protocols / Enterprise / Workshop sheet'],
     ['Ctrl+K', 'Command palette — jump to any place, sheet or action'],
     ['/', 'Focus the composer'],
@@ -4785,8 +5493,9 @@
     if (isTextInputFocused()) return;
     if (e.key === '?') { e.preventDefault(); openKbHelp(); return; }
     if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-      if (e.key === '1') { switchView('command'); return; }
+      if (e.key === '1') { switchView('day'); return; }
       if (e.key === '2') { switchView('brain'); return; }
+      if (e.key === '3') { switchView('command'); return; } // not in the nav or the help: still reachable
       var sheetKey = SHEET_KEY[e.key.toLowerCase()];
       if (sheetKey) { switchView(sheetKey); return; }
     }
@@ -7485,14 +8194,16 @@
     });
   }
 
+  // btn is optional (the Day view's auto-open has none). Resolves true once the console opened.
   function ccSignIn(seat, btn) {
-    btn.disabled = true;
-    bridgePost('/api/command-center/signin', { provider: seat.id }).then(function (r) {
-      btn.disabled = false;
-      if (!r.ok) return toast(r.data.error || 'Could not open the sign-in.', 'critical');
+    if (btn) btn.disabled = true;
+    return bridgePost('/api/command-center/signin', { provider: seat.id }).then(function (r) {
+      if (btn) btn.disabled = false;
+      if (!r.ok) { toast(r.data.error || 'Could not open the sign-in.', 'critical'); return false; }
       toast('Finish the sign-in in the console that just opened, then this seat lights up on the next refresh.', 'info', { title: seat.label });
       // Most browser sign-ins take under a minute; look again then rather than making the operator click.
       setTimeout(function () { refreshCommandCenter(true); }, 45000);
+      return true;
     });
   }
 
@@ -7547,8 +8258,9 @@
   bridgeFetch('/api/command-center/seats').then(function (r) { return r.json(); }).then(function (d) {
     var pending = (d.seats || []).filter(function (s) { return s.installed && !s.signedIn; });
     if (!pending.length) return;
+    if (currentView === 'day') return; // the Day view's sign-in banner already says this
     toast(pending.map(function (s) { return s.label; }).join(', ') + (pending.length === 1 ? ' needs' : ' need') + ' a sign-in.',
-          'warn', { title: 'Command Center', action: { label: 'Open', onClick: function () { switchView('command'); } } });
+          'warn', { title: 'Sign-in', action: { label: 'Open Day', onClick: function () { switchView('day'); } } });
   }).catch(function () {});
   function pollCommandCenter() { return refreshCommandCenter(false); }
 
@@ -7911,6 +8623,7 @@
   function refreshStatus() {
     fetch('/api/status').then(function (r) { return r.json(); }).then(function (s) {
       lastStatusPayload = s;
+      noteBrainVersion(s.brainVersion); // the shared brain changed on disk: the Day view re-reads
       document.getElementById('stat-notes').textContent = s.notes;
       var freshEl = document.getElementById('stat-fresh');
       var ageMs = Date.now() - new Date(s.generatedAt).getTime();
