@@ -10,7 +10,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { assistantFeed, brainNote, latestBrief, routineDueToday } from '../brain-assistant.mjs';
+import { applyAction, assistantFeed, authorIsOurs, brainNote, latestBrief, routineDueToday, writeSignal } from '../brain-assistant.mjs';
 import { easternNow } from '../brain-librarian.mjs';
 
 const ROOT = path.join(os.tmpdir(), `assistant-test-${process.pid}`);
@@ -68,7 +68,7 @@ chk('falls back to the newest earlier brief', latestBrief(ROOT, '2026-10-25')?.d
 
 // --- Feed ---
 console.log('\nFeed');
-const feed = assistantFeed(ROOT, NOW);
+let feed = assistantFeed(ROOT, NOW);
 const titles = (list) => list.map((i) => i.title).join('|');
 chk('today holds the errand due today', titles(feed.today) === 'Pick up dry cleaning', titles(feed.today));
 chk('overdue and upcoming are split', titles(feed.overdue) === 'Late thing' && titles(feed.upcoming) === 'Soon thing');
@@ -91,6 +91,86 @@ chk('refuses a path outside the brain', brainNote(ROOT, '../outside.md').status 
 chk('refuses an absolute path elsewhere', brainNote(ROOT, path.join(os.tmpdir(), 'x.md')).status === 403);
 chk('refuses non-markdown', brainNote(ROOT, 'Reminders/x.txt').status === 400);
 chk('a closed-and-moved file is a clear 404', brainNote(ROOT, 'Reminders/gone.md').status === 404);
+
+// --- Who may edit in place ---
+console.log('\nAuthorship');
+chk('"Claude Code (migrated; originally captured by Grok)" is ours', authorIsOurs('Claude Code (migrated; originally captured by Grok)'));
+chk('"Grok (file created by Grok; text by Claude Code)" is not ours', !authorIsOurs('Grok (file created by Grok; text by Claude Code at the user\'s direction)'));
+chk('Alfred and librarian are ours, an empty author is not', authorIsOurs('Alfred') && authorIsOurs('librarian') && !authorIsOurs(''));
+
+// --- Actions: close / tomorrow / snooze / carryover ---
+console.log('\nActions');
+const ours = (kind, status, due, title) => reminder(kind, status, due, title).replace('**Author:** grok', '**Author:** Claude Code (migrated; originally captured by Grok)');
+const exists = (rel) => fs.existsSync(path.join(ROOT, rel));
+const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+put('Reminders/2026-10-21--ours-todo.md', ours('todo', 'open', 'none', 'Our own to-do'));
+put('Reminders/2026-10-21--grok-todo.md', reminder('todo', 'open', 'none', 'A to-do Grok wrote'));
+put('Reminders/2026-10-26--ours-errand.md', ours('errand', 'open', '2026-10-26', 'Our errand'));
+put('Reminders/2026-10-26--grok-errand.md', reminder('errand', 'open', '2026-10-26', 'A Grok errand'));
+put('Reminders/Done/2026-10-25--expired.md', `${ours('errand', 'expired', '2026-10-25', 'Yesterday\'s errand')}\n- Expired: 2026-10-26 02:30 ET by librarian (errand day ended)\n`);
+
+let r = applyAction(ROOT, { file: 'Reminders/2026-10-21--ours-todo.md', action: 'close' }, NOW);
+chk('closing our own file edits it in place and moves it to Done', r.status === 200 && r.via === 'direct' && r.applied
+  && !exists('Reminders/2026-10-21--ours-todo.md') && /\*\*Status:\*\* done/.test(read('Reminders/Done/2026-10-21--ours-todo.md'))
+  && /- Closed: 2026-10-26 09:00 ET by user \(Alfred dashboard\)/.test(read('Reminders/Done/2026-10-21--ours-todo.md')), JSON.stringify(r));
+chk('it shows under done-today on the next read', assistantFeed(ROOT, NOW).doneToday.some((i) => i.title === 'Our own to-do'));
+
+r = applyAction(ROOT, { file: 'Reminders/2026-10-21--grok-todo.md', action: 'close' }, NOW);
+const grokDone = 'Reminders/Done/2026-10-21--grok-todo.md';
+chk('closing Grok\'s file writes a close signal from the user and the Librarian applies it',
+  r.status === 200 && r.via === 'signal' && r.applied && /^Inbox\/2026-10-26-0900--user--grok--close--a-to-do-grok-wrote\.md$/.test(r.signal)
+  && exists(grokDone) && /- Closed: 2026-10-26 09:00 ET by user \(signal /.test(read(grokDone)), JSON.stringify(r));
+chk('the applied signal is filed in Inbox/Done', !exists(r.signal) && exists(r.signal.replace('Inbox/', 'Inbox/Done/')));
+chk('closing it again is a clear 404', applyAction(ROOT, { file: 'Reminders/2026-10-21--grok-todo.md', action: 'close' }, NOW).status === 404);
+
+r = applyAction(ROOT, { file: 'Reminders/2026-10-26--ours-errand.md', action: 'tomorrow' }, NOW);
+chk('tomorrow on our own errand moves its Due and keeps it open in Reminders/', r.status === 200 && r.applied && r.due === '2026-10-27'
+  && /\*\*Due:\*\* 2026-10-27/.test(read('Reminders/2026-10-26--ours-errand.md')) && /- Moved: .* to 2026-10-27 by user/.test(read('Reminders/2026-10-26--ours-errand.md')));
+chk('it now sits in upcoming, not today', assistantFeed(ROOT, NOW).upcoming.some((i) => i.title === 'Our errand') && !assistantFeed(ROOT, NOW).today.some((i) => i.title === 'Our errand'));
+
+r = applyAction(ROOT, { file: 'Reminders/2026-10-26--grok-errand.md', action: 'tomorrow' }, NOW);
+chk('tomorrow on Grok\'s errand leaves the file alone and sends an amend signal', r.status === 200 && !r.applied && r.pending === 'amend'
+  && /--user--grok--amend--/.test(r.signal) && exists(r.signal) && /\*\*Due:\*\* 2026-10-26/.test(read('Reminders/2026-10-26--grok-errand.md'))
+  && /Replace `- \*\*Due:\*\* 2026-10-26` with `- \*\*Due:\*\* 2026-10-27`/.test(read(r.signal)), JSON.stringify(r));
+chk('the feed marks that item pending', assistantFeed(ROOT, NOW).today.find((i) => i.title === 'A Grok errand')?.pending === 'amend');
+chk('a second signal for the same item gets a distinct file name',
+  applyAction(ROOT, { file: 'Reminders/2026-10-26--grok-errand.md', action: 'tomorrow' }, NOW).signal.endsWith('-2.md'));
+
+chk('snooze needs a date', applyAction(ROOT, { file: 'Reminders/2026-10-26--ours-errand.md', action: 'snooze' }, NOW).status === 400);
+r = applyAction(ROOT, { file: 'Reminders/2026-10-26--ours-errand.md', action: 'snooze', due: '2026-11-02' }, NOW);
+chk('snooze to a date', r.status === 200 && r.due === '2026-11-02' && /\*\*Due:\*\* 2026-11-02/.test(read('Reminders/2026-10-26--ours-errand.md')));
+
+r = applyAction(ROOT, { file: 'Reminders/Done/2026-10-25--expired.md', action: 'carryover' }, NOW);
+chk('carry-over reopens yesterday\'s expired errand for today', r.status === 200 && r.applied && r.due === '2026-10-26'
+  && exists('Reminders/2026-10-25--expired.md') && /\*\*Status:\*\* open/.test(read('Reminders/2026-10-25--expired.md'))
+  && assistantFeed(ROOT, NOW).today.some((i) => i.title === 'Yesterday\'s errand'), JSON.stringify(r));
+chk('carry-over refuses an item that is not in Done/', applyAction(ROOT, { file: 'Reminders/2026-10-26--ours-errand.md', action: 'carryover' }, NOW).status === 400);
+
+console.log('\nAction safety');
+chk('refuses files outside Reminders/', applyAction(ROOT, { file: 'Memory/profile.md', action: 'close' }, NOW).status === 400);
+chk('refuses a path that escapes', applyAction(ROOT, { file: 'Reminders/../Memory/profile.md', action: 'close' }, NOW).status === 400);
+chk('refuses the README', applyAction(ROOT, { file: 'Reminders/README.md', action: 'close' }, NOW).status === 400);
+chk('refuses an unknown action', applyAction(ROOT, { file: 'Reminders/2026-10-26--ours-errand.md', action: 'delete' }, NOW).status === 400);
+chk('refuses a bad actor name', applyAction(ROOT, { file: 'Reminders/2026-10-26--ours-errand.md', action: 'close', by: 'x; rm' }, NOW).status === 400);
+chk('a missing brain is a 404', applyAction(path.join(ROOT, 'nope'), { file: 'Reminders/x.md', action: 'close' }, NOW).status === 404);
+
+// --- Signals and projects in the feed ---
+console.log('\nFeed extras');
+const fyi = writeSignal(ROOT, { type: 'fyi', from: 'claude-code', to: 'grok', re: 'Routines/', subject: 'Dashboard can close items', body: 'Hello.' }, NOW);
+const sig = read(fyi);
+chk('a signal is named and headed per MANIFESTO §6', /^Inbox\/2026-10-26-0900--claude-code--grok--fyi--dashboard-can-close-items\.md$/.test(fyi)
+  && /- \*\*Kind:\*\* signal\n- \*\*Type:\*\* fyi\n- \*\*From:\*\* claude-code\n- \*\*To:\*\* grok\n- \*\*Re:\*\* Routines\/\n- \*\*Status:\*\* open\n- \*\*Created:\*\* 2026-10-26 09:00 ET/.test(sig), sig);
+feed = assistantFeed(ROOT, NOW);
+chk('open signals appear in the feed with from, to and type', feed.signals.some((s) => s.file === fyi && s.from === 'claude-code' && s.to === 'grok' && s.type === 'fyi'));
+put('Projects/demo/status.md', '# Demo\n\n- **Owner:** Claude\n- **Status:** Active\n- **Track:** Personal\n\n## Where it stands\n- (2026-10-25) **Nearly** done.\n- (2026-10-20) Started.\n\n## Next\n1. Ship it.\n');
+put('Projects/_dormant/old.md', '# Old\n');
+put('Projects/paused/status.md', '# Paused\n\n- **Status:** dormant\n\n## Where it stands\n- x\n');
+feed = assistantFeed(ROOT, NOW);
+chk('active projects give one status line and one next step', feed.projects.length === 1 && feed.projects[0].name === 'demo'
+  && feed.projects[0].stands === '(2026-10-25) Nearly done.' && feed.projects[0].next === 'Ship it.' && feed.projects[0].track === 'Personal', JSON.stringify(feed.projects));
+chk('items carry a short author and whether we may edit them',
+  feed.today.find((i) => i.title === 'A Grok errand')?.author === 'grok' && feed.today.find((i) => i.title === 'A Grok errand')?.ours === false
+  && feed.today.find((i) => i.title === 'Yesterday\'s errand')?.author === 'Claude Code' && feed.today.find((i) => i.title === 'Yesterday\'s errand')?.ours === true);
 
 fs.rmSync(ROOT, { recursive: true, force: true });
 console.log(`\n${pass} passed, ${fails.length} failed`);

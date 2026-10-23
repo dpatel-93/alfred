@@ -148,7 +148,8 @@ export function applyAction(brain, { file, action, due, by = 'user' } = {}, now 
     return { status: 200, applied: !fs.existsSync(full), via: 'signal', signal, title };
   }
 
-  const newDue = action === 'snooze' ? (String(due || '').match(/^\d{4}-\d{2}-\d{2}$/) || [])[0] : addDays(now.date, 1);
+  const newDue = action === 'snooze' ? (String(due || '').match(/^\d{4}-\d{2}-\d{2}$/) || [])[0]
+    : action === 'carryover' ? now.date : addDays(now.date, 1);  // carry-over means "today"
   if (!newDue) return { status: 400, error: 'snooze needs due: YYYY-MM-DD' };
   if (action === 'carryover' && !inDone) return { status: 400, error: 'carryover is for expired items in Reminders/Done/' };
   const oldDue = h.due || 'none';
