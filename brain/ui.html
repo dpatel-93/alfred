@@ -603,6 +603,57 @@
      positioned overlays above the bar rather than growing it, so this only
      had to grow by the new rows' own height, not their popover content. */
   #pane-brain { padding-bottom: 260px; }
+  /* --- Personal assistant (Brain tab, right half) ----------------------------
+     The shared brain's day-to-day view beside the graph. It is a sibling of
+     .brain-canvas inside .brain-split, so P4's ResizeObserver re-fits the graph
+     to the left half by itself; nothing here touches the canvas or its click
+     math. Hidden in 'ops', which borrows this pane for the full-width canvas. */
+  .brain-split { flex: 1 1 auto; min-height: 0; display: flex; }
+  .brain-split > .brain-canvas { flex: 1 1 50%; min-width: 0; }
+  .assistant {
+    flex: 0 0 50%; min-width: 0; overflow-y: auto;
+    display: flex; flex-direction: column; gap: var(--sp-7);
+    padding: var(--sp-7) var(--sp-8);
+    background: var(--panel-bg); border-left: 1px solid var(--border);
+    backdrop-filter: blur(4px);
+  }
+  body.ops-canvas .assistant { display: none; }
+  .assistant-head { display: flex; align-items: baseline; gap: var(--sp-5); flex-wrap: wrap; }
+  .assistant-head h2 { margin: 0; font-family: var(--font-display); font-size: 16px; font-weight: 600; color: var(--text); }
+  .assistant-meta { flex: 1 1 auto; color: var(--text-dim); font-size: 11px; }
+  .assistant-body { display: flex; flex-direction: column; gap: var(--sp-8); }
+  .assistant-sec { display: flex; flex-direction: column; gap: var(--sp-3); }
+  .assistant-sec > h3, .assistant-sec > summary {
+    margin: 0; font-size: 10px; font-weight: 600; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--text-dim);
+  }
+  .assistant-sec > summary { cursor: pointer; }
+  details.assistant-sec[open] > summary { margin-bottom: var(--sp-3); }
+  .assistant-item {
+    --accent: var(--gray);
+    display: flex; align-items: center; gap: var(--sp-4); width: 100%; text-align: left;
+    padding: 8px 10px; border: 0; border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--surface-2) 78%, transparent);
+    box-shadow: inset 3px 0 0 var(--accent);
+    color: var(--text); font: inherit; font-size: 12.5px; cursor: pointer;
+  }
+  .assistant-item:hover { background: color-mix(in srgb, var(--surface-3) 85%, transparent); }
+  .assistant-item .ai-title { flex: 1 1 auto; min-width: 0; }
+  .assistant-item .ai-when {
+    color: var(--text-dim); font-size: 11px; white-space: nowrap;
+    font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  }
+  .assistant-item.overdue { --accent: var(--red); }
+  .assistant-item.today { --accent: var(--amber); }
+  .assistant-item.routine { --accent: var(--mint); }
+  .assistant-item.soon { --accent: var(--blue); }
+  .assistant-item.brief { --accent: var(--violet); flex-direction: column; align-items: flex-start; gap: 2px; }
+  .assistant-item.brief .ai-text { color: var(--text-soft); font-size: 12px; }
+  .assistant-empty, .assistant-sub { margin: 0; color: var(--text-dim); font-size: 12px; }
+  @media (max-width: 900px) {
+    .brain-split { flex-direction: column; }
+    .assistant { flex: 0 0 45%; border-left: 0; border-top: 1px solid var(--border); }
+  }
   /* #pane-command has no such race (nothing here does P4's coordinate math),
      so it gets a live reserve instead of a guessed static one — the actual
      fix for "the terminal sits behind the bottom bar": a ResizeObserver on
@@ -1480,7 +1531,7 @@
      the standard +2px outward offset. */
   .btn:focus-visible, .icon-btn:focus-visible, .dock-btn:focus-visible,
   .seat-more:focus-visible, .filter-chip:focus-visible,
-  .cc-grid-toggle:focus-visible {
+  .cc-grid-toggle:focus-visible, .assistant-item:focus-visible, .assistant-sec > summary:focus-visible {
     outline: 2px solid var(--blue); outline-offset: 2px;
   }
   .view-btn:focus-visible, .seat-main:focus-visible {
@@ -1764,8 +1815,20 @@
         <div class="cat-btn" data-folder="Learning" style="--accent:#63e6b5;">LRN</div>
         <div class="cat-btn" data-folder="Claude-Code" style="--accent:#f18b5b;">CLD</div>
       </div>
-      <div class="brain-canvas">
-        <canvas id="graph"></canvas>
+      <div class="brain-split">
+        <div class="brain-canvas">
+          <canvas id="graph"></canvas>
+        </div>
+        <!-- Personal assistant: Grok's brief, reminders, errands and routines
+             from the shared brain. Filled by pollAssistant(). -->
+        <aside id="assistant" class="assistant" aria-label="Personal assistant">
+          <div class="assistant-head">
+            <h2>Today</h2>
+            <span id="assistant-meta" class="assistant-meta" aria-live="polite">Loading…</span>
+            <button id="assistant-refresh" class="btn" type="button" title="Re-read the shared brain now">Refresh</button>
+          </div>
+          <div id="assistant-body" class="assistant-body"></div>
+        </aside>
       </div>
     </section>
 
@@ -2932,6 +2995,107 @@
   // roster). Resolved once per startViewPolls() call, which already re-runs
   // on every switchView (including into/out of 'ops'), so the interval
   // swap takes effect the moment the view actually changes.
+  // ============================================================
+  // Personal assistant (Brain tab, right half): the shared brain's
+  // day-to-day view — Grok's morning brief, reminders, errands and the
+  // user's routines. Read-only: the brain's files are the truth, so
+  // anything Grok, Claude or the Librarian closes drops off on the next
+  // read. Re-read every 30 min on the Brain view, on returning to the tab,
+  // and on Refresh. Built with textContent only — the brain is written by
+  // other AIs, so none of it is ever parsed as HTML.
+  // ============================================================
+  var ASSISTANT_POLL_MS = 30 * 60 * 1000;
+  var assistantBody = document.getElementById('assistant-body');
+  var assistantMeta = document.getElementById('assistant-meta');
+
+  function shortDate(iso) { // '2026-10-25' -> 'Sun, Oct 25'
+    return new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US',
+      { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+  }
+
+  function assistantItem(cls, title, when, file, scope) {
+    var b = el('button', 'assistant-item ' + cls, [el('span', 'ai-title', [title])]);
+    b.type = 'button';
+    if (scope === 'work') b.appendChild(el('span', 'badge info', ['work']));
+    if (when) b.appendChild(el('span', 'ai-when', [when]));
+    if (file) {
+      b.title = 'Open ' + file;
+      b.addEventListener('click', function () { openPanel({ title: title, folder: file.split('/')[0], brainFile: file }); });
+    }
+    return b;
+  }
+
+  function assistantSection(title, items, empty, collapsed) {
+    var sec = el(collapsed ? 'details' : 'section', 'assistant-sec',
+      [el(collapsed ? 'summary' : 'h3', null, [title + (collapsed ? ' (' + items.length + ')' : '')])]);
+    if (!items.length && empty) sec.appendChild(el('p', 'assistant-empty', [empty]));
+    items.forEach(function (i) { sec.appendChild(i); });
+    return sec;
+  }
+
+  function renderAssistant(d) {
+    assistantBody.textContent = '';
+    if (!d || !d.brain) {
+      assistantMeta.textContent = 'Shared brain not found';
+      assistantBody.appendChild(el('p', 'assistant-empty',
+        ['Set "Shared brain path" in alfred-profile.md to the Google Drive "Second Brain" folder.']));
+      return;
+    }
+    assistantMeta.textContent = shortDate(d.date) + ' · read ' + d.generatedAt.slice(11);
+    var item = function (cls, when) {
+      return function (i) { return assistantItem(cls, i.title, when(i), i.file, i.scope); };
+    };
+    var now = d.overdue.map(item('overdue', function (i) { return 'was due ' + shortDate(i.due); }))
+      .concat(d.carryOver.map(item('overdue', function () { return 'missed yesterday'; })))
+      .concat(d.today.map(item('today', function (i) { return i.kind; })));
+    assistantBody.appendChild(assistantSection('Due today', now, 'Nothing due today.'));
+    assistantBody.appendChild(assistantSection('Routines today',
+      d.routines.today.map(item('routine', function (i) { return i.schedule.split(/[;(]/)[0].trim(); })),
+      'No routines today.'));
+
+    var briefItems = [];
+    var b = d.brief;
+    if (b) {
+      briefItems = b.top.map(function (t) {
+        var row = assistantItem('brief', t.title, null, b.file);
+        if (t.text) row.appendChild(el('span', 'ai-text', [t.text]));
+        return row;
+      });
+    }
+    var briefSec = assistantSection('Grok morning brief', briefItems, b ? 'The brief has no top items.' : 'No brief yet.');
+    if (b) {
+      briefSec.insertBefore(el('p', 'assistant-sub', [(b.isToday ? '' : 'Latest brief, from ') + shortDate(b.date)
+        + (b.updated ? ' · ' + b.updated.replace(/^\d{4}-\d{2}-\d{2}\s*/, '') : '')]), briefSec.children[1] || null);
+    }
+    assistantBody.appendChild(briefSec);
+
+    assistantBody.appendChild(assistantSection('Coming up this week',
+      d.upcoming.map(item('soon', function (i) { return shortDate(i.due); })), 'Nothing in the next 7 days.'));
+    assistantBody.appendChild(assistantSection('Open to-dos', d.todos.map(item('', function () { return ''; })),
+      'No open to-dos.'));
+    assistantBody.appendChild(assistantSection('Watching and later',
+      d.watching.map(item('', function () { return 'watch'; }))
+        .concat(d.later.map(item('', function (i) { return shortDate(i.due); }))), null, true));
+    assistantBody.appendChild(assistantSection('Calendar', [], d.calendar.connected ? '' : 'Not connected yet.'));
+  }
+
+  function pollAssistant() {
+    if (!assistantBody) return Promise.resolve();
+    return bridgeFetch('/api/assistant')
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(renderAssistant)
+      .catch(function () { assistantMeta.textContent = 'Could not reach the shared brain; showing the last read.'; });
+  }
+
+  (function wireAssistantRefresh() {
+    var btn = document.getElementById('assistant-refresh');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      pollAssistant().then(function () { btn.disabled = false; });
+    });
+  })();
+
   var GLOBAL_POLLS = [
     { fn: pollStatus, ms: 10000 },
     { fn: pollCommandCenter, ms: 60000 },
@@ -2939,7 +3103,7 @@
   ];
 
   var POLLS = {
-    brain: [],
+    brain: [{ fn: pollAssistant, ms: ASSISTANT_POLL_MS }],
     dev:   [{ fn: pollWorkshop, ms: 120000 }],
     auto:  [{ fn: pollProtocols, ms: 30000 }],
     ops:   [{ fn: pollUsage, ms: 60000 }],
@@ -5731,7 +5895,11 @@
     panel.classList.add('open');
     sfxOpen();
 
-    fetch('/api/note?path=' + encodeURIComponent(n.path))
+    // Assistant-panel items come from the shared brain, not the graph's vault,
+    // through their own token-gated reader.
+    (n.brainFile
+      ? bridgeFetch('/api/assistant/note?path=' + encodeURIComponent(n.brainFile))
+      : fetch('/api/note?path=' + encodeURIComponent(n.path)))
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.error) { panelBody.textContent = data.error; sfxError(); return; }

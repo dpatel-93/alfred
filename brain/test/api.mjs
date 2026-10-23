@@ -423,6 +423,16 @@ const emptyPull = await fetch(B+'/api/interns/pull',{method:'POST',headers:H,bod
 chk('POST /api/interns/pull rejects an empty model name', emptyPull.status===400, `got ${emptyPull.status}`);
 
 // --- settings: the key is write-only from the UI's point of view ---
+// Personal-assistant panel: personal content, so token-gated like settings.
+const asNoTok = await fetch(B+'/api/assistant');
+chk('GET /api/assistant without token blocked', asNoTok.status===401||asNoTok.status===403, `got ${asNoTok.status}`);
+const asGet = await j('/api/assistant',{headers:{'X-Alfred-Token':TOKEN}});
+chk('GET /api/assistant with token answers (brain or not)', asGet.s===200 && typeof asGet.d?.brain==='boolean', `got ${asGet.s}`);
+const asNoteNoTok = await fetch(B+'/api/assistant/note?path=README.md');
+chk('GET /api/assistant/note without token blocked', asNoteNoTok.status===401||asNoteNoTok.status===403, `got ${asNoteNoTok.status}`);
+const asEscape = await j('/api/assistant/note?path=..%2F..%2Fescape.md',{headers:{'X-Alfred-Token':TOKEN}});
+chk('GET /api/assistant/note never leaves the brain', asEscape.s!==200, `got ${asEscape.s}`);
+
 const setNoTok = await fetch(B+'/api/settings');
 chk('GET /api/settings without token blocked', setNoTok.status===401||setNoTok.status===403, `got ${setNoTok.status}`);
 const setGet = await j('/api/settings',{headers:{'X-Alfred-Token':TOKEN}});
