@@ -13,9 +13,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WebSocketServer } from 'ws';
 import pty from 'node-pty';
 import { buildIndex, linkKey, noteKey, resolveVaultDir, SKIP_DIRS, vaultExcludes, isExcludedPath } from './index-vault.mjs';
-import { composeGreeting, parseMcpList, recentNoteTitles } from './greeting.mjs';
+import { composeGreeting, composeGreetingLines, parseMcpList } from './greeting.mjs';
 import { composeMorningBriefParagraphs } from './morning-brief.mjs';
-import { fetchWorldPulse } from './world-pulse.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -5479,7 +5478,21 @@ function writeGreetingState(state) {
  *   in advance must not consume the "have we met" flag, or the pre-render would
  *   turn every real greeting into "Welcome back" — including the first.
  */
-async function buildGreeting(commit = true) {
+/** The shared brain's day (brain-assistant.mjs), or null when it cannot be read. */
+async function readAssistantFeed() {
+  try {
+    const { assistantFeed } = await import(pathToFileURL(ASSISTANT_MODULE).href);
+    return assistantFeed();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @param {boolean} [opts.withBrief]  false leaves out the "Grok's brief" line —
+ *   the Morning Brief reads the brief itself, so its status must not trail it.
+ */
+async function buildGreeting(commit = true, { withBrief = true } = {}) {
   const index = loadIndex();
   const counts = buildFileCounts(index);
   const state = readGreetingState();
@@ -5488,19 +5501,22 @@ async function buildGreeting(commit = true) {
   refreshMcpProbe(); // fire-and-forget: warms the cache for the NEXT greeting
   const fresh = mcpProbe.servers && Date.now() - mcpProbe.at < MCP_PROBE_TTL_MS * 6;
 
-  const text = composeGreeting({
+  const today = await readAssistantFeed();
+  if (today && !withBrief) delete today.brief;
+  const args = {
     name: getCeoName('there'),
     now,
     counts,
     notes: index.notes.length,
     indexStale: isIndexStale(),
     mcpServers: fresh ? mcpProbe.servers : null,
-    recent: recentNoteTitles(index.notes),
     returning: Boolean(state.lastGreetedAt),
-  });
+    today,
+  };
+  const lines = composeGreetingLines(args);
 
   if (commit) writeGreetingState({ ...state, lastGreetedAt: now.toISOString() });
-  return { text, mcpChecked: Boolean(fresh) };
+  return { text: composeGreeting(args), lines, mcpChecked: Boolean(fresh) };
 }
 
 // --- Pre-rendering the greeting ---------------------------------------------
@@ -5596,49 +5612,35 @@ async function handleGreeting(req, res) {
 
 // --- The on-demand morning brief --------------------------------------------
 // Same idea as the startup greeting, but triggered by a click rather than
-// spoken once automatically — a status update plus the dp brief, a separate
-// project's GitHub Action output, read via the GitHub contents API rather than
-// re-run here (the Action holds its own API keys and schedule; this just reads
-// what it already produced).
+// spoken once automatically: the day's status, then Grok's morning brief read
+// from the shared brain (Outputs/briefs/YYYY-MM-DD.md). Grok Bot compiles the
+// news every weekday; this replaced the old GitHub digest and the live Grok
+// world-pulse search, so the button costs nothing and says what Grok said.
 
-const DAILY_BRIEF_PATH = 'output/latest-brief.json';
-
-async function fetchDpBrief() {
-  const repo = storedDailyBriefRepo();
-  if (!repo) return null;
+async function readGrokBrief() {
   try {
-    const file = await githubApi(`/repos/${repo}/contents/${DAILY_BRIEF_PATH}`);
-    if (!file || typeof file.content !== 'string') return { error: 'unexpected response shape from GitHub' };
-    return JSON.parse(Buffer.from(file.content, 'base64').toString('utf8'));
+    const { latestBrief, sharedBrainPath, easternDate } = await import(pathToFileURL(ASSISTANT_MODULE).href);
+    const brain = sharedBrainPath();
+    if (!brain || !fs.existsSync(brain)) return { error: 'the shared brain is not reachable from this PC' };
+    return latestBrief(brain, easternDate(), { withMarkdown: true });
   } catch (err) {
-    return { error: err.message };
+    return { error: String(err.message || err).slice(0, 200) };
   }
-}
-
-// Grok has standing operator approval for exactly this one feature (approved
-// 2026-09-14 — see world-pulse.mjs's header), so this calls it without asking
-// per run. Cached for WORLD_PULSE_TTL_MS so clicking the brief button twice in
-// a row doesn't spend a second live X/web search for substantially the same
-// "what's trending right now" answer.
-const WORLD_PULSE_TTL_MS = 30 * 60 * 1000;
-let worldPulseCache = { at: 0, result: null };
-
-async function cachedWorldPulse() {
-  if (worldPulseCache.result && Date.now() - worldPulseCache.at < WORLD_PULSE_TTL_MS) {
-    return worldPulseCache.result;
-  }
-  const result = await fetchWorldPulse();
-  worldPulseCache = { at: Date.now(), result };
-  return result;
 }
 
 async function buildMorningBrief() {
   // false: this is a status readout, not a first-contact greeting — it must
   // not consume the "have we met" flag the real greeting relies on.
-  const { text: statusText } = await buildGreeting(false);
-  const [dpBrief, worldPulse] = await Promise.all([fetchDpBrief(), cachedWorldPulse()]);
-  const paragraphs = composeMorningBriefParagraphs({ statusText, dpBrief, worldPulse, now: new Date() });
-  return { text: paragraphs.join(' '), paragraphs, dpBrief, worldPulse };
+  const { text: statusText } = await buildGreeting(false, { withBrief: false });
+  const brief = await readGrokBrief();
+  const paragraphs = composeMorningBriefParagraphs({ statusText, brief });
+  return {
+    text: paragraphs.join(' '),
+    paragraphs,
+    statusText,
+    brief: brief && !brief.error ? { file: brief.file, date: brief.date, isToday: brief.isToday, markdown: brief.markdown } : null,
+    briefError: brief?.error || null,
+  };
 }
 
 // --- Browser-playable brief audio --------------------------------------------

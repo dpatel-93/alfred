@@ -14,7 +14,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { composeGreeting, parseMcpList, recentNoteTitles, spokenList, spokenServerName, spokenTitle } from '../greeting.mjs';
+import { composeGreeting, composeGreetingLines, isOptionalServer, parseMcpList, recentNoteTitles, spokenList,
+  spokenServerName, spokenTitle, summarizeTools } from '../greeting.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SERVER = path.join(HERE, '..', 'server.mjs');
@@ -128,17 +129,16 @@ const BASE_ARGS = {
   notes: 154,
   indexStale: false,
   mcpServers: [{ name: 'a', state: 'connected' }, { name: 'b', state: 'connected' }],
-  recent: ['Alfred', 'Tickr'],
   returning: true,
 };
 
 const healthy = composeGreeting(BASE_ARGS);
 chk('greets by name at the right time of day', healthy.startsWith('Good morning, Batman.'), healthy.slice(0, 40));
 chk('says welcome back to a returning operator', healthy.includes('Welcome back.'));
-chk('counts what is ready', healthy.includes('91 skills, 36 commands and 89 agents ready.'), healthy);
-chk('reports a clean bill of health', healthy.includes('All 2 tool servers connected.'), healthy);
-chk('reports the brain', healthy.includes('The brain holds 154 notes, index fresh.'), healthy);
-chk('names what is new', healthy.includes('Newest in the brain: Alfred and Tickr.'), healthy);
+chk('counts what is ready', healthy.includes('91 skills, 36 commands and 89 agents ready'), healthy);
+chk('reports a clean bill of health', healthy.includes('all 2 tools connected'), healthy);
+chk('reports the brain', healthy.includes('brain 154 notes.'), healthy);
+chk('machinery is one Systems line, last', /Systems: [^:]+$/.test(healthy), healthy);
 
 chk('first ever greeting says Welcome, not Welcome back',
   composeGreeting({ ...BASE_ARGS, returning: false }).includes('Welcome.'));
@@ -149,30 +149,77 @@ chk('afternoon and evening are distinguished',
 const broken = composeGreeting({
   ...BASE_ARGS,
   mcpServers: [
-    { name: 'claude.ai Gmail', state: 'connected' },
-    { name: 'plugin:github:github', state: 'failed' },
-    { name: 'claude.ai Aha!', state: 'auth' },
+    { name: 'github', state: 'connected' },
+    { name: 'terraform', state: 'failed' },
+    { name: 'stripe', state: 'auth' },
   ],
 });
-chk('a broken server is counted out of the total', broken.includes('1 of 3 tool servers connected.'), broken);
-chk('a failure is named and described', broken.includes('github is down'), broken);
-chk('an auth prompt is described differently from a failure',
-  broken.includes('Aha! needs signing in'), broken);
+chk('a broken server is counted out of the total', broken.includes('1 of 3 tools connected'), broken);
+chk('a failure is named and described', broken.includes('terraform is down'), broken);
+chk('an auth prompt is described differently from a failure', broken.includes('stripe needs signing in'), broken);
+
+// The real startup message listed ~90 plugin/claude.ai connectors, Gmail once
+// per plugin that ships it. Only directly configured servers are named.
+const noisy = [{ name: 'github', state: 'connected' }, { name: 'terraform', state: 'failed' }];
+for (const p of ['small-business', 'sales', 'marketing', 'data']) noisy.push({ name: `plugin:${p}:gmail`, state: 'failed' });
+noisy.push({ name: 'claude.ai Stripe', state: 'auth' }, { name: 'plugin:context-mode:context-mode', state: 'connected' });
+const quiet = composeGreeting({ ...BASE_ARGS, mcpServers: noisy });
+chk('plugin and claude.ai connectors are never named', !/gmail|stripe/i.test(quiet), quiet);
+chk('connected add-ons are only counted', quiet.includes('plus 1 add-on connector'), quiet);
+chk('own servers are still named when down', quiet.includes('1 of 2 tools connected') && quiet.includes('terraform is down'), quiet);
+const tools = summarizeTools([...noisy, { name: 'plugin:x:terraform', state: 'connected' }]);
+chk('isOptionalServer tells plugin/claude.ai apart from own',
+  isOptionalServer('plugin:a:b') && isOptionalServer('claude.ai Gmail') && !isOptionalServer('terraform'));
+chk('summarizeTools dedupes by spoken name', tools.own === 2 && tools.optionalConnected === 2, JSON.stringify(tools));
 
 chk('a stale index is flagged, not glossed over',
-  composeGreeting({ ...BASE_ARGS, indexStale: true }).includes('the index is stale'));
+  composeGreeting({ ...BASE_ARGS, indexStale: true }).includes('index stale'));
 
 // null means "not probed yet" and [] means "none configured" — a real finding.
 chk('an unprobed MCP state says so rather than claiming health',
-  composeGreeting({ ...BASE_ARGS, mcpServers: null }).includes('Still checking the tool connections.'));
+  composeGreeting({ ...BASE_ARGS, mcpServers: null }).includes('still checking the tool connections'));
 chk('zero configured servers is reported as a finding',
-  composeGreeting({ ...BASE_ARGS, mcpServers: [] }).includes('No tool servers are configured.'));
+  composeGreeting({ ...BASE_ARGS, mcpServers: [] }).includes('no tool servers are configured'));
 
 chk('a singular count is not pluralised',
   composeGreeting({ ...BASE_ARGS, notes: 1, counts: { skill: 1, command: 0, agents: 0 } })
-    .includes('1 skill ready.'));
+    .includes('1 skill ready'));
 chk('an empty vault still produces a greeting',
-  composeGreeting({ ...BASE_ARGS, notes: 0, counts: {}, recent: [] }).includes('The brain holds 0 notes'));
+  composeGreeting({ ...BASE_ARGS, notes: 0, counts: {} }).includes('brain 0 notes'));
+
+// --- The day, from the shared brain -------------------------------------------
+const item = (title, extra = {}) => ({ title, kind: 'errand', scope: 'personal', ...extra });
+const TODAY = {
+  brain: true,
+  overdue: [item('Old thing', { due: '2025-12-30' })], carryOver: [],
+  today: [item('ATM cash'), item('Target run'), item('Liquor store'), item('Post office')],
+  upcoming: [item('CO detectors', { due: '2026-01-04' })],
+  todos: [item('Dentist'), item('Grout')],
+  routines: { today: [{ title: 'Time tracking' }], other: [] },
+  brief: { date: '2026-01-01', isToday: true, top: [{ title: 'Firewalls need patching.' }] },
+};
+const day = composeGreetingLines({ ...BASE_ARGS, today: TODAY });
+const lab = (l) => day.find((x) => x.label === l)?.text || '';
+chk('lines come back labelled, greeting first and Systems last',
+  day[0].label === null && day[day.length - 1].label === 'Systems', JSON.stringify(day.map((l) => l.label)));
+chk('overdue comes before due today',
+  day.findIndex((l) => l.label === 'Overdue') < day.findIndex((l) => l.label === 'Due today'));
+chk('due today names three and counts the rest', lab('Due today') === 'ATM cash, Target run, Liquor store and 1 more.', lab('Due today'));
+chk('coming up says the weekday', lab('Coming up') === 'CO detectors on Sunday.', lab('Coming up'));
+chk('routines and to-dos are reported', lab('Routines') === 'Time tracking.' && lab('To-dos') === '2 open.');
+chk('the brief headline is mentioned', lab("Grok's brief").startsWith('Firewalls need patching'), lab("Grok's brief"));
+chk('nothing due says so plainly', composeGreetingLines({ ...BASE_ARGS, today: { ...TODAY, today: [] } })
+  .some((l) => l.label === 'Due today' && l.text === 'nothing.'));
+const { brief: _brief, ...noBrief } = TODAY;
+chk('a feed without a brief field leaves the brief line out (Morning Brief status)',
+  !composeGreetingLines({ ...BASE_ARGS, today: noBrief }).some((l) => l.label === "Grok's brief"));
+chk('a stale brief says whose day it is',
+  composeGreeting({ ...BASE_ARGS, today: { ...TODAY, brief: { ...TODAY.brief, isToday: false, date: '2025-12-26' } } })
+    .includes("the latest is Friday's"));
+chk('an unreachable brain is said, not hidden',
+  composeGreeting({ ...BASE_ARGS, today: { brain: false } }).includes('shared brain is not reachable'));
+chk('the spoken text is the lines joined', composeGreeting({ ...BASE_ARGS, today: TODAY })
+  === day.map((l) => (l.label ? `${l.label}: ${l.text}` : l.text)).join(' '));
 
 // --- The live endpoint ------------------------------------------------------
 
@@ -230,7 +277,8 @@ try {
     chk('greeting endpoint answers', r.status === 200, `got ${r.status}`);
     chk('greeting carries text', typeof body.text === 'string' && body.text.length > 20, JSON.stringify(body).slice(0, 200));
     chk('speak:false does not speak', body.spoke === false, JSON.stringify(body).slice(0, 200));
-    chk('the live greeting counts the real vault', /The brain holds \d+ notes?/.test(body.text || ''), body.text);
+    chk('the live greeting counts the real vault', /brain \d+ notes?/.test(body.text || ''), body.text);
+    chk('the live greeting carries labelled lines', Array.isArray(body.lines) && body.lines.some((l) => l.label === 'Systems'), JSON.stringify(body.lines));
 
     // First call records the visit; the second must notice.
     chk('first greeting of a fresh machine is a Welcome', /Welcome\./.test(body.text || ''), body.text);
