@@ -201,6 +201,38 @@ function doneToday(brain, date) {
   }).filter((i) => i.status === 'done' && i.closedOn === date);
 }
 
+// --- What changed lately: the hand-off strip ("since you last looked") ---
+// The brain is edited from the car (Grok) and the desk (Claude); the dashboard shows the
+// last day's edits so the user never has to wonder whether a car-side change landed.
+const RECENT_DIRS = ['Reminders', 'Reminders/Done', 'Inbox', 'Inbox/Done', 'Routines', 'Outputs/briefs', 'Memory/topics', 'Memory/timeline'];
+const RECENT_HOURS = 24;
+const RECENT_MAX = 20;
+export function recentChanges(brain, now = easternNow(), { hours = RECENT_HOURS, max = RECENT_MAX } = {}) {
+  const since = now.ms - hours * 60 * 60 * 1000;
+  const out = [];
+  const consider = (rel, full) => {
+    let st; try { st = fs.statSync(full); } catch { return; }
+    if (!st.isFile() || st.mtimeMs < since || /readme\.md$/i.test(rel)) return;
+    const text = fs.readFileSync(full, 'utf8');
+    const h = readFields(text);
+    const author = String(h.author || h['updated by'] || h.owner || '').split('(')[0].trim();
+    out.push({ file: rel, title: titleOf(text, path.basename(rel)), folder: rel.split('/')[0], kind: firstWord(h.kind) || '',
+      author, ours: authorIsOurs(author), modified: new Date(st.mtimeMs).toISOString(), ageMinutes: Math.round((now.ms - st.mtimeMs) / 60000) });
+  };
+  for (const rel of RECENT_DIRS) {
+    const dir = path.join(brain, rel);
+    let names = []; try { names = fs.readdirSync(dir); } catch { continue; }
+    for (const f of names) if (f.endsWith('.md')) consider(`${rel}/${f}`, path.join(dir, f));
+  }
+  const projects = path.join(brain, 'Projects');
+  try {
+    for (const e of fs.readdirSync(projects, { withFileTypes: true })) {
+      if (e.isDirectory() && !e.name.startsWith('_')) consider(`Projects/${e.name}/status.md`, path.join(projects, e.name, 'status.md'));
+    }
+  } catch { /* no projects */ }
+  return out.sort((a, b) => a.ageMinutes - b.ageMinutes).slice(0, max);
+}
+
 // --- The whole panel ---
 export function assistantFeed(brain = sharedBrainPath(), now = easternNow()) {
   const base = { generatedAt: now.stamp, date: now.date, weekday: DAYS[weekdayOf(now.date)], calendar: { connected: false } };
@@ -231,6 +263,7 @@ export function assistantFeed(brain = sharedBrainPath(), now = easternNow()) {
     routines: userRoutines(brain, now.date),
     projects: projectLines(brain),
     signals: open.signals.map(({ file, title, from, to, type, ageDays }) => ({ file, title, from, to, type, ageDays })),
+    recent: recentChanges(brain, now),
   };
 }
 
