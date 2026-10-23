@@ -80,7 +80,7 @@ function getVaultRoot() {
 }
 
 // Daily session notes live outside the vault when the brain keeps them in
-// their own folder (Second Brain: Memory/Alfred/sessions/). ALFRED_SESSIONS
+// their own folder (Second Brain: System/logs/claude-code/). ALFRED_SESSIONS
 // overrides for tests; ALFRED_VAULT alone means a test vault, so the profile's
 // real sessions folder is not used alongside it.
 function getSessionsDir() {
@@ -89,8 +89,18 @@ function getSessionsDir() {
   return dir && !isFixturePath(dir) ? dir : null;
 }
 
+// Where the memory mirror lives. A brain organised by function keeps it apart
+// from the knowledge vault (Second Brain: Memory/agents/claude-code/); default
+// is the vault's own Claude-Code/Memory folder. Same test rule as above.
+function getMemoryMirrorDir(vaultRoot) {
+  const dir = process.env.ALFRED_MEMORY_MIRROR ||
+    (process.env.ALFRED_VAULT ? null : readProfileValue('Memory mirror path'));
+  if (dir && !isFixturePath(dir)) return dir;
+  return vaultRoot && path.join(vaultRoot, 'Claude-Code', 'Memory');
+}
+
 const VAULT_ROOT = getVaultRoot();
-const VAULT_MEMORY_DIR = VAULT_ROOT && path.join(VAULT_ROOT, 'Claude-Code', 'Memory');
+const VAULT_MEMORY_DIR = getMemoryMirrorDir(VAULT_ROOT);
 const VAULT_SESSION_LOG = VAULT_ROOT && path.join(VAULT_ROOT, 'Claude-Code', 'SessionLog.md');
 const SESSIONS_DIR = getSessionsDir();
 

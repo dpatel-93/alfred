@@ -46,6 +46,18 @@ export function getVaultRoot(profilePath = PROFILE_PATH) {
   }
 }
 
+/** The shared multi-AI brain ("Shared brain path" in the profile), or null. */
+export function getSharedBrain(profilePath = PROFILE_PATH) {
+  if (process.env.ALFRED_SHARED_BRAIN) return process.env.ALFRED_SHARED_BRAIN;
+  try {
+    const m = fs.readFileSync(profilePath, 'utf8').match(/^\s*-\s*\*\*Shared brain path[^*]*\*\*:\s*(.+)$/m);
+    const value = m && m[1].replace(/\s*\(.*?\)\s*$/, '').trim();
+    return value && !/^\(?not specified\)?$/i.test(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 function git(repo, args) {
   const r = spawnSync('git', ['-C', repo, ...args],
     { encoding: 'utf8', timeout: GIT_TIMEOUT_MS, windowsHide: true });
@@ -86,11 +98,21 @@ export function decide({ project, noteMtimeMs, commitsSince }) {
 export function render(verdict) {
   if (verdict.action === 'none') return '';
   if (verdict.action === 'create') {
+    if (verdict.brainNote) {
+      return `[ProjectNote] No status file for "${verdict.project}" in the shared brain. If this is an `
+        + `ongoing project, create ${verdict.brainNote} from System/templates/project-status.md `
+        + `(including the Read-aloud summary) before this session ends.`;
+    }
     return `[ProjectNote] No vault note for "${verdict.project}". Create `
       + `Projects/${verdict.project}.md from Templates/New-Project.md, and fill in Current State `
       + `before this session ends.`;
   }
   const s = verdict.commits === 1 ? '' : 's';
+  if (verdict.brainNote) {
+    return `[ProjectNote] "${verdict.project}" has ${verdict.commits} commit${s} newer than `
+      + `${verdict.brainNote} (latest: ${verdict.newest.subject}). Update "Where it stands", "Next" and `
+      + `the Read-aloud summary before this session ends. Do it without being asked.`;
+  }
   return `[ProjectNote] "${verdict.project}" has ${verdict.commits} commit${s} newer than its vault `
     + `note (latest: ${verdict.newest.subject}). Update the note's Current State before this session `
     + `ends — demote the old one to Previous State. Do it without being asked.`;
@@ -102,10 +124,15 @@ function check(cwd) {
   const repo = findRepoRoot(cwd);
   if (!repo) return '';
   const vault = getVaultRoot();
-  if (!vault) return '';                       // no vault configured: supported, silent
+  const brain = getSharedBrain();
+  if (!vault && !brain) return '';             // nothing configured: supported, silent
 
   const project = path.basename(repo);
-  const notePath = path.join(vault, 'Projects', `${project}.md`);
+  // A shared brain keeps one folder per project with a status.md; the vault
+  // layout keeps Projects/<name>.md. The brain wins when both are configured.
+  const slug = project.replace(/([a-z0-9])([A-Z])/g, '$1-$2').replace(/[\s_]+/g, '-').toLowerCase();
+  const brainNote = brain ? `Projects/${slug}/status.md` : null;
+  const notePath = brain ? path.join(brain, brainNote) : path.join(vault, 'Projects', `${project}.md`);
 
   let noteMtimeMs = null;
   try { noteMtimeMs = fs.statSync(notePath).mtimeMs; } catch { /* stays null */ }
@@ -120,7 +147,7 @@ function check(cwd) {
     return { sha, atMs: Number(ct) * 1000, subject: subject || '' };
   });
 
-  return render(decide({ project, noteMtimeMs, commitsSince }));
+  return render({ ...decide({ project, noteMtimeMs, commitsSince }), brainNote });
 }
 
 const isMain = process.argv[1]

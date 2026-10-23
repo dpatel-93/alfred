@@ -61,6 +61,11 @@
           },
           {
             "type": "command",
+            "command": "cmd /c node C:/Users/dishi/.claude/helpers/brain-librarian.mjs --quiet",
+            "timeout": 20000
+          },
+          {
+            "type": "command",
             "command": "cmd /c node C:/Users/dishi/.claude/helpers/brain-open-items.mjs",
             "timeout": 10000
           }
