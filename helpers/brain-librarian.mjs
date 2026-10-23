@@ -46,7 +46,7 @@ export function easternNow(now = new Date(process.env.ALFRED_NOW || Date.now()))
   const date = `${p.year}-${p.month}-${p.day}`;
   return { date, stamp: `${date} ${p.hour}:${p.minute} ET`, month: `${p.year}-${p.month}`, ms: now.getTime() };
 }
-const addDays = (date, n) => new Date(Date.parse(`${date}T12:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
+export const addDays = (date, n) => new Date(Date.parse(`${date}T12:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
 
 // --- Header fields: "- **Field:** value" lines near the top ---
 export function readFields(text) {
@@ -228,10 +228,13 @@ export function collectOpenItems(brain, now = easternNow()) {
   }).filter((i) => i.kind === 'errand' && i.status === 'expired' && i.due === yesterday);
   const signals = mdFiles(path.join(brain, 'Inbox')).map((f) => {
     const p = path.join(brain, 'Inbox', f);
-    const h = readFields(fs.readFileSync(p, 'utf8'));
+    const text = fs.readFileSync(p, 'utf8');
+    const h = readFields(text);
     const m = f.match(/^\d{4}-\d{2}-\d{2}-\d{4}--([a-z0-9-]+)--([a-z0-9-]+)--([a-z]+)--/i);
-    return { file: `Inbox/${f}`, from: (h.from || m?.[1] || '').toLowerCase(), to: (h.to || m?.[2] || '').toLowerCase(),
-      type: firstWord(h.type) || m?.[3] || '', status: firstWord(h.status) || 'open',
+    // `re` and `title` let the dashboard mark an item that already has a signal in flight.
+    return { file: `Inbox/${f}`, title: (text.match(/^#\s+(.+)$/m) || [, f])[1].trim(),
+      from: (h.from || m?.[1] || '').toLowerCase(), to: (h.to || m?.[2] || '').toLowerCase(),
+      type: firstWord(h.type) || m?.[3] || '', status: firstWord(h.status) || 'open', re: cleanRef(h.re),
       ageDays: Math.floor((now.ms - fs.statSync(p).mtimeMs) / DAY_MS) };
   }).filter((s) => s.status !== 'done');
   return {
