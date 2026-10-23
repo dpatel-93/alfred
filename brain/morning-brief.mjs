@@ -1,103 +1,93 @@
 // --- morning-brief.mjs -------------------------------------------------------
-// Composes the "morning brief" a button triggers on demand: Alfred's own status
-// (the same content the startup greeting reports), then the dp brief — the
-// AI-summarized daily digest DP_dailybrief's GitHub Action produces and commits
-// back to its repo as output/latest-brief.json — then a world-pulse section
-// sourced live from Grok (see world-pulse.mjs) for broad, non-personalized
-// "what is the world talking about" trending news the dp digest doesn't cover.
+// Composes the "morning brief" a button triggers on demand: Alfred's status (the
+// greeting's lines), then Grok's morning brief from the shared brain —
+// Outputs/briefs/YYYY-MM-DD.md, which Grok Bot compiles every weekday around
+// 07:00 ET. Grok owns the news now; this only reads what it already wrote, so
+// there is no GitHub fetch and no live search behind the button any more.
 //
-// Pure, like greeting.mjs, and for the same reason: a missing GitHub
-// connection, a stale brief (today's Action run hasn't landed yet, or failed),
-// an empty brief, and an unreachable/misbehaving Grok all matter and none of
-// them are reachable from a live server on a morning when everything actually
-// worked.
+// Pure, like greeting.mjs: a missing brief, an unreadable one, and a stale one
+// (weekends, or Grok has not run yet) all matter, and none are reachable on
+// demand from a live machine on a morning when everything worked.
 // -------------------------------------------------------------------------
 
-import { worldPulseParagraphs } from './world-pulse.mjs';
+const plain = (s) => String(s)
+  .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')        // [text](url) -> text
+  .replace(/https?:\/\/\S+/g, '')                 // bare urls are not read aloud
+  .replace(/\*\*(.+?)\*\*/g, '$1').replace(/`([^`]+)`/g, '$1')
+  .replace(/\s+\|\s*$/, '').replace(/\s+/g, ' ').trim();
 
-// The Action runs on an 8am EST cron. Age rather than calendar-date equality,
-// so a check a few hours either side of midnight in either timezone (the
-// runner's UTC vs. the operator's local clock) never misreads a brief that
-// actually ran this morning as stale, or a genuinely stale one as fresh.
-export const STALE_BRIEF_HOURS = 20;
-
-export function briefAgeHours(dpBriefDateIso, now) {
-  const then = new Date(dpBriefDateIso).getTime();
-  if (!Number.isFinite(then)) return Infinity;
-  return (now.getTime() - then) / 3600000;
-}
-
-// The dp digest/spokenText arrives as one AI-written block of prose. Shown
-// as a single joined string it reads as a wall of text, so the modal wants
-// it broken into paragraphs: honor blank-line breaks already in the source,
-// and if there are none, group sentences into ~280-char chunks rather than
-// handing back one unbroken block.
-export function splitIntoParagraphs(text) {
-  const byBlankLine = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
-  if (byBlankLine.length > 1) return byBlankLine;
-
-  const sentences = text.replace(/\n+/g, ' ').match(/[^.!?]+[.!?]+(?:\s+|$)/g) || [text];
-  const groups = [];
-  let current = '';
-  for (const s of sentences) {
-    if (current && (current + s).length > 280) { groups.push(current.trim()); current = ''; }
-    current += s;
-  }
-  if (current.trim()) groups.push(current.trim());
-  return groups.length ? groups : [text];
-}
+const firstSentence = (s) => (plain(s).match(/^.+?[.!?](?=\s|$)/) || [plain(s)])[0];
+const endStop = (s) => {
+  const t = s.replace(/[\s,:;–-]+$/, '');
+  return /[.!?]$/.test(t) ? t : `${t}.`;
+};
 
 /**
- * Same content as composeMorningBrief, kept as an array so a caller that
- * renders to HTML (the modal) can show real paragraphs instead of one
- * joined string. composeMorningBrief below is this, joined — every existing
- * caller that wants a flat string for speech keeps working unchanged.
- *
- * @param {object} o
- * @param {string} o.statusText  Alfred's own status line(s) — reuse buildGreeting's text.
- * @param {?object} o.dpBrief    { date, mode, articleCount, digest, spokenText } from
- *   output/latest-brief.json, `{ error }` if the fetch/parse failed, or null/undefined
- *   if there is no GitHub connection to fetch it with at all.
- * @param {?object} o.worldPulse  A fetchWorldPulse() result — `{ categories }`,
- *   `{ error }`, or omitted/null to skip the section entirely (an older caller,
- *   or one that deliberately doesn't want it).
- * @param {Date} o.now
+ * Grok's markdown brief, turned into something worth listening to: the "Top of
+ * the brief" in full (headline + one sentence), then every other section as
+ * its headlines only. Sources, URLs, sub-bullets and the metadata line are for
+ * reading, not hearing; the modal shows the whole file for that.
  */
-export function composeMorningBriefParagraphs({ statusText, dpBrief, worldPulse, now }) {
+export function spokenBrief(markdown) {
+  const sections = [];
+  let cur = null;
+  for (const line of String(markdown).split(/\r?\n/)) {
+    const h = line.match(/^##\s+(.+)$/);
+    if (h) { cur = { title: plain(h[1]), items: [], bullets: [] }; sections.push(cur); continue; }
+    if (!cur) continue;
+    const n = line.match(/^\d+\.\s+(.*)$/);
+    if (n) {
+      const bold = n[1].match(/^\*\*(.+?)\*\*\s*(.*)$/);
+      cur.items.push(bold ? { head: plain(bold[1]), rest: bold[2] } : { head: firstSentence(n[1]), rest: '' });
+      continue;
+    }
+    const b = line.match(/^-\s+(.*)$/);
+    if (b && !/^sources?:/i.test(b[1].trim())) cur.bullets.push(firstSentence(b[1]));
+  }
+
+  const out = [];
+  for (const s of sections) {
+    if (/^top\b/i.test(s.title)) {
+      out.push(...s.items.map((i) => [endStop(i.head), i.rest && firstSentence(i.rest)].filter(Boolean).join(' ')));
+      continue;
+    }
+    const heads = s.items.length ? s.items.map((i) => i.head) : s.bullets;
+    if (heads.length) out.push(`${endStop(s.title)} ${heads.map(endStop).join(' ')}`);
+  }
+  return out.filter(Boolean);
+}
+
+const WEEKDAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/**
+ * @param {object} o
+ * @param {string} o.statusText  Alfred's status — the greeting, minus its brief line.
+ * @param {?object} o.brief      brain-assistant.mjs latestBrief(..., { withMarkdown: true }),
+ *   `{ error }` if the brain could not be read, or null when there is no brief at all.
+ */
+export function composeMorningBriefParagraphs({ statusText, brief }) {
   const paragraphs = [];
   const status = String(statusText || '').trim();
   if (status) paragraphs.push(status);
 
-  paragraphs.push('Now, your daily brief.');
-
-  if (!dpBrief) {
-    paragraphs.push('I could not reach GitHub for the daily brief — connect a GitHub account from the Workshop and try again.');
-  } else if (dpBrief.error) {
-    paragraphs.push(`The daily brief could not be read: ${dpBrief.error}`);
-  } else {
-    const text = String(dpBrief.spokenText || dpBrief.digest || '').trim();
-    if (!text) {
-      paragraphs.push('The daily brief file was empty.');
-    } else {
-      const ageHours = briefAgeHours(dpBrief.date, now);
-      if (ageHours > STALE_BRIEF_HOURS) {
-        const rounded = Math.max(1, Math.round(ageHours));
-        paragraphs.push(`Heads up — the newest brief I have is from about ${rounded} hours ago, not this morning's run.`);
-      }
-      paragraphs.push(...splitIntoParagraphs(text));
-    }
+  if (!brief) {
+    paragraphs.push('There is no morning brief from Grok in the shared brain yet.');
+    return paragraphs;
   }
-
-  // Independent of whether the dp brief above succeeded — a Grok outage and a
-  // GitHub outage are unrelated failures and neither should hide the other.
-  if (worldPulse) {
-    if (worldPulse.error) {
-      paragraphs.push(`The world-pulse update wasn't available just now: ${worldPulse.error}`);
-    } else {
-      paragraphs.push(...worldPulseParagraphs(worldPulse));
-    }
+  if (brief.error) {
+    paragraphs.push(`Grok's morning brief could not be read: ${brief.error}`);
+    return paragraphs;
   }
-
+  if (!brief.isToday) {
+    const day = WEEKDAY[new Date(`${brief.date}T12:00:00Z`).getUTCDay()];
+    paragraphs.push(`Heads up: there is no brief from Grok yet today, so this is ${day}'s.`);
+  }
+  const spoken = spokenBrief(brief.markdown || '');
+  if (!spoken.length) {
+    paragraphs.push("Grok's morning brief is there, but it has nothing to read out.");
+    return paragraphs;
+  }
+  paragraphs.push("Now, Grok's morning brief.", ...spoken);
   return paragraphs;
 }
 

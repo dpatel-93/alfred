@@ -104,7 +104,85 @@ export function recentNoteTitles(notes, limit = 3) {
     .filter(Boolean);
 }
 
+// --- Tools: report the ones the operator set up, count the rest -------------
+// `claude mcp list` also lists every connector that plugins and claude.ai
+// bundle: a hundred-odd entries, the same Gmail once per plugin that ships it,
+// almost none ever signed into. Reading those out buried the one or two that
+// mattered. So the greeting names only servers configured directly, once each,
+// and merely counts the optional connectors that are switched on.
+export function isOptionalServer(name) {
+  return /^plugin:/i.test(String(name)) || /^claude\.ai\s/i.test(String(name));
+}
+
+/** One entry per spoken name; connected anywhere beats down anywhere. */
+function dedupe(servers) {
+  const rank = { connected: 2, auth: 1, failed: 0 };
+  const byName = new Map();
+  for (const s of servers) {
+    const key = spokenServerName(s.name).toLowerCase();
+    const prev = byName.get(key);
+    if (!prev || (rank[s.state] ?? 0) > (rank[prev.state] ?? 0)) byName.set(key, { ...s, spoken: spokenServerName(s.name) });
+  }
+  return [...byName.values()];
+}
+
+export function summarizeTools(mcpServers) {
+  const own = dedupe(mcpServers.filter((s) => !isOptionalServer(s.name)));
+  const optional = dedupe(mcpServers.filter((s) => isOptionalServer(s.name)));
+  return {
+    own: own.length,
+    ownConnected: own.filter((s) => s.state === 'connected').length,
+    ownBroken: own.filter((s) => s.state !== 'connected'),
+    optionalConnected: optional.filter((s) => s.state === 'connected').length,
+  };
+}
+
+function toolsLine(mcpServers) {
+  if (!mcpServers) return 'still checking the tool connections.';
+  if (!mcpServers.length) return 'no tool servers are configured.';
+  const t = summarizeTools(mcpServers);
+  const extra = t.optionalConnected ? `, plus ${countNoun(t.optionalConnected, 'add-on connector')}` : '';
+  if (!t.own) return `${countNoun(t.optionalConnected, 'add-on connector')} connected.`;
+  if (!t.ownBroken.length) return `all ${countNoun(t.own, 'tool')} connected${extra}.`;
+  const named = t.ownBroken.map((s) => `${s.spoken} ${s.state === 'auth' ? 'needs signing in' : 'is down'}`);
+  return `${t.ownConnected} of ${countNoun(t.own, 'tool')} connected${extra}; ${spokenList(named)}.`;
+}
+
+// --- The day, from the shared brain (brain-assistant.mjs's feed) --------------
+const WEEKDAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const dayName = (iso) => WEEKDAY[new Date(`${iso}T12:00:00Z`).getUTCDay()];
+const MAX_NAMED = 3;
+
+function namedItems(items, describe = (i) => spokenTitle(i.title, 60)) {
+  const shown = items.slice(0, MAX_NAMED).map(describe);
+  if (items.length > MAX_NAMED) shown.push(`${items.length - MAX_NAMED} more`);
+  return `${spokenList(shown)}.`;
+}
+
+function dayLines(today) {
+  if (!today) return [];
+  if (!today.brain) return [{ label: 'Today', text: 'the shared brain is not reachable, so no reminders.' }];
+  const lines = [];
+  const late = [...today.overdue, ...today.carryOver];
+  if (late.length) lines.push({ label: 'Overdue', text: namedItems(late) });
+  lines.push({ label: 'Due today', text: today.today.length ? namedItems(today.today) : 'nothing.' });
+  if (today.upcoming.length) {
+    lines.push({ label: 'Coming up', text: namedItems(today.upcoming, (i) => `${spokenTitle(i.title, 60)} on ${dayName(i.due)}`) });
+  }
+  if (today.routines.today.length) lines.push({ label: 'Routines', text: namedItems(today.routines.today) });
+  if (today.todos.length) lines.push({ label: 'To-dos', text: `${today.todos.length} open.` });
+  if (!('brief' in today)) return lines; // the Morning Brief reads the brief itself
+  const b = today.brief;
+  if (!b) lines.push({ label: "Grok's brief", text: 'none yet.' });
+  else if (!b.isToday) lines.push({ label: "Grok's brief", text: `none yet today; the latest is ${dayName(b.date)}'s.` });
+  else lines.push({ label: "Grok's brief", text: b.top.length ? `${b.top[0].title.replace(/\.$/, '')}, and more in the Morning Brief.` : 'in, with no headlines.' });
+  return lines;
+}
+
 /**
+ * The greeting as labelled lines, so the HUD can show it as a short list.
+ * Personal-assistant content first, machinery last and in one line.
+ *
  * @param {object} o
  * @param {string}  o.name       what to call the operator
  * @param {Date}    o.now        used only for time of day
@@ -112,37 +190,23 @@ export function recentNoteTitles(notes, limit = 3) {
  * @param {number}  o.notes      vault note count
  * @param {boolean} o.indexStale
  * @param {?Array}  o.mcpServers null means "not probed yet" — distinct from []
- * @param {string[]} o.recent    recently touched note titles
  * @param {boolean} o.returning  false on the very first greeting ever
+ * @param {?object} o.today      brain-assistant.mjs feed, or null to leave the day out
  */
-export function composeGreeting({ name, now, counts, notes, indexStale, mcpServers, recent, returning }) {
-  const lines = [];
-  lines.push(`${timeOfDayGreeting(now)}, ${name}. ${returning ? 'Welcome back.' : 'Welcome.'}`);
+export function composeGreetingLines({ name, now, counts, notes, indexStale, mcpServers, returning, today = null }) {
+  const lines = [{ label: null, text: `${timeOfDayGreeting(now)}, ${name}. ${returning ? 'Welcome back.' : 'Welcome.'}` }];
+  lines.push(...dayLines(today));
 
   const ready = [];
   if (counts.skill) ready.push(countNoun(counts.skill, 'skill'));
   if (counts.command) ready.push(countNoun(counts.command, 'command'));
   if (counts.agents) ready.push(countNoun(counts.agents, 'agent'));
-  if (ready.length) lines.push(`${spokenList(ready)} ready.`);
+  const brain = `brain ${countNoun(notes, 'note')}${indexStale ? ', index stale (worth a refresh)' : ''}`;
+  lines.push({ label: 'Systems', text: `${ready.length ? `${spokenList(ready)} ready; ` : ''}${toolsLine(mcpServers).replace(/\.$/, '')}; ${brain}.` });
+  return lines;
+}
 
-  // null and [] mean different things and must not collapse: "still checking"
-  // is honest, "no tool servers are configured" is a finding.
-  if (!mcpServers) {
-    lines.push('Still checking the tool connections.');
-  } else if (!mcpServers.length) {
-    lines.push('No tool servers are configured.');
-  } else {
-    const broken = mcpServers.filter((s) => s.state !== 'connected');
-    if (!broken.length) {
-      lines.push(`All ${countNoun(mcpServers.length, 'tool server')} connected.`);
-    } else {
-      const named = broken.map((s) => `${spokenServerName(s.name)} ${s.state === 'auth' ? 'needs signing in' : 'is down'}`);
-      lines.push(`${mcpServers.length - broken.length} of ${countNoun(mcpServers.length, 'tool server')} connected. ${spokenList(named)}.`);
-    }
-  }
-
-  lines.push(`The brain holds ${countNoun(notes, 'note')}${indexStale ? ', and the index is stale — worth a refresh' : ', index fresh'}.`);
-  if (recent.length) lines.push(`Newest in the brain: ${spokenList(recent)}.`);
-
-  return lines.join(' ');
+/** The same greeting as one string, for speech. */
+export function composeGreeting(args) {
+  return composeGreetingLines(args).map((l) => (l.label ? `${l.label}: ${l.text}` : l.text)).join(' ');
 }

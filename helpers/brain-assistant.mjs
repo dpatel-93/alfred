@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import { collectOpenItems, easternNow, readFields, sharedBrainPath } from './brain-librarian.mjs';
 
 export { sharedBrainPath };
+export const easternDate = () => easternNow().date;
 
 const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const TOP_ITEMS = 5;
@@ -43,7 +44,7 @@ function userRoutines(brain, date) {
 }
 
 // --- Grok's morning brief: newest one on or before today, top items only ---
-export function latestBrief(brain, date) {
+export function latestBrief(brain, date, { withMarkdown = false } = {}) {
   const dir = path.join(brain, 'Outputs', 'briefs');
   if (!fs.existsSync(dir)) return null;
   const f = fs.readdirSync(dir).filter((n) => /^\d{4}-\d{2}-\d{2}\.md$/.test(n) && n.slice(0, 10) <= date).sort().pop();
@@ -60,7 +61,8 @@ export function latestBrief(brain, date) {
     if (top.length === TOP_ITEMS) break;
   }
   return { file: `Outputs/briefs/${f}`, date: f.slice(0, 10), isToday: f.slice(0, 10) === date,
-    title: titleOf(text, f), updated: (text.match(/Last updated:\s*([^|\n]+)/i) || [])[1]?.trim() || null, top };
+    title: titleOf(text, f), updated: (text.match(/Last updated:\s*([^|\n]+)/i) || [])[1]?.trim() || null, top,
+    ...(withMarkdown ? { markdown: text } : {}) };
 }
 
 // --- One brain file for the panel's reader; never anything outside the brain ---

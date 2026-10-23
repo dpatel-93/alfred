@@ -1583,6 +1583,10 @@
   #brief-audio { width: 100%; margin-bottom: 14px; }
   .brief-paragraphs p { margin: 0 0 10px; line-height: 1.5; }
   .brief-paragraphs p:last-child { margin-bottom: 0; }
+  .brief-paragraphs .brief-status { color: var(--text-dim); padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  /* The startup greeting as a short labelled list rather than one run-on line. */
+  .greet-lines { display: flex; flex-direction: column; gap: 3px; }
+  .greet-label { color: var(--text); font-weight: 600; }
   /* --- Protocols pyramid ------------------------------------------------
      Instruction scope drawn as a funnel: the widest band at the top applies
      everywhere, and each band below it is narrower because it applies to less.
@@ -2381,7 +2385,15 @@
       // Shown as well as spoken, deliberately: with talk-back off, or the
       // volume down, or a voice that never got installed, the briefing still
       // has to arrive. Speech is the nicer channel, not the only one.
-      toast(r.data.text, 'info', { title: 'Alfred', ms: 12000 });
+      // Shown as a short labelled list (Due today / Coming up / Systems ...)
+      // rather than the spoken run-on; the speech still gets the joined text.
+      var message = r.data.text;
+      if (r.data.lines && r.data.lines.length) {
+        message = el('div', 'greet-lines', r.data.lines.map(function (l) {
+          return el('div', 'greet-line', l.label ? [el('span', 'greet-label', [l.label]), ' ' + l.text] : [l.text]);
+        }));
+      }
+      toast(message, 'info', { title: 'Alfred', ms: 20000 });
     }).catch(function () { /* a silent HUD is not a broken HUD */ });
   }
   setTimeout(fireGreeting, 600);
@@ -4364,8 +4376,19 @@
       kbBody.appendChild(el('p', 'panel-help', ['not read aloud — check `/speak status`']));
     }
     var wrap = el('div', 'brief-paragraphs', []);
-    var paragraphs = (data.paragraphs && data.paragraphs.length) ? data.paragraphs : [data.text];
-    paragraphs.forEach(function (p) { wrap.appendChild(el('p', null, [p])); });
+    if (data.brief && data.brief.markdown) {
+      // Grok's brief from the shared brain: today's status first, then the
+      // whole file rendered as a note (sections, sources and all). The audio
+      // above reads the shorter spoken cut of it.
+      if (data.statusText) wrap.appendChild(el('p', 'brief-status', [data.statusText]));
+      if (!data.brief.isToday) wrap.appendChild(el('p', 'panel-help', ['No brief from Grok yet today; showing ' + data.brief.date + '.']));
+      var doc = el('div', 'brief-doc', []);
+      renderMarkdown(data.brief.markdown, doc);
+      wrap.appendChild(doc);
+    } else {
+      var paragraphs = (data.paragraphs && data.paragraphs.length) ? data.paragraphs : [data.text];
+      paragraphs.forEach(function (p) { wrap.appendChild(el('p', null, [p])); });
+    }
     kbBody.appendChild(wrap);
     kbScrim.classList.add('open'); kbModal.classList.add('open');
   }
