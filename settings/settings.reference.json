@@ -58,6 +58,11 @@
             "type": "command",
             "command": "cmd /c node C:/Users/dishi/.claude/helpers/project-note-check.mjs",
             "timeout": 15000
+          },
+          {
+            "type": "command",
+            "command": "cmd /c node C:/Users/dishi/.claude/helpers/brain-open-items.mjs",
+            "timeout": 10000
           }
         ]
       }

@@ -12,7 +12,7 @@ import { execFile, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import pty from 'node-pty';
-import { buildIndex, linkKey, noteKey, resolveVaultDir, SKIP_DIRS } from './index-vault.mjs';
+import { buildIndex, linkKey, noteKey, resolveVaultDir, SKIP_DIRS, vaultExcludes, isExcludedPath } from './index-vault.mjs';
 import { composeGreeting, parseMcpList, recentNoteTitles } from './greeting.mjs';
 import { composeMorningBriefParagraphs } from './morning-brief.mjs';
 import { fetchWorldPulse } from './world-pulse.mjs';
@@ -1100,15 +1100,19 @@ async function scanProjectGit(dir) {
 function matchBrainNote(projectName) {
   let notes;
   try { notes = loadIndex().notes; } catch { return null; }
+  // A Projects folder may sit below the root when the brain is a larger shared
+  // folder (Second Brain: Memory/Alfred/vault/Projects/), so match it at any
+  // depth rather than only at the top.
   const exactPath = 'Projects/' + projectName + '.md';
-  let note = notes.find((n) => n.path === exactPath);
+  const inProjects = (p) => /(^|\/)Projects\/[^/]+\.md$/.test(p);
+  let note = notes.find((n) => n.path === exactPath) || notes.find((n) => n.path.endsWith('/' + exactPath));
   const aliases = projectNoteAliases();
   if (!note && aliases[projectName]) {
     note = notes.find((n) => n.path === aliases[projectName]);
   }
   if (!note) {
     const target = projectName.toLowerCase();
-    note = notes.find((n) => n.folder === 'Projects' && n.title.toLowerCase() === target);
+    note = notes.find((n) => inProjects(n.path) && n.title.toLowerCase() === target);
   }
   return note ? { path: note.path, title: note.title, mtime: note.mtime } : null;
 }
@@ -2010,13 +2014,15 @@ function maskKey(k) {
 function countMarkdown(dir, budget = 20000) {
   let n = 0;
   const stack = [dir];
+  const excludes = vaultExcludes();
   while (stack.length && n < budget) {
     const current = stack.pop();
     let entries;
     try { entries = fs.readdirSync(current, { withFileTypes: true }); } catch { continue; }
     for (const e of entries) {
       if (e.isDirectory()) {
-        if (!e.name.startsWith('.') && !SKIP_DIRS.has(e.name)) stack.push(path.join(current, e.name));
+        const full = path.join(current, e.name);
+        if (!e.name.startsWith('.') && !SKIP_DIRS.has(e.name) && !isExcludedPath(dir, full, excludes)) stack.push(full);
       } else if (e.name.toLowerCase().endsWith('.md')) {
         n++;
       }

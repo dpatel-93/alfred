@@ -37,9 +37,13 @@ function chk(name, ok, detail = '') {
   else { fails.push(name); console.log(`  FAIL  ${name}  ${detail}`); }
 }
 
-function run(base, cmd) {
+// The operator's real redaction rules must never shape these results, so the
+// default run points ALFRED_REDACT_RULES at a file that does not exist.
+const NO_RULES = path.join(ROOT, 'no-redact-rules.json');
+
+function run(base, cmd, extraEnv = {}) {
   const r = spawnSync(process.execPath, [HOOK, cmd], {
-    env: { ...process.env, ALFRED_VAULT: VAULT, ALFRED_MEMORY_BASE: base },
+    env: { ...process.env, ALFRED_VAULT: VAULT, ALFRED_MEMORY_BASE: base, ALFRED_REDACT_RULES: NO_RULES, ...extraEnv },
     encoding: 'utf8',
   });
   return (r.stdout || '') + (r.stderr || '');
@@ -176,6 +180,58 @@ run(MAC, 'sync');
 chk('pushing replaces the legacy vault copy with the verbatim memory',
   read(path.join(legacyDir, 'mac-only-fact.md')) === goodLocal,
   read(path.join(legacyDir, 'mac-only-fact.md')).slice(0, 80));
+
+// --- Redaction (shared brain) ----------------------------------------------
+
+console.log('\nRedaction');
+const RVAULT = path.join(ROOT, 'rvault');
+const RSESS = path.join(ROOT, 'rsessions');
+const RBASE = path.join(ROOT, 'r-projects');
+const rMem = path.join(RBASE, 'C--Users-alice', 'memory');
+const RULES = path.join(ROOT, 'redact.json');
+fs.mkdirSync(rMem, { recursive: true });
+fs.mkdirSync(RVAULT, { recursive: true });
+fs.writeFileSync(RULES, JSON.stringify({
+  replace: [{ find: '\\bBruce Wayne\\b', flags: 'g', with: 'the user' }],
+}), 'utf8');
+const rEnv = { ALFRED_VAULT: RVAULT, ALFRED_REDACT_RULES: RULES, ALFRED_SESSIONS: RSESS };
+
+const secretMem = `---
+name: identity
+description: who the user is
+metadata:
+  type: user
+---
+
+Bruce Wayne works at bruce@wayne-enterprises.com.
+`;
+const rIndex = '# Memory\n\n## User\n- [identity](identity.md) — Bruce Wayne basics\n';
+fs.writeFileSync(path.join(rMem, 'identity.md'), secretMem, 'utf8');
+fs.writeFileSync(path.join(rMem, 'MEMORY.md'), rIndex, 'utf8');
+
+run(RBASE, 'sync', rEnv);
+const rVaultFile = read(path.join(RVAULT, 'Claude-Code', 'Memory', 'Global', 'identity.md'));
+chk('the vault copy is redacted', rVaultFile.includes('the user works at <redacted-email>') &&
+  !rVaultFile.includes('Bruce'), rVaultFile.slice(-60));
+chk('the redacted vault index carries no name',
+  !read(path.join(RVAULT, 'Claude-Code', 'Memory', 'Global', 'MEMORY.md')).includes('Bruce'));
+
+const future2 = new Date(Date.now() + 120_000);
+fs.utimesSync(path.join(RVAULT, 'Claude-Code', 'Memory', 'Global', 'identity.md'), future2, future2);
+run(RBASE, 'pull', rEnv);
+chk('pulling never overwrites the real memory with its own redacted copy',
+  read(path.join(rMem, 'identity.md')) === secretMem);
+chk('the local index gains no duplicate redacted line',
+  read(path.join(rMem, 'MEMORY.md')) === rIndex, read(path.join(rMem, 'MEMORY.md')));
+
+const days = fs.existsSync(RSESS) ? fs.readdirSync(RSESS) : [];
+const dayNote = days.length ? read(path.join(RSESS, days[0])) : '';
+chk('the session note is one dated file in the sessions folder',
+  days.length === 1 && /^\d{4}-\d{2}-\d{2}\.md$/.test(days[0]), days.join(','));
+chk('the session note has the brain header and no name',
+  dayNote.includes('- **Owner:** Alfred') && dayNote.includes('Global/identity') && !dayNote.includes('Bruce'));
+chk('no SessionLog.md inside the vault when a sessions folder is set',
+  !fs.existsSync(path.join(RVAULT, 'Claude-Code', 'SessionLog.md')));
 
 // --- Safety ----------------------------------------------------------------
 

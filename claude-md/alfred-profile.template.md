@@ -40,3 +40,10 @@
 - **Knowledge vault path (optional)**: (not specified — a markdown vault of decisions, patterns,
   and project notes, if you keep one. `vault-recall` uses this for cross-session memory; leave
   unset and that skill degrades to "no vault configured" rather than failing)
+- **Session notes path (optional)**: (not specified — a folder for one `YYYY-MM-DD.md` session note
+  per day. Unset keeps the single `Claude-Code/SessionLog.md` inside the vault)
+- **Shared brain path (optional)**: (not specified — a folder several AIs share, e.g. a Google
+  Drive "Second Brain" with a `Shared/` layer. `brain-open-items.mjs` lists the `## Open items`
+  under `Shared/<track>/` at session start. To redact names and handles out of everything the
+  vault sync writes there, put personal rules in `~/.alfred/redact.json`; see
+  `helpers/brain-redact.cjs`)
