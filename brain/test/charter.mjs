@@ -46,7 +46,7 @@ await page.route('**/api/org*', (r) => {
   r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 });
 
-await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
+await page.goto(BASE + '/?nogate=1', { waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(900);
 // The #top nav is down to 2 tabs (Command/Brain) as of the P3 frame — Enterprise
 // has no tab of its own until P7 gives it a sheet, so it's reached the same way

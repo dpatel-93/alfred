@@ -168,6 +168,20 @@ put('Projects/paused/status.md', '# Paused\n\n- **Status:** dormant\n\n## Where 
 feed = assistantFeed(ROOT, NOW);
 chk('active projects give one status line and one next step', feed.projects.length === 1 && feed.projects[0].name === 'demo'
   && feed.projects[0].stands === '(2026-10-25) Nearly done.' && feed.projects[0].next === 'Ship it.' && feed.projects[0].track === 'Personal', JSON.stringify(feed.projects));
+// --- Recent changes (the hand-off strip) ---
+console.log('\nRecent');
+const tenMinAgo = new Date(NOW.ms - 10 * 60 * 1000);
+const twoDaysAgo = new Date(NOW.ms - 48 * 60 * 60 * 1000);
+put('Memory/topics/home.md', '# Home\n\n- **Kind:** memory\n- **Author:** Grok\n\n- (2026-10-26) A fact · via grok\n');
+fs.utimesSync(path.join(ROOT, 'Memory/topics/home.md'), tenMinAgo, tenMinAgo);
+fs.utimesSync(path.join(ROOT, 'Reminders/2026-10-21--watch.md'), twoDaysAgo, twoDaysAgo);
+for (const f of fs.readdirSync(path.join(ROOT, 'Reminders'))) if (f !== '2026-10-21--watch.md') fs.utimesSync(path.join(ROOT, 'Reminders', f), tenMinAgo, tenMinAgo);
+feed = assistantFeed(ROOT, NOW);
+const home = feed.recent.find((r) => r.file === 'Memory/topics/home.md');
+chk('a file edited ten minutes ago is listed with its author and age', !!home && home.author === 'Grok' && home.ours === false && home.ageMinutes === 10 && home.folder === 'Memory', JSON.stringify(home));
+chk('a file older than a day is not', !feed.recent.some((r) => r.file === 'Reminders/2026-10-21--watch.md'));
+chk('newest first', feed.recent.every((r, i, a) => i === 0 || a[i - 1].ageMinutes <= r.ageMinutes));
+
 chk('items carry a short author and whether we may edit them',
   feed.today.find((i) => i.title === 'A Grok errand')?.author === 'grok' && feed.today.find((i) => i.title === 'A Grok errand')?.ours === false
   && feed.today.find((i) => i.title === 'Yesterday\'s errand')?.author === 'Claude Code' && feed.today.find((i) => i.title === 'Yesterday\'s errand')?.ours === true);

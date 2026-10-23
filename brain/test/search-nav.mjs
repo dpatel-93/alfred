@@ -29,7 +29,7 @@ await ctx.addInitScript(() => {
 const page = await ctx.newPage();
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 
-await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+await page.goto(BASE + '/?nogate=1', { waitUntil: 'domcontentloaded' });
 // #landing intercepts pointer events until dismissed; every click below would
 // otherwise land on it instead of on the app.
 await page.click('#landing').catch(() => {});

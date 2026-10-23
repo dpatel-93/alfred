@@ -106,7 +106,7 @@ if (!(await up())) {
       body: JSON.stringify({ results: ['qwen3.5:9b', 'qwen3.5:4b', 'qwen2.5-coder:1.5b'], tags: [] }),
     }));
 
-    await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
+    await page.goto(BASE + '/?nogate=1', { waitUntil: 'domcontentloaded' });
     await page.click('#landing').catch(() => {});
     await page.waitForTimeout(1200);
 
