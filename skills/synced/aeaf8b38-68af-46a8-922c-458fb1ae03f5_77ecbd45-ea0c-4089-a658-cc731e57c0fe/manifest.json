@@ -1,5 +1,5 @@
 {
-  "lastUpdated": 1792110259689,
+  "lastUpdated": 1792777791950,
   "skills": [
     {
       "skillId": "deep-research",
@@ -62,7 +62,7 @@
       "name": "skill-creator",
       "description": "Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill from scratch, edit, or optimize an existing skill, run evals to test a skill, benchmark skill performance with variance analysis, or optimize a skill's description for better triggering accuracy.",
       "source": "anthropic-example",
-      "updatedAt": "2026-09-14T19:41:01.499089Z"
+      "updatedAt": "2026-10-21T20:47:56.610025Z"
     },
     {
       "skillId": "web-artifacts-builder",
@@ -161,6 +161,14 @@
       "description": "Read this before the first Google Drive, Docs, Sheets or Slides connector call whenever the task creates or changes a Google file. Use this skill whenever the user wants to create or change a Google Doc, Sheet or Slides file in their Google Drive. Triggers include: a request that names Google Docs, Sheets, Slides or Drive and asks to make, edit, format, copy or rename a file; a docs.google.com link with a request to change that file, even a one-line fix or suggested edits; and any follow-up change to a Google file from earlier in the chat, even \"change it\" or \"add a tab\". Includes helper scripts for document positions, cell ranges and slide layout. However, if the user asks for a doc, deck or spreadsheet without naming Google, or gives a Google file only as source material for something new, use Claude's own output type instead. Do NOT use for read-only questions about a Google file, or for Word, Excel, PowerPoint or PDF files.",
       "source": "anthropic-example",
       "updatedAt": "2026-10-14T14:41:49.960676Z"
+    },
+    {
+      "skillId": "skill_0195arLYz2jJ9KC5MHUU48wQ",
+      "name": "drive-second-brain",
+      "description": "Use at the start of any substantive task and whenever durable facts, decisions or outputs come up: read and write the user's AI-neutral Second Brain in Google Drive per its MANIFESTO.",
+      "source": "plugin",
+      "updatedAt": "2026-10-23T14:22:20.152918Z",
+      "backingPluginId": "plugin_01HXWcARnEX44nwW8Ef53cMX"
     }
   ]
 }
