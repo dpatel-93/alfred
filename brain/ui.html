@@ -1,5 +1,5 @@
 <title>Alfred</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23080b10'/%3E%3Ccircle cx='16' cy='16' r='13' fill='%23ffb648'/%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%23ffd591' stroke-width='0.8' opacity='0.7'/%3E%3Cpath d='M9.6 24 L16 8.6 L22.4 24' fill='none' stroke='%23080b10' stroke-width='3.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M12.5 18.9 L19.5 18.9' fill='none' stroke='%23080b10' stroke-width='2.9' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2307080d'/%3E%3Ccircle cx='16' cy='16' r='13' fill='%234cc9ff'/%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%23e6f7ff' stroke-width='0.8' opacity='0.7'/%3E%3Cpath d='M9.6 24 L16 8.6 L22.4 24' fill='none' stroke='%2307080d' stroke-width='3.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M12.5 18.9 L19.5 18.9' fill='none' stroke='%2307080d' stroke-width='2.9' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
   @property --focus {
     syntax: '<color>'; inherits: true; initial-value: #e6f7ff;
@@ -118,6 +118,7 @@
     --r-pill: 999px;
     --notch:    10px;  /* the angled corner is back: .frame/.day-card/.sheet/.modal/#composer cut it via clip-path */
     --notch-sm: 6px;
+    --hl-line:  linear-gradient(90deg, color-mix(in srgb, var(--blue) 80%, transparent) 0, transparent 60%);   /* the 1px top highlight on notched surfaces */
 
     /* ---------- Elevation / z-layers ---------- */
     --z-starfield:  -1;
@@ -2076,10 +2077,12 @@
   .sheet, .modal {
     --notch: 14px;
     border-radius: var(--r-md);
-    border-top-color: color-mix(in srgb, var(--blue) 55%, var(--border-strong));
+    border-top-color: transparent;
     clip-path: polygon(0 0, calc(100% - var(--notch)) 0, 100% var(--notch), 100% 100%, 0 100%);
     box-shadow: inset 0 0 44px color-mix(in srgb, var(--blue) 5%, transparent);
   }
+  .sheet { background: var(--hl-line) 0 0 / 100% 1px no-repeat border-box, var(--bg); }
+  .modal { background: var(--hl-line) 0 0 / 100% 1px no-repeat border-box, var(--panel-bg-3); }
   .sheet::after, .modal::after {
     content: ''; position: absolute; top: 0; right: 0; width: var(--notch); height: var(--notch); pointer-events: none;
     background: linear-gradient(to top right, transparent calc(50% - 1.5px),
@@ -2092,24 +2095,20 @@
   }
   #search-results { box-shadow: inset 0 0 24px color-mix(in srgb, var(--accent-primary) 10%, transparent); }
   #answer-panel { box-shadow: inset 0 0 28px color-mix(in srgb, var(--mint) 9%, transparent); }
-  /* reader drawer: flush to the screen edge, so no notch — just the lit edge */
+  /* reader drawer: flush to the screen edge, so no notch — just the lit edge and the top highlight */
   #panel {
     border-left-color: var(--border-strong);
+    background: var(--hl-line) 0 0 / 100% 1px no-repeat border-box, var(--panel-bg);
     box-shadow: var(--shadow-drawer), inset 1px 0 0 color-mix(in srgb, var(--blue) 22%, transparent);
-  }
-  #panel::before {
-    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; pointer-events: none;
-    background: linear-gradient(90deg, color-mix(in srgb, var(--blue) 70%, transparent) 0, transparent 70%);
   }
   .modal-head h2, #panel-title { font-family: var(--font-display); }
 
   /* --- composer: a slimmer neon input --- */
   #composer {
     padding: 6px 8px; gap: 6px; border-radius: var(--r-md);
-    background: color-mix(in srgb, var(--surface-1) 90%, transparent);
-    border: 1px solid var(--border-strong);
-    border-top-color: color-mix(in srgb, var(--blue) 35%, var(--border-strong));
-    box-shadow: var(--shadow-panel), inset 0 1px 0 color-mix(in srgb, var(--blue) 10%, transparent);
+    background: var(--hl-line) 0 0 / 100% 1px no-repeat border-box, color-mix(in srgb, var(--surface-1) 90%, transparent);
+    border: 1px solid var(--border-strong); border-top-color: transparent;
+    box-shadow: var(--shadow-panel);
   }
   .composer-row .prompt { color: var(--blue); text-shadow: 0 0 8px color-mix(in srgb, var(--blue) 60%, transparent); padding-bottom: 5px; }
   .composer-input {
@@ -2185,10 +2184,15 @@
     position: relative; width: min(580px, 100%); max-height: calc(100vh - 48px); overflow-y: auto;
     padding: var(--sp-10) var(--sp-10) var(--sp-9);
     display: flex; flex-direction: column; gap: var(--sp-6);
-    background: var(--panel-bg-3); border: 1px solid var(--border-strong); border-radius: var(--r-md);
-    border-top-color: color-mix(in srgb, var(--blue) 65%, var(--border-strong));
+    background: var(--hl-line) 0 0 / 100% 1px no-repeat border-box, var(--panel-bg-3);
+    border: 1px solid var(--border-strong); border-radius: var(--r-md); border-top-color: transparent;
     clip-path: polygon(0 0, calc(100% - var(--notch)) 0, 100% var(--notch), 100% 100%, 0 100%);
     box-shadow: inset 0 0 60px color-mix(in srgb, var(--blue) 6%, transparent);
+  }
+  .gate-panel::after {
+    content: ''; position: absolute; top: 0; right: 0; width: var(--notch); height: var(--notch); pointer-events: none;
+    background: linear-gradient(to top right, transparent calc(50% - 1.5px),
+      color-mix(in srgb, var(--blue) 55%, var(--border-strong)) calc(50% - 1.5px) 50%, transparent 50%);
   }
   .gate-brand {
     font-family: var(--font-display); font-size: var(--fs-sm); letter-spacing: var(--track-label);
@@ -3942,12 +3946,20 @@
     return isFinite(t) && t > recentBaseline;
   }
 
+  // The leading word of the author decides ("Claude Code (migrated; originally captured by Grok)" is
+  // Claude's). A signal has no author field, but its file name says who sent it:
+  // Inbox/2026-10-23-1900--claude-code--grok--fyi--slug.md is from claude-code.
   function recentAuthor(r) {
-    var a = String(r.author || '').toLowerCase();
-    if (a.indexOf('grok') !== -1) return { key: 'grok', label: 'Grok' };
-    if (a.indexOf('claude') !== -1) return { key: 'claude', label: 'Claude' };
-    if (a.indexOf('alfred') !== -1 || (!a && r.ours)) return { key: 'claude', label: 'Alfred' };
-    return { key: 'other', label: r.author ? String(r.author).split(/[\s(,;]/)[0].slice(0, 10) : '?' };
+    var a = String(r.author || '').trim().toLowerCase();
+    if (!a) {
+      var m = /^Inbox\/(?:Done\/)?\d{4}-\d{2}-\d{2}-\d{4}--([a-z0-9-]+)--/.exec(String(r.file || ''));
+      if (m) a = m[1];
+    }
+    var lead = a.split(/[^a-z]+/)[0];
+    if (lead === 'grok') return { key: 'grok', label: 'Grok' };
+    if (lead === 'claude') return { key: 'claude', label: 'Claude' };
+    if (lead === 'alfred' || (!lead && r.ours)) return { key: 'claude', label: 'Alfred' };
+    return { key: 'other', label: lead ? capFirst(lead.slice(0, 10)) : 'Other' };
   }
 
   function dayRecentRow(r) {
@@ -3977,9 +3989,8 @@
     if (!rows.length) {
       body.push(dayEmpty('Nothing changed in the last day.'));
     } else {
-      var fold = Math.max(RECENT_FOLD, fresh);
-      body.push(el('div', 'day-recent', (recentShowAll ? rows : rows.slice(0, fold)).map(dayRecentRow)));
-      if (rows.length > fold) {
+      body.push(el('div', 'day-recent', (recentShowAll ? rows : rows.slice(0, RECENT_FOLD)).map(dayRecentRow)));
+      if (rows.length > RECENT_FOLD) {
         var more = el('button', 'btn day-recent-more', [recentShowAll ? 'Show fewer' : 'Show all ' + rows.length]);
         more.type = 'button';
         more.addEventListener('click', function () { recentShowAll = !recentShowAll; renderDay(dayFeed, true); });
@@ -4368,13 +4379,14 @@
     var blocking = (s.id === 'claude' && !s.signedIn) || m.forced.indexOf(s) !== -1;
     var cls = 'gate-seat' + (s.installed && s.signedIn ? ' ok' : blocking ? ' need' : '');
     var row = el('li', cls, []);
+    row.title = String(s.label || s.id);
     row.style.setProperty('--seat', seatAccentVar(s.id));
     row.appendChild(el('span', 'gate-bulb', []));
     var tag = s.id === 'claude' ? 'Required' : (GATE_FORCED.indexOf(s.id) !== -1 && s.installed ? 'Needed' : 'Optional');
     var state = gateStateText(s);
     if (s.installed && !s.signedIn && !s.canSignIn && s.loginCmd) state += ' (run "' + s.loginCmd + '" in a terminal)';
     row.appendChild(el('div', 'gate-seat-main', [
-      el('div', 'gate-seat-name', [String(s.label || s.id), el('span', 'gate-tag', [tag])]),
+      el('div', 'gate-seat-name', [benchShort(s), el('span', 'gate-tag', [tag])]),
       GATE_ROLE[s.id] ? el('div', 'gate-role', [GATE_ROLE[s.id]]) : null,
       el('div', 'gate-state', [state]),
     ]));

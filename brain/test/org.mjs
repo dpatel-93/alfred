@@ -31,7 +31,7 @@ page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/
 
 const payload = fleet();
 await page.route('**/api/org*', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payload) }));
-await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
+await page.goto(BASE + '/?nogate=1', { waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(900);
 // The #top nav is down to 2 tabs (Command/Brain) as of the P3 frame — Enterprise
 // has no tab of its own until P7 gives it a sheet, so it's reached the same way
@@ -192,7 +192,7 @@ T('no node off-screen at default zoom', spill.offscreen === 0, JSON.stringify(sp
 // left every row reading "--" forever while /api/status answered 200 the whole
 // time. Load the deep link directly — going via the brain view hides the bug.
 const deep = await (await b.newContext({ viewport: { width: 1600, height: 900 } })).newPage();
-await deep.goto(BASE + '/#ops', { waitUntil: 'domcontentloaded' });
+await deep.goto(BASE + '/?nogate=1#ops', { waitUntil: 'domcontentloaded' });
 await deep.waitForTimeout(900);
 await deep.waitForTimeout(4000);
 const railText = await deep.evaluate(() =>
