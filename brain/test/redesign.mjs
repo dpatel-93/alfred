@@ -50,6 +50,8 @@ const server = spawn(process.execPath, [path.join(HERE, '..', 'server.mjs')], {
     ALFRED_COUNCIL_STUB_DIR: stub,
     ALFRED_PROVIDERS: REGISTRY,
     ALFRED_TERM_STUB_CMD: JSON.stringify([process.execPath, '-e', echoScript]),
+    // The Day view auto-opens a sign-in console for a signed-out seat; never on a test run.
+    ALFRED_CC_DRY_RUN: '1',
   },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
@@ -119,13 +121,42 @@ if (!(await up())) {
       document.body.classList.remove('bench-tight', 'rail-collapsed');
     });
 
+    // --- the Day place is the default landing ---------------------------------
+    // No hash: the app opens on Day (date header, bench strip), not the Brain. The nav is
+    // Day then Brain; Command is no longer a tab (it stays reachable by hash and key 3,
+    // which the Command section below uses). The graph takes the whole Brain pane.
+    await page.waitForSelector('.day-grid, #day-body .state-block', { timeout: 10000 }).catch(() => {});
+    await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
+    chk(tag('with no hash the app lands on the Day view'), await page.evaluate(() =>
+      !document.getElementById('pane-day').hidden && document.getElementById('pane-brain').hidden
+      && document.getElementById('pane-command').hidden));
+    chk(tag('the nav is Day then Brain, Day active, and there is no Command tab'), await page.evaluate(() => {
+      const b = [...document.querySelectorAll('#views .view-btn')];
+      return b.map((x) => x.dataset.view).join(',') === 'day,brain' && b[0].classList.contains('active')
+        && b[0].getAttribute('aria-selected') === 'true' && !b[1].classList.contains('active');
+    }));
+    chk(tag('the Day header carries the weekday date and the bench strip mounts'), await page.evaluate(() =>
+      /^[A-Z][a-z]+day, [A-Z][a-z]+ \d{1,2}$/.test(document.getElementById('day-date').textContent)
+      && !!document.getElementById('bench') && !!document.getElementById('signin-banner')));
+    await page.keyboard.press('2');
+    await sleep(400);
+    chk(tag('key 2 opens the Brain with the graph filling the pane (the Today panel left)'), await page.evaluate(() => {
+      const c = document.querySelector('.brain-canvas').getBoundingClientRect();
+      const p = document.getElementById('pane-brain').getBoundingClientRect();
+      return !document.getElementById('pane-brain').hidden && document.getElementById('pane-day').hidden
+        && !document.getElementById('assistant') && Math.abs(c.width - p.width) < 2;
+    }));
+    await page.keyboard.press('1');
+    await sleep(300);
+    chk(tag('key 1 returns to Day'), await page.evaluate(() => !document.getElementById('pane-day').hidden));
+
     // --- the Command place: tab strip, grid mode, unread dot, seats -------
     // Seats now render on the Bench (#cc-seats), visible on every place —
     // P5 moved them out of the Command pane's old "Lanes" section and moved
     // pollCommandCenter into GLOBAL_POLLS to match. Every control that used
     // to sit directly on a seat card (model, open/native/sign-in) now lives behind that row's own
     // "..." popover (#seat-popover) — plan §3.2.
-    await page.click('[data-view="command"]');
+    await page.evaluate(() => { location.hash = 'command'; }); // no tab any more: hash (or key 3)
     await page.waitForFunction(
       () => document.querySelectorAll('#cc-seats .seat').length > 0,
       null, { timeout: 10000 },

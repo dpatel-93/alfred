@@ -295,6 +295,8 @@ const server = spawn(process.execPath, [path.join(HERE, '..', 'server.mjs')], {
     PORT: String(PORT),
     ALFRED_VAULT: path.join(HERE, 'fixtures', 'vault'),
     ALFRED_SHARED_BRAIN: BRAIN,
+    // The Day view auto-opens a sign-in console for a signed-out seat; never on a test run.
+    ALFRED_CC_DRY_RUN: '1',
     // Never the live token file — see TOKEN_FILE in server.mjs.
     ALFRED_TOKEN_FILE: path.join(os.tmpdir(), `alfred-test-${PORT}.token`),
     // The brain suite exists to cover the DEGRADED path — keyword fallback with
