@@ -1,7 +1,7 @@
 // P0 regression harness for the Blend redesign (see the implementation plan,
 // section 4, "P0 — Regression harness"). This suite pins the shipped behaviour
 // the redesign must not break — the terminal tab strip, grid-mode refit, the
-// unread dot, the Interns catalog search, the DeepSeek external-panel label,
+// unread dot, the Interns catalog search,
 // and the Brain graph's click-to-open-panel path — at three widths. It MUST
 // be green against the code as it stands before any redesign edit lands; a
 // harness that has never passed on the old code proves nothing about the new
@@ -123,8 +123,7 @@ if (!(await up())) {
     // Seats now render on the Bench (#cc-seats), visible on every place —
     // P5 moved them out of the Command pane's old "Lanes" section and moved
     // pollCommandCenter into GLOBAL_POLLS to match. Every control that used
-    // to sit directly on a seat card (model, open/native/sign-in, the
-    // DeepSeek-style external-panel button) now lives behind that row's own
+    // to sit directly on a seat card (model, open/native/sign-in) now lives behind that row's own
     // "..." popover (#seat-popover) — plan §3.2.
     await page.click('[data-view="command"]');
     await page.waitForFunction(
@@ -271,23 +270,8 @@ if (!(await up())) {
     // open .composer-tool, and vice versa — this mirrors that for the test).
     await page.evaluate(() => { document.getElementById('composer-tool-interns').open = false; });
 
-    // --- 5. DeepSeek external-panel label ---------------------------------
-    // The control now lives in the seat popover (plan §3.2) — open each
-    // seat's "..." in turn and look inside the shared #seat-popover.
-    let webBtnCount = 0;
-    let webLabel = '';
-    for (let i = 0; i < seatRowCount; i++) {
-      await seatMoreBtns.nth(i).click();
-      const btn = page.locator('#seat-popover button:has-text("Open panel")');
-      const c = await btn.count();
-      if (c) { webBtnCount += c; webLabel = (await btn.first().textContent()) || ''; }
-    }
-    await page.keyboard.press('Escape').catch(() => {});
-    chk(tag('a web-surface seat (DeepSeek) renders the external-panel control'), webBtnCount >= 1, `count=${webBtnCount}`);
-    if (webBtnCount >= 1) {
-      chk(tag('the external-panel label reads "Open panel" and "external", verbatim'),
-        webLabel.includes('Open panel') && webLabel.toLowerCase().includes('external'), JSON.stringify(webLabel));
-    }
+    // (Section 5, the web-surface "Open panel" label, was dropped with the
+    // DeepSeek Harness seat 2026-10-23 — no registered seat is web-surfaced.)
 
     // --- 5b. Focus mechanism (plan §3.2/§4 P5) -----------------------------
     // Clicking a seat's row body sets body[data-focus-seat] and re-tints

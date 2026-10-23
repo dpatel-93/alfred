@@ -262,9 +262,8 @@ query the same index directly instead of guessing filenames.
   Playwright remains a devDependency used only by the browser test suite.
 - **Optional AI CLIs for the Command Center.** Every signed-in CLI on the machine
   becomes a seat: Claude Code (the host), Grok Build (`npm i -g @xai-official/grok`,
-  SuperGrok / X Premium+), Google's Antigravity CLI (`agy`, Google AI Pro/Ultra),
-  Codex (`npm i -g @openai/codex`, ChatGPT Plus/Pro), local Ollama models, and the
-  DeepSeek Harness (`npm i -g @deepseek-ai/dsh`) pointed at that Ollama. All are
+  SuperGrok / X Premium+), Google's Antigravity CLI (`agy`, Google AI Pro/Ultra)
+  and local Ollama models. All are
   subscription or local — no per-token API keys are needed for any of them, and
   none is required: the council and the lanes use whatever is ready.
 - **Any markdown editor works for hand-editing brain notes** — VS Code,
@@ -395,7 +394,7 @@ Everything else happens from the search bar:
 
 One page that houses every AI you have signed into on this machine. A **seat** is any
 provider in `helpers/providers.json` that is the host (Claude Code), a CLI you can sign into
-(Grok Build, Antigravity, Codex, the DeepSeek Harness) or the local Ollama daemon. Adding a
+(Grok Build, Antigravity) or the local Ollama daemon. Adding a
 seat is a data edit in that registry — there is no code to change.
 
 Each seat is a **lane** — a card that shows whether the CLI is installed and signed in, which
@@ -415,7 +414,7 @@ model it runs, and two buttons:
   ticked seat at once, equal columns.
 
 **Sign in** appears on any seat that is installed but not signed in. It opens the provider's
-own login command (`claude auth login`, `agy`, `grok login`, `codex login`) in a real console
+own login command (`claude auth login`, `agy`, `grok login`) in a real console
 and steps aside — the HUD never sees a credential. On load, the HUD says once which seats
 still need one.
 
@@ -487,7 +486,7 @@ behind the token too, that is one line in the router's allowlist.
 | `POST` | `/api/claude/open-terminal` | token | Opens a real console resumed on your most recent idle session |
 | `GET` | `/api/command-center/seats` | token | Every seat with installed / signed-in / ready state, its effective model and suggestions (`?refresh=1` bypasses the 30s cache) |
 | `POST` | `/api/command-center/open` | token | Opens ticked seats in Windows Terminal — `{"providers":[…]}` for a fresh equal-column window, `"lane": true` to add a pane to the shared window |
-| `POST` | `/api/command-center/signin` | token | Opens the seat's own login command in a real console; `{"provider": "codex"}` |
+| `POST` | `/api/command-center/signin` | token | Opens the seat's own login command in a real console; `{"provider": "grok"}` |
 | `POST` | `/api/command-center/config` | token | Saves per-seat models and the chair model to `~/.alfred/config.json`; a blank model returns a seat to the registry default |
 | `POST` | `/api/council` | token | Convenes a council — `{"question", "providers": […], "synthesize"}` — and returns a run id; poll `GET /api/council/<id>` for answers and the verdict as they land |
 | `POST` | `/api/terminals` | token | Starts a seat's CLI in a real console (`{"provider", "cols", "rows"}`); `GET /api/terminals` lists them, `POST /api/terminals/<id>/kill` \| `/resize` \| `/drop` control one |
@@ -525,7 +524,6 @@ the page, and `/api/github/status` is asserted in the test suite to never return
 | `ALFRED_COUNCIL_TIMEOUT_MS` | `600000` | How long a single seat may take before the council gives up on it |
 | `ALFRED_LOCAL_CONFIG_DIR` | `~/.alfred` | Where `config.json` (GitHub token, saved keys, per-seat models) lives — the test servers point this at a temp folder so they never touch yours |
 | `ALFRED_TOKEN_FILE` | `~/.claude/alfred-session.token` | Where the per-boot bridge token is written for hooks to read — likewise redirected by the test servers |
-| `DSH_OLLAMA_KEY` | unset | Only if you seat the DeepSeek Harness: its config schema insists on a key *name* even for a local Ollama route, so this holds a dummy value that Ollama ignores |
 
 ### Naming the org chart's lanes
 

@@ -14,7 +14,7 @@ A thin layer over native Claude Code primitives — no external orchestration pa
 | **Managers** | Sonnet | Default coding subagents — reviews Employee output |
 | **Employees** | Haiku | Quick lookups, grep/file sweeps, web search, research, doc summarisation, bulk mechanical work — **the default for anything fast and bounded** |
 | **Interns** | Local Ollama (`qwen3.5:9b`, `qwen3.5:4b`, `qwen2.5-coder:1.5b`, `nomic-embed-text` via `ollama run` in Bash) | Free — drafts/summaries/embeddings only |
-| **Peers** | Any other connected provider — Gemini (`agy`), Grok (`grok`), Codex (`codex`) | **CEO approval required per use — ask first, every time.** Zero marginal cost once approved: bulk sweeps, long-context reads, genuinely independent second opinions |
+| **Peers** | Any other connected provider — Gemini (`agy`), Grok (`grok`) | **CEO approval required per use — ask first, every time.** Zero marginal cost once approved: bulk sweeps, long-context reads, genuinely independent second opinions |
 
 **The ranks above are ROLES, not vendors.** The Model column shows how they are filled when Claude
 is the host, which is the common case — but a role is a job description, and any connected provider

@@ -5,7 +5,7 @@
 # Alfred — Agent Charter
 
 This file exists so that **any** terminal coding agent can run Alfred's orchestration, not only
-Claude Code. Grok Build, Codex and most other agents read `AGENTS.md` natively; this is that file.
+Claude Code. Grok Build and most other agents read `AGENTS.md` natively; this is that file.
 
 ## How to read this
 
@@ -25,7 +25,6 @@ if it cannot delegate at all, do the work yourself but keep the verification obl
 | `claude` | Claude (Anthropic) | — | subscription | no gate |
 | `gemini` | Gemini (Google, via Antigravity CLI) | THE READER — volume and senses | subscription | **ask first, every use** |
 | `grok` | Grok (xAI, via Grok Build CLI) | THE SCOUT — the live world, right now | subscription | **ask first, every use** |
-| `codex` | Codex (OpenAI) | — | subscription | **ask first, every use** |
 | `omniroute` | OmniRoute (self-hosted gateway to ~340 providers) | THE RESERVE — capacity when the bench is empty, and a deliberately different take | subscription | **ask first, every use** |
 | `ollama` | Ollama (local models) | — | local | no gate |
 
@@ -97,7 +96,7 @@ A thin layer over native Claude Code primitives — no external orchestration pa
 | **Managers** | Sonnet | Default coding subagents — reviews Employee output |
 | **Employees** | Haiku | Quick lookups, grep/file sweeps, web search, research, doc summarisation, bulk mechanical work — **the default for anything fast and bounded** |
 | **Interns** | Local Ollama (`qwen3.5:9b`, `qwen3.5:4b`, `qwen2.5-coder:1.5b`, `nomic-embed-text` via `ollama run` in Bash) | Free — drafts/summaries/embeddings only |
-| **Peers** | Any other connected provider — Gemini (`agy`), Grok (`grok`), Codex (`codex`) | **CEO approval required per use — ask first, every time.** Zero marginal cost once approved: bulk sweeps, long-context reads, genuinely independent second opinions |
+| **Peers** | Any other connected provider — Gemini (`agy`), Grok (`grok`) | **CEO approval required per use — ask first, every time.** Zero marginal cost once approved: bulk sweeps, long-context reads, genuinely independent second opinions |
 
 **The ranks above are ROLES, not vendors.** The Model column shows how they are filled when Claude
 is the host, which is the common case — but a role is a job description, and any connected provider
