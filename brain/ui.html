@@ -2,35 +2,36 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23080b10'/%3E%3Ccircle cx='16' cy='16' r='13' fill='%23ffb648'/%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%23ffd591' stroke-width='0.8' opacity='0.7'/%3E%3Cpath d='M9.6 24 L16 8.6 L22.4 24' fill='none' stroke='%23080b10' stroke-width='3.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M12.5 18.9 L19.5 18.9' fill='none' stroke='%23080b10' stroke-width='2.9' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
   @property --focus {
-    syntax: '<color>'; inherits: true; initial-value: #f0e9dd;
+    syntax: '<color>'; inherits: true; initial-value: #e6f7ff;
   }
   :root {
     color-scheme: dark;
 
-    /* ---------- Surfaces — Atelier's warm graphite room (names unchanged) ---------- */
-    --bg:            #131218;
-    --bg-2:          #17161d;   /* NEW — topbar/sheet ground */
-    --surface-1:     #1c1b23;
-    --surface-2:     #22212b;
-    --surface-3:     #2a2934;
-    --surface-4:     #333240;
-    --border:        #2b2a35;
-    --border-strong: #3a3947;
-    --border-focusable: #56545f;
+    /* ---------- Surfaces — the cyberpunk night room: ink-blue blacks (names unchanged;
+       2026-10-23 skin, DESIGN-UI-SYSTEM.md section 7) ---------- */
+    --bg:            #07080d;
+    --bg-2:          #0b0d14;   /* topbar/sheet ground */
+    --surface-1:     #0f1219;
+    --surface-2:     #141825;
+    --surface-3:     #1a1f2e;
+    --surface-4:     #222841;
+    --border:        #1d2437;
+    --border-strong: #2b3450;
+    --border-focusable: #3b4a6b;
 
     /* ---------- Alfred's own identity is NEUTRAL. Alfred is the room, not a vendor. ---------- */
-    --bone:          #f0e9dd;   /* NEW */
+    --bone:          #e6f7ff;   /* ice — Alfred's own colour in the neon room */
 
     /* ---------- The bench — the ONLY saturated colour in the product ---------- */
-    --p-claude:    #e0855c;
-    --p-gemini:    #6fa8ff;
-    --p-grok:      #d3d7e0;
-    --p-omniroute: #f2c15b;
-    --p-ollama:    #b08cff;
+    --p-claude:    #ff8c42;
+    --p-gemini:    #4cc9ff;
+    --p-grok:      #e6f7ff;
+    --p-omniroute: #ffc857;
+    --p-ollama:    #c77dff;
 
     /* ---------- FOCUS — written onto <body> by setFocusSeat(); cascades everywhere ---------- */
     --focus:     var(--bone);
-    --focus-rgb: 240, 233, 221;   /* for rgba() where color-mix is awkward (canvas, shadows) */
+    --focus-rgb: 230, 247, 255;   /* for rgba() where color-mix is awkward (canvas, shadows) */
 
     /* ---------- Legacy accent hooks — re-pointed, NOT removed (85+ call sites) ----------
        --accent-primary/-hot, --alfred-amber/-hot and the glow ladder are declared on the
@@ -42,29 +43,29 @@
     --alfred-cyan:        var(--p-gemini);
 
     /* ---------- Semantic contract — UNCHANGED MEANING, re-toned for the warm ground ---------- */
-    --mint:   #5fd39a;   /* live / healthy / success */
-    --amber:  #f2c15b;   /* warn / stale */
-    --red:    #ff7a80;   /* critical / error */
-    --blue:   #6fa8ff;   /* info / selected */
-    --blue-strong: #4f8ff0;
-    --violet: #b08cff;   /* category: Decisions */
-    --orange: #e0855c;   /* category: Claude-Code */
-    --gray:   #908b9b;   /* idle / disabled / absent — contrast-gated at 4.81:1 on --surface-2, see below */
+    --mint:   #2ef2b2;   /* live / healthy / success */
+    --amber:  #ffc857;   /* warn / stale */
+    --red:    #ff4d6d;   /* critical / error */
+    --blue:   #4cc9ff;   /* info / selected */
+    --blue-strong: #1fb6ff;
+    --violet: #c77dff;   /* category: Decisions */
+    --orange: #ff8c42;   /* category: Claude-Code */
+    --gray:   #8590a8;   /* idle / disabled / absent — contrast-gated at 5.52:1 on --surface-2, 4.83:1 on its own 10% tint */
 
     /* ---------- Text — warm off-white, never blue-white ---------- */
-    --text:       #ece8e3;
-    --text-soft:  #c6c1cc;
-    --text-dim:   #a8a3b0;  /* contrast-gated at 6.93:1 on --surface-1 (needs >=4.5:1) */
-    --text-faint: #726e7c;  /* decorative only — contrast-gated at 3.76:1 on --bg (needs >=3:1) */
-    --on-accent:  #15141a;
+    --text:       #e8f1ff;
+    --text-soft:  #b7c6dc;
+    --text-dim:   #8fa0ba;  /* contrast-gated at 7.05:1 on --surface-1 (needs >=4.5:1) */
+    --text-faint: #5c6b85;  /* decorative only — contrast-gated at 3.71:1 on --bg (needs >=3:1) */
+    --on-accent:  #06080c;
 
     /* ---------- Composed surfaces (names unchanged) ---------- */
     --panel-bg:     color-mix(in srgb, var(--surface-1) 88%, transparent);
     --panel-bg-2:   color-mix(in srgb, var(--surface-1) 72%, transparent);
     --panel-bg-3:   var(--bg-2);
     --well-bg:      rgba(0, 0, 0, 0.28);
-    --scrim-bg:     rgba(8, 7, 11, 0.62);
-    --overlay-bg:   rgba(8, 7, 11, 0.72);
+    --scrim-bg:     rgba(4, 6, 12, 0.66);
+    --overlay-bg:   rgba(4, 6, 12, 0.76);
     --hairline:     var(--border);          /* was a focus tint — a hairline is structure, not accent */
 
     /* ---------- Type — Phosphor's pairing, Windows-native, zero external loads ---------- */
@@ -111,12 +112,12 @@
     /* ---------- Radius — UNCHANGED except radius ---------- */
     --r-0:    0;
     --r-xs:   3px;
-    --r-sm:   6px;     /* was 3px — Atelier/Phosphor soft geometry */
-    --r-md:   9px;     /* was 6px */
-    --r-lg:   14px;    /* NEW — sheets */
+    --r-sm:   4px;     /* cyberpunk skin: tighter, machined corners (was 6px) */
+    --r-md:   6px;     /* was 9px */
+    --r-lg:   10px;    /* sheets (was 14px) */
     --r-pill: 999px;
-    --notch:    0;     /* .frame's clip-path is neutralised, not deleted (see P2) */
-    --notch-sm: 0;
+    --notch:    10px;  /* the angled corner is back: .frame/.day-card/.sheet/.modal/#composer cut it via clip-path */
+    --notch-sm: 6px;
 
     /* ---------- Elevation / z-layers ---------- */
     --z-starfield:  -1;
@@ -139,9 +140,9 @@
     /* ---------- Glow ladder — keyed to --focus; full ladder declared on `body` below ---------- */
     --glow-0: none;
 
-    --shadow-panel:  0 8px 28px rgba(0, 0, 0, 0.45);
-    --shadow-modal:  0 32px 90px rgba(0, 0, 0, 0.62);
-    --shadow-drawer: -20px 0 40px rgba(0, 0, 0, 0.5);
+    --shadow-panel:  0 8px 28px rgba(0, 0, 0, 0.55);
+    --shadow-modal:  0 32px 90px rgba(0, 0, 0, 0.72);
+    --shadow-drawer: -20px 0 40px rgba(0, 0, 0, 0.6);
 
     /* ---------- Motion — existing names, Atelier/Phosphor durations folded in ---------- */
     --t-instant: 80ms;
@@ -1887,6 +1888,366 @@
      now scrolls internally instead of clipping, the rail stays fully usable
      at its normal width at every tested viewport size, so it no longer needs
      to narrow here at all. */
+
+  /* ==========================================================================
+     CYBERPUNK SKIN (2026-10-23) — DESIGN-UI-SYSTEM.md section 7.
+     One additive layer on top of the token values in :root. Everything here
+     is tokens + color-mix(); no new palette. Rules of the house still hold:
+     mint = live/primary, blue = info/selected, amber = warn, red = critical,
+     gray = idle; --p-* only tints identity surfaces. Notches are clip-path
+     (top-right corner), so an outer glow on a notched element is replaced by
+     an inset one; .day-card keeps a true outer glow by clipping a pseudo
+     layer instead of the card itself. All motion is gated on
+     prefers-reduced-motion at the foot of this block.
+     ========================================================================== */
+
+  * { scrollbar-width: thin; scrollbar-color: var(--border-focusable) transparent; }
+
+  /* --- page ground: a faint 48px grid under a vignette. Fixed, static, behind
+         everything (--z-grid). #pane-command paints its own solid ground. --- */
+  body::before {
+    content: ''; position: fixed; inset: 0; z-index: var(--z-grid); pointer-events: none;
+    background:
+      radial-gradient(ellipse 120% 95% at 50% 36%, transparent 38%, color-mix(in srgb, var(--bg) 88%, transparent) 100%),
+      repeating-linear-gradient(0deg, color-mix(in srgb, var(--blue) 4%, transparent) 0 1px, transparent 1px 48px),
+      repeating-linear-gradient(90deg, color-mix(in srgb, var(--blue) 4%, transparent) 0 1px, transparent 1px 48px);
+  }
+  #aura {
+    background: radial-gradient(ellipse 70% 60% at 50% 38%,
+      color-mix(in srgb, var(--focus) 6%, transparent) 0%, transparent 70%);
+  }
+
+  /* --- kickers and card titles: uppercase, tracked --- */
+  .day-card-title, details.day-card > summary, .day-group, .flight-head, .bench-sect-title,
+  .stage-head h1, .modal-head h2 {
+    text-transform: uppercase; letter-spacing: var(--track-kicker);
+  }
+
+  /* --- header --- */
+  #top {
+    background: color-mix(in srgb, var(--bg-2) 94%, transparent); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 10px 28px -16px color-mix(in srgb, var(--blue) 30%, transparent);
+  }
+  #top::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; pointer-events: none;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--blue) 60%, transparent) 0, transparent 46%);
+  }
+  #mark { color: var(--text); font-weight: 600; }
+  .mark-glyph {
+    color: var(--blue);
+    text-shadow: 0 0 8px color-mix(in srgb, var(--blue) 75%, transparent),
+                 0 0 20px color-mix(in srgb, var(--blue) 40%, transparent);
+  }
+  #views { gap: 2px; }
+  .view-btn {
+    border-radius: 0; padding: 10px 24px; color: var(--text-dim);
+    font-family: var(--font-display); font-weight: 600; letter-spacing: var(--track-kicker);
+    background: color-mix(in srgb, var(--surface-2) 60%, transparent);
+    clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+    transition: color var(--t-fast) var(--ease-out), background var(--t-fast) var(--ease-out),
+                box-shadow var(--t-fast) var(--ease-out);
+  }
+  .view-btn:hover { color: var(--text); background: color-mix(in srgb, var(--blue) 9%, var(--surface-2)); }
+  .view-btn.active {
+    color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, var(--surface-1));
+    box-shadow: inset 0 -2px 0 var(--blue), inset 0 -16px 14px -12px color-mix(in srgb, var(--blue) 55%, transparent);
+    text-shadow: 0 0 10px color-mix(in srgb, var(--blue) 60%, transparent);
+  }
+  .view-btn.active::before, .view-btn.active::after { content: none; }
+  .dock-btn { border-radius: var(--r-xs); letter-spacing: var(--track-kicker); }
+  .dock-btn:hover { color: var(--text); border-color: color-mix(in srgb, var(--blue) 55%, transparent); }
+  .dock-btn.active {
+    color: var(--blue); border-color: color-mix(in srgb, var(--blue) 70%, transparent);
+    background: color-mix(in srgb, var(--blue) 12%, transparent);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--blue) 22%, transparent);
+  }
+  /* util buttons: ghost outlines */
+  #utils button, #ext-term-btn {
+    background: transparent; border: 1px solid var(--border-focusable); border-radius: var(--r-sm);
+    color: var(--text-soft); letter-spacing: var(--track-kicker); text-transform: uppercase;
+    transition: color var(--t-fast) var(--ease-out), border-color var(--t-fast) var(--ease-out),
+                background var(--t-fast) var(--ease-out), box-shadow var(--t-fast) var(--ease-out);
+  }
+  #utils button:hover, #ext-term-btn:hover, #ext-term-btn.active {
+    color: var(--text); border-color: color-mix(in srgb, var(--blue) 60%, transparent);
+    background: color-mix(in srgb, var(--blue) 8%, transparent);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--blue) 18%, transparent);
+  }
+  #utils button:focus-visible, #ext-term-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+  /* --- Day: date hero with a neon rule --- */
+  .day-headline { position: relative; padding-bottom: var(--sp-5); }
+  .day-headline::after {
+    content: ''; position: absolute; left: 0; bottom: 0; width: 100%; height: 2px; pointer-events: none;
+    background: linear-gradient(90deg, var(--blue), transparent 85%);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--blue) 45%, transparent);
+  }
+  .day-date { font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+  .day-summary { font-family: var(--font-mono); font-size: var(--fs-xs); letter-spacing: var(--track-ui); }
+
+  /* --- bench pills: bulbs glow in their state colour --- */
+  .bench-seat {
+    border-radius: var(--r-sm); font-family: var(--font-mono); text-transform: uppercase;
+    letter-spacing: var(--track-kicker); font-size: var(--fs-mini);
+  }
+  .bench-bulb { box-shadow: 0 0 6px color-mix(in srgb, var(--gray) 45%, transparent); }
+  .bench-seat.ready .bench-bulb { box-shadow: 0 0 8px 1px color-mix(in srgb, var(--mint) 65%, transparent); }
+  .bench-seat.needs .bench-bulb { box-shadow: 0 0 8px 1px color-mix(in srgb, var(--amber) 65%, transparent); }
+
+  .signin-banner { border-radius: var(--r-sm); }
+
+  /* --- Day cards: the notch is clipped on a pseudo layer so the card itself can
+         still carry a real outer glow on hover. ::before = ground + border + the
+         notch + its diagonal stroke; ::after = the 1px top highlight. --- */
+  .day-card {
+    --hl: var(--blue);
+    position: relative; isolation: isolate;
+    background: none; border: 0; backdrop-filter: none;
+    padding: calc(var(--sp-6) + 1px) calc(var(--sp-7) + 1px);
+    transition: box-shadow var(--t-base) var(--ease-out);
+  }
+  .day-card.overdue { --hl: var(--red); }
+  .day-card::before {
+    content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      linear-gradient(to top right, transparent calc(50% - 1.5px),
+        color-mix(in srgb, var(--hl) 55%, var(--border-strong)) calc(50% - 1.5px) 50%, transparent 50%)
+        top right / var(--notch) var(--notch) no-repeat,
+      var(--panel-bg);
+    border: 1px solid var(--border); border-radius: var(--r-md);
+    clip-path: polygon(0 0, calc(100% - var(--notch)) 0, 100% var(--notch), 100% 100%, 0 100%);
+    backdrop-filter: blur(4px);
+    transition: border-color var(--t-base) var(--ease-out);
+  }
+  .day-card::after {
+    content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 1px; z-index: -1; pointer-events: none;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--hl) 85%, transparent) 0, transparent 60%);
+  }
+  .day-card:hover { box-shadow: 0 0 24px color-mix(in srgb, var(--hl) 12%, transparent); }
+  .day-card:hover::before { border-color: color-mix(in srgb, var(--hl) 45%, transparent); }
+  .day-count { color: var(--blue); }
+
+  .day-item { border-radius: var(--r-sm); }
+  .day-item:hover { background: color-mix(in srgb, var(--blue) 7%, var(--surface-2)); }
+  .day-kind {
+    --kc: var(--gray);
+    border: 0; border-left: 2px solid var(--kc); border-radius: 0;
+    padding: 1px 6px 1px 5px; color: var(--text-soft);
+    background: color-mix(in srgb, var(--kc) 9%, transparent);
+    font-family: var(--font-mono); text-transform: uppercase; letter-spacing: var(--track-kicker);
+  }
+  .day-kind[data-kind="errand"]   { --kc: var(--amber); }
+  .day-kind[data-kind="reminder"] { --kc: var(--blue); }
+  .day-kind[data-kind="todo"]     { --kc: var(--mint); }
+  .day-kind[data-kind="watch"]    { --kc: var(--violet); }
+  .day-project, .day-signal { border-radius: var(--r-sm); }
+  .day-project:hover, .day-signal:hover { background: color-mix(in srgb, var(--blue) 7%, var(--surface-2)); }
+
+  /* --- buttons: primary = mint outline, secondary = ghost, danger = red outline --- */
+  .btn {
+    border-radius: var(--r-sm); font-family: var(--font-mono); letter-spacing: var(--track-kicker);
+    transition: color var(--t-fast) var(--ease-out), border-color var(--t-fast) var(--ease-out),
+                background var(--t-fast) var(--ease-out), box-shadow var(--t-fast) var(--ease-out);
+  }
+  .btn:hover:not(:disabled) {
+    color: var(--text); border-color: color-mix(in srgb, var(--blue) 60%, transparent);
+    background: color-mix(in srgb, var(--blue) 8%, transparent);
+  }
+  .btn.primary, .btn.day-act.done {
+    color: var(--mint); background: transparent;
+    border-color: color-mix(in srgb, var(--mint) 60%, transparent);
+  }
+  .btn.primary:hover:not(:disabled), .btn.primary:focus-visible,
+  .btn.day-act.done:hover:not(:disabled), .btn.day-act.done:focus-visible {
+    color: var(--mint); border-color: var(--mint);
+    background: color-mix(in srgb, var(--mint) 10%, transparent);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--mint) 35%, transparent),
+                inset 0 0 10px color-mix(in srgb, var(--mint) 8%, transparent);
+  }
+  .btn.danger { color: var(--red); background: transparent; border-color: color-mix(in srgb, var(--red) 55%, transparent); }
+  .btn.danger:hover:not(:disabled), .btn.danger:focus-visible {
+    color: var(--red); border-color: var(--red); background: color-mix(in srgb, var(--red) 10%, transparent);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--red) 32%, transparent);
+  }
+  .btn:focus-visible, .icon-btn:focus-visible, .dock-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+  /* --- sheets and modals: top-right notch, lit top edge, inset glow --- */
+  .sheet, .modal {
+    --notch: 14px;
+    border-radius: var(--r-md);
+    border-top-color: color-mix(in srgb, var(--blue) 55%, var(--border-strong));
+    clip-path: polygon(0 0, calc(100% - var(--notch)) 0, 100% var(--notch), 100% 100%, 0 100%);
+    box-shadow: inset 0 0 44px color-mix(in srgb, var(--blue) 5%, transparent);
+  }
+  .sheet::after, .modal::after {
+    content: ''; position: absolute; top: 0; right: 0; width: var(--notch); height: var(--notch); pointer-events: none;
+    background: linear-gradient(to top right, transparent calc(50% - 1.5px),
+      color-mix(in srgb, var(--blue) 55%, var(--border-strong)) calc(50% - 1.5px) 50%, transparent 50%);
+  }
+  .frame {
+    --notch: var(--notch-sm);
+    border-radius: var(--r-sm);
+    clip-path: polygon(0 0, calc(100% - var(--notch)) 0, 100% var(--notch), 100% 100%, 0 100%);
+  }
+  #search-results { box-shadow: inset 0 0 24px color-mix(in srgb, var(--accent-primary) 10%, transparent); }
+  #answer-panel { box-shadow: inset 0 0 28px color-mix(in srgb, var(--mint) 9%, transparent); }
+  /* reader drawer: flush to the screen edge, so no notch — just the lit edge */
+  #panel {
+    border-left-color: var(--border-strong);
+    box-shadow: var(--shadow-drawer), inset 1px 0 0 color-mix(in srgb, var(--blue) 22%, transparent);
+  }
+  #panel::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; pointer-events: none;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--blue) 70%, transparent) 0, transparent 70%);
+  }
+  .modal-head h2, #panel-title { font-family: var(--font-display); }
+
+  /* --- composer: a slimmer neon input --- */
+  #composer {
+    padding: 6px 8px; gap: 6px; border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--surface-1) 90%, transparent);
+    border: 1px solid var(--border-strong);
+    border-top-color: color-mix(in srgb, var(--blue) 35%, var(--border-strong));
+    box-shadow: var(--shadow-panel), inset 0 1px 0 color-mix(in srgb, var(--blue) 10%, transparent);
+  }
+  .composer-row .prompt { color: var(--blue); text-shadow: 0 0 8px color-mix(in srgb, var(--blue) 60%, transparent); padding-bottom: 5px; }
+  .composer-input {
+    background: color-mix(in srgb, var(--bg) 72%, var(--surface-2));
+    border: 1px solid var(--border-strong); border-radius: var(--r-sm); padding: 6px 10px;
+    transition: border-color var(--t-fast) var(--ease-out), box-shadow var(--t-fast) var(--ease-out);
+  }
+  .composer-input:focus, .composer-input:focus-visible {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--blue) 30%, transparent),
+                0 0 18px color-mix(in srgb, var(--blue) 24%, transparent);
+  }
+
+  /* --- toasts and tooltip: same geometry, lit edge --- */
+  .toast { border-radius: var(--r-sm); box-shadow: 0 14px 44px rgba(0, 0, 0, 0.6), 0 0 18px color-mix(in srgb, var(--accent) 14%, transparent); }
+  #tooltip { border-radius: var(--r-sm); }
+
+  /* ==========================================================================
+     SINCE YOU LAST LOOKED (Day card, column 3).
+     ========================================================================== */
+  .day-recent { display: flex; flex-direction: column; gap: var(--sp-2); }
+  .day-recent-row {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--sp-1) var(--sp-4);
+    width: 100%; padding: var(--sp-3) var(--sp-5); border: 0; border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--surface-2) 78%, transparent);
+    box-shadow: inset 3px 0 0 var(--blue);
+    color: var(--text); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer;
+    transition: background var(--t-fast) var(--ease-out);
+  }
+  .day-recent-row:hover { background: color-mix(in srgb, var(--blue) 7%, var(--surface-2)); }
+  .day-recent-row.is-old { box-shadow: inset 3px 0 0 var(--border-strong); color: var(--text-dim); }
+  .day-recent-row .rc-author {
+    --ac: var(--gray);
+    grid-row: 1 / span 2; align-self: start; margin-top: 2px;
+    padding: 1px 6px; border: 1px solid color-mix(in srgb, var(--ac) 40%, transparent); border-radius: var(--r-xs);
+    background: color-mix(in srgb, var(--ac) 10%, var(--surface-2)); color: var(--ac);
+    font-family: var(--font-mono); font-size: var(--fs-micro); font-weight: 600;
+    letter-spacing: var(--track-kicker); text-transform: uppercase; white-space: nowrap;
+  }
+  .day-recent-row .rc-author[data-a="grok"]   { --ac: var(--p-grok); }
+  .day-recent-row .rc-author[data-a="claude"] { --ac: var(--p-claude); }
+  .day-recent-row .rc-title { min-width: 0; overflow-wrap: anywhere; }
+  .day-recent-row .rc-age {
+    font-family: var(--font-mono); font-size: var(--fs-xs); font-variant-numeric: tabular-nums;
+    color: var(--text-dim); white-space: nowrap;
+  }
+  .day-recent-row .rc-kicker {
+    grid-column: 2 / -1; color: var(--text-dim); font-family: var(--font-mono); font-size: var(--fs-micro);
+    letter-spacing: var(--track-kicker); text-transform: uppercase;
+  }
+  .day-recent-row:focus-visible, .day-recent-more:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .day-recent-more { align-self: flex-start; }
+
+  /* ==========================================================================
+     THE GATE (#gate). Blocks the dash until Claude is signed in and Grok/Gemini
+     are signed in (or the operator continues anyway). Sits at --z-landing;
+     toasts are lifted above it so the "finish the sign-in" note is never hidden
+     behind the scrim.
+     ========================================================================== */
+  #gate {
+    position: fixed; inset: 0; z-index: var(--z-landing);
+    display: flex; align-items: center; justify-content: center; padding: var(--sp-9) var(--sp-7);
+    background: radial-gradient(ellipse 80% 70% at 50% 40%,
+      color-mix(in srgb, var(--bg) 72%, transparent), color-mix(in srgb, var(--bg) 94%, transparent));
+    backdrop-filter: blur(10px);
+    opacity: 1; transition: opacity var(--t-base) var(--ease-out);
+  }
+  #gate[hidden] { display: none; }
+  #gate.leaving { opacity: 0; pointer-events: none; }
+  body.gated .toast-stack { z-index: calc(var(--z-landing) + 1); }
+  .gate-panel {
+    --notch: 16px;
+    position: relative; width: min(580px, 100%); max-height: calc(100vh - 48px); overflow-y: auto;
+    padding: var(--sp-10) var(--sp-10) var(--sp-9);
+    display: flex; flex-direction: column; gap: var(--sp-6);
+    background: var(--panel-bg-3); border: 1px solid var(--border-strong); border-radius: var(--r-md);
+    border-top-color: color-mix(in srgb, var(--blue) 65%, var(--border-strong));
+    clip-path: polygon(0 0, calc(100% - var(--notch)) 0, 100% var(--notch), 100% 100%, 0 100%);
+    box-shadow: inset 0 0 60px color-mix(in srgb, var(--blue) 6%, transparent);
+  }
+  .gate-brand {
+    font-family: var(--font-display); font-size: var(--fs-sm); letter-spacing: var(--track-label);
+    text-transform: uppercase; color: var(--text-dim);
+  }
+  .gate-title {
+    margin: 0; font-family: var(--font-display); font-size: var(--fs-2xl); font-weight: 700;
+    letter-spacing: .05em; text-transform: uppercase; color: var(--text); line-height: var(--lh-tight);
+  }
+  .gate-sub { margin: 0; color: var(--text-soft); font-size: var(--fs-base); line-height: var(--lh-base); }
+  .gate-seats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+  .gate-seat {
+    --st: var(--gray);
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--sp-5);
+    padding: var(--sp-5) var(--sp-6); border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--surface-2) 80%, transparent);
+    box-shadow: inset 3px 0 0 color-mix(in srgb, var(--seat, var(--gray)) 70%, transparent);
+  }
+  .gate-seat.ok   { --st: var(--mint); }
+  .gate-seat.need { --st: var(--amber); }
+  .gate-bulb {
+    width: 10px; height: 10px; border-radius: 50%; background: var(--st);
+    box-shadow: 0 0 10px 1px color-mix(in srgb, var(--st) 60%, transparent);
+  }
+  .gate-seat-main { min-width: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
+  .gate-seat-name { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--sp-3); font-weight: 600; color: var(--text); }
+  .gate-tag {
+    padding: 0 5px; border: 1px solid color-mix(in srgb, var(--text-dim) 40%, transparent); border-radius: var(--r-xs);
+    color: var(--text-dim); font-family: var(--font-mono); font-size: var(--fs-micro); font-weight: 600;
+    letter-spacing: var(--track-kicker); text-transform: uppercase;
+  }
+  .gate-role { color: var(--text-dim); font-size: var(--fs-xs); }
+  .gate-state { color: var(--text-soft); font-size: var(--fs-sm); }
+  .gate-seat.need .gate-state { color: var(--amber); }
+  .gate-foot { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-4) var(--sp-7); min-height: 24px; }
+  .gate-note { flex: 1 1 240px; min-width: 0; color: var(--text-dim); font-size: var(--fs-xs); }
+  .gate-auto { display: inline-flex; align-items: center; gap: var(--sp-3); cursor: pointer; color: var(--text-dim); font-size: var(--fs-xs); }
+  .gate-auto input { accent-color: var(--blue); }
+  .gate-skip {
+    margin: 0; padding: var(--sp-2) var(--sp-3); border: 0; background: none; cursor: pointer;
+    color: var(--text-dim); font: inherit; font-size: var(--fs-xs); text-decoration: underline; text-underline-offset: 3px;
+  }
+  .gate-skip[hidden] { display: none; }
+  .gate-skip:hover { color: var(--text); }
+  .gate-skip:focus-visible, .gate-auto input:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+  /* --- motion: one entrance stagger on the Day cards (first mount only, see
+         renderDay), the gate panel's rise, and nothing else. --- */
+  @media (prefers-reduced-motion: no-preference) {
+    @keyframes cyberRise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    .day-grid.enter .day-card { animation: cyberRise var(--t-slow) var(--ease-out) both; }
+    .gate-panel { animation: cyberRise var(--t-slow) var(--ease-out) both; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #gate { transition-duration: .01ms !important; }
+    .day-card, .day-card::before, .day-recent-row, .view-btn, .btn, #utils button, .composer-input,
+    .bench-seat { transition-duration: .01ms !important; }
+  }
+
 </style>
 
 <!-- Landing/AUTHORIZE screen removed (P2): the app opens straight into the
@@ -1894,8 +2255,25 @@
      on normal page load — see fireGreeting() below. -->
 <div id="aura"></div>
 
+<!-- The gate (blocking sign-in check). Shown at load; script fades it out once Claude is signed in and
+     Grok/Gemini are signed in (or "Continue anyway"). ?nogate=1 hides it before first paint. -->
+<div id="gate" role="dialog" aria-modal="true" aria-labelledby="gate-title" aria-describedby="gate-sub">
+  <div class="gate-panel" id="gate-panel" tabindex="-1">
+    <div class="gate-brand"><span class="mark-glyph">&#9670;</span> Alfred</div>
+    <h2 id="gate-title" class="gate-title">Before we start</h2>
+    <p id="gate-sub" class="gate-sub">Checking your sign-ins&hellip;</p>
+    <ul id="gate-seats" class="gate-seats" aria-label="AI seats"></ul>
+    <div class="gate-foot">
+      <span id="gate-note" class="gate-note" role="status" aria-live="polite"></span>
+      <label class="gate-auto"><input type="checkbox" id="gate-auto"> Open the sign-in window for me</label>
+      <button id="gate-skip" class="gate-skip" type="button" hidden>Continue anyway</button>
+    </div>
+  </div>
+</div>
+<script>if (/[?&]nogate=1(?:&|$)/.test(location.search)) document.getElementById('gate').hidden = true;</script>
+
 <header id="top">
-  <div id="mark" aria-hidden="true">&#9670; ALFRED</div>
+  <div id="mark" aria-hidden="true"><span class="mark-glyph">&#9670;</span> ALFRED</div>
   <!-- Pick any combo of seats — 1, several, or all — and open them side by
        side in a real Windows Terminal window. Independent of the council
        ticks on the composer's seat strip below: this checklist only decides
@@ -2327,10 +2705,21 @@
   var DEFAULT_COLOR = '#8d9dad';
   function colorFor(folder) { return FOLDER_COLORS[folder] || DEFAULT_COLOR; }
 
-  var ACCENT_RGB = '255,182,72';  // --alfred-amber #ffb648 (was --blue)
+  // Wireframe, sulci, links and org lanes: a cyan at low alpha derived from --focus-rgb
+  // (pulled 65% of the way toward the skin's cyan, #4cc9ff) so the brain follows the skin.
+  function wireRgb() {
+    var p = [230, 247, 255];
+    try {
+      var raw = getComputedStyle(document.documentElement).getPropertyValue('--focus-rgb').split(',').map(Number);
+      if (raw.length === 3 && !raw.some(isNaN)) p = raw;
+    } catch (e) { /* keep the ice default */ }
+    var cyan = [76, 201, 255];
+    return p.map(function (v, i) { return Math.round(v * 0.35 + cyan[i] * 0.65); }).join(',');
+  }
+  var ACCENT_RGB = wireRgb();
   var REACTOR_HEX = '#ffb648';    // active org-tier lane label
   var REACTOR_HOT = '#ffd591';    // active org-tier lane label glow
-  var MINT_RGB = '99,230,181';    // --mint #63e6b5
+  var MINT_RGB = '46,242,178';    // --mint #2ef2b2
 
   // ============================================================
   // Toast system — DESIGN-UI-SYSTEM §2.10.
@@ -2550,7 +2939,11 @@
       toast(message, 'info', { title: 'Alfred', ms: 20000 });
     }).catch(function () { /* a silent HUD is not a broken HUD */ });
   }
-  setTimeout(fireGreeting, 600);
+  // Wait for the sign-in gate: the greeting is spoken aloud, so it must not talk over the gate.
+  setTimeout(function waitForGate() {
+    if (document.body.classList.contains('gated')) return setTimeout(waitForGate, 400);
+    fireGreeting();
+  }, 600);
 
   // ============================================================
   // Canvas + camera
@@ -3150,6 +3543,7 @@
   var daySig = '';          // fingerprint of what is on screen, so an unchanged poll rebuilds nothing
   var daySeq = 0;           // request order, so a slow poll cannot repaint over a newer action reply
   var dayApplied = 0;
+  var dayEntered = false;   // the Day cards have had their one entrance stagger
   var dayBusy = {};         // file -> true while an action on it is in flight
   var dayOpen = {};         // collapsed cards the operator has opened, by title
   var lastBrainVersion = null;
@@ -3313,7 +3707,11 @@
   function dayItemRow(item, o) {
     o = o || {};
     var row = el('div', 'day-item' + (o.cls ? ' ' + o.cls : ''), []);
-    if (item.kind) row.appendChild(el('span', 'day-kind', [item.kind]));
+    if (item.kind) {
+      var kindChip = el('span', 'day-kind', [item.kind]);
+      kindChip.setAttribute('data-kind', String(item.kind).toLowerCase());
+      row.appendChild(kindChip);
+    }
     var title = el('button', 'day-title', [item.title || item.file]);
     title.type = 'button';
     title.title = 'Open ' + item.file;
@@ -3498,6 +3896,99 @@
     return dayCard('End of day', { body: body });
   }
 
+  // --- Since you last looked: the last 24h of edits across the shared brain ---
+  // /api/assistant carries `recent` (newest first, max 20). A row is "new" when it was
+  // modified after the last time this page was looked at: alfred-last-seen is written
+  // when the tab is hidden or closed, and read again when it comes back. Never written
+  // yet? Treat the last 6 hours as new.
+  var LAST_SEEN_KEY = 'alfred-last-seen';
+  var RECENT_FALLBACK_MS = 6 * 60 * 60 * 1000;
+  var RECENT_FOLD = 8;
+  var recentShowAll = false;
+
+  function readLastSeen() {
+    var t = NaN;
+    try { t = parseInt(localStorage.getItem(LAST_SEEN_KEY), 10); } catch (e) { /* no storage */ }
+    return isFinite(t) && t > 0 ? t : Date.now() - RECENT_FALLBACK_MS;
+  }
+  function writeLastSeen() {
+    try { localStorage.setItem(LAST_SEEN_KEY, String(Date.now())); } catch (e) { /* no storage */ }
+  }
+  var recentBaseline = readLastSeen();
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { writeLastSeen(); return; }
+    recentBaseline = readLastSeen();       // what changed while away is what is new now
+    if (dayFeed) renderDay(dayFeed, true);
+  });
+  window.addEventListener('pagehide', writeLastSeen);
+
+  function recentAgeMinutes(r) {
+    var t = Date.parse(r.modified);
+    if (isFinite(t)) return Math.max(0, Math.floor((Date.now() - t) / 60000));
+    return typeof r.ageMinutes === 'number' ? Math.max(0, Math.floor(r.ageMinutes)) : 0;
+  }
+
+  function recentAgeText(mins) {
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + ' min ago';
+    var h = Math.floor(mins / 60);
+    if (h < 24) return h + ' h ago';
+    return Math.floor(h / 24) + ' d ago';
+  }
+
+  function recentIsNew(r) {
+    var t = Date.parse(r.modified);
+    return isFinite(t) && t > recentBaseline;
+  }
+
+  function recentAuthor(r) {
+    var a = String(r.author || '').toLowerCase();
+    if (a.indexOf('grok') !== -1) return { key: 'grok', label: 'Grok' };
+    if (a.indexOf('claude') !== -1) return { key: 'claude', label: 'Claude' };
+    if (a.indexOf('alfred') !== -1 || (!a && r.ours)) return { key: 'claude', label: 'Alfred' };
+    return { key: 'other', label: r.author ? String(r.author).split(/[\s(,;]/)[0].slice(0, 10) : '?' };
+  }
+
+  function dayRecentRow(r) {
+    var isNew = recentIsNew(r);
+    var au = recentAuthor(r);
+    var b = el('button', 'day-recent-row ' + (isNew ? 'is-new' : 'is-old'), []);
+    b.type = 'button';
+    var chip = el('span', 'rc-author', [au.label]);
+    chip.setAttribute('data-a', au.key);
+    b.appendChild(chip);
+    b.appendChild(el('span', 'rc-title', [r.title || r.file]));
+    b.appendChild(el('span', 'rc-age', [recentAgeText(recentAgeMinutes(r))]));
+    var kicker = [r.folder, r.kind && String(r.kind).toLowerCase() !== String(r.folder || '').toLowerCase() ? r.kind : '']
+      .filter(Boolean).join(' · ');
+    if (kicker) b.appendChild(el('span', 'rc-kicker', [kicker]));
+    if (isNew) b.appendChild(el('span', 'day-sr', ['new']));
+    b.title = 'Open ' + r.file;
+    b.addEventListener('click', function () { dayOpenFile(r.file, r.title); });
+    return b;
+  }
+
+  function dayRecentCard(d) {
+    if (!Array.isArray(d.recent)) return null;     // an older server: no strip rather than a false "nothing changed"
+    var rows = d.recent;
+    var fresh = rows.filter(recentIsNew).length;
+    var body = [];
+    if (!rows.length) {
+      body.push(dayEmpty('Nothing changed in the last day.'));
+    } else {
+      var fold = Math.max(RECENT_FOLD, fresh);
+      body.push(el('div', 'day-recent', (recentShowAll ? rows : rows.slice(0, fold)).map(dayRecentRow)));
+      if (rows.length > fold) {
+        var more = el('button', 'btn day-recent-more', [recentShowAll ? 'Show fewer' : 'Show all ' + rows.length]);
+        more.type = 'button';
+        more.addEventListener('click', function () { recentShowAll = !recentShowAll; renderDay(dayFeed, true); });
+        body.push(more);
+      }
+    }
+    return dayCard('Since you last looked (' + fresh + ')', { body: body });
+  }
+
   function dayOpenColumn(d) {
     var todos = arr(d.todos), watching = arr(d.watching), projects = arr(d.projects), signals = arr(d.signals);
     var cards = [
@@ -3510,6 +4001,8 @@
     ];
     if (signals.length) cards.push(dayCard('Signals waiting', { count: signals.length, body: signals.map(daySignalRow) }));
     cards.push(dayEndOfDayCard(d));
+    var recent = dayRecentCard(d);
+    if (recent) cards.unshift(recent);
     return dayColumn('Open and wrap-up', cards);
   }
 
@@ -3522,7 +4015,8 @@
     daySummaryEl.textContent = d.brain ? daySummaryText(d) : 'Shared brain not found';
     daySummaryEl.title = d.generatedAt ? 'Read ' + d.generatedAt : '';
 
-    var sig = JSON.stringify(d, function (k, v) { return k === 'generatedAt' ? undefined : v; });
+    var sig = JSON.stringify(d, function (k, v) { return k === 'generatedAt' || k === 'ageMinutes' ? undefined : v; })
+      + '|' + Math.floor(Date.now() / 300000) + '|' + recentBaseline + '|' + recentShowAll;
     if (!force && sig === daySig) return;
     daySig = sig;
 
@@ -3536,6 +4030,17 @@
       return;
     }
     var grid = el('div', 'day-grid', [dayTodayColumn(d), dayBriefColumn(d), dayOpenColumn(d)]);
+    if (!dayEntered) { // one entrance stagger, on first mount only (never on a data poll)
+      dayEntered = true;
+      grid.classList.add('enter');
+      var stagger = 0;
+      for (var row = 0; row < 6; row++) {
+        Array.prototype.forEach.call(grid.children, function (col) {
+          var card = col.children[row];
+          if (card) card.style.animationDelay = Math.min(stagger++, 9) * 45 + 'ms';
+        });
+      }
+    }
     dayBodyEl.appendChild(grid);
     Array.prototype.forEach.call(grid.querySelectorAll('.day-col'), function (c, i) { c.scrollTop = colScroll[i] || 0; });
     dayBodyEl.scrollTop = bodyScroll;
@@ -3723,14 +4228,18 @@
       });
       localStorage.setItem(key, '1');
     } catch (e) { /* no storage: at most one auto-open per page load, below */ }
-    var seat = arr(d.seats).filter(function (s) { return s.id === need[0]; })[0];
+    var firstId = GATE_ORDER.filter(function (id) { return need.indexOf(id) !== -1; })[0] || need[0];
+    var seat = arr(d.seats).filter(function (s) { return s.id === firstId; })[0];
     if (!seat) return;
     ccSignIn(seat).then(function (ok) {
       if (!ok) return;
+      gateConsoleOpened = true;
       signinOpened = seat.id;
       startBenchWatch(seat.id);
       if (benchData) renderBanner(benchData);
-    }).catch(function () { /* the banner's own button is still there */ });
+      gateSetNote('Sign-in window opened for ' + benchShort(seat) + '. Finish it there; this page updates when you are done.');
+      gateSyncSkip();
+    }).catch(function () { /* the banner's and the gate's own buttons are still there */ });
   }
 
   function renderBench(d) {
@@ -3744,6 +4253,7 @@
     }
     checkBenchWatch(d);
     renderBanner(d);
+    gateUpdate(d);
     if (benchFirst) { benchFirst = false; maybeAutoOpenSignIn(d); }
   }
 
@@ -3753,13 +4263,288 @@
     var p = bridgeFetch('/api/bench' + (refresh ? '?refresh=1' : ''))
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(renderBench)
-      .catch(function () { /* keep the last strip; the next poll tries again */ })
+      .catch(function () { gateBenchFailed(); /* keep the last strip; the next poll tries again */ })
       .then(function () { if (benchInflight === p) benchInflight = null; });
     benchInflight = p;
     return p;
   }
 
   function pollBenchTick() { return fetchBench(false); }
+
+  // ============================================================
+  // THE GATE (#gate): the dash does not open until the seats it leans on are
+  // signed in. Claude is the main seat and the orchestrator, so it is MANDATORY
+  // (no bypass). Grok and Gemini are FORCED when installed: a "Continue anyway"
+  // link appears only after a sign-in console has been opened for a missing seat
+  // this boot, or 60 s after the gate opened. Ollama, OmniRoute and anything
+  // not installed are listed but never block. While the gate is up the rest of
+  // the page is inert and /api/bench?refresh=1 is polled every 10 s; it fades
+  // out the moment the check passes. ?nogate=1 switches it off (the browser
+  // test suites use that). Built with el()/textContent only.
+  // ============================================================
+  var GATE_POLL_MS = 10 * 1000;
+  var GATE_SKIP_AFTER_MS = 60 * 1000;
+  var GATE_SKIP_PREFIX = 'alfred-gate-skipped-';
+  var GATE_FORCED = ['grok', 'gemini'];            // installed seats that must be signed in unless skipped
+  var GATE_ORDER = ['claude', 'grok', 'gemini'];   // which sign-in console opens first
+  var GATE_ROLE = {
+    claude: 'Main seat: orchestrates everything',
+    grok: 'Live world, voice and the car',
+    gemini: 'Long reading and images',
+    ollama: 'Free local drafts',
+    omniroute: 'Reserve capacity',
+  };
+  var gateEl = document.getElementById('gate');
+  var gateShown = false;
+  var gateOpenedAt = Date.now();
+  var gateConsoleOpened = false;     // a sign-in console was opened for a missing seat this boot
+  var gateSkipped = false;           // "Continue anyway", remembered for this boot
+  var gateServerStarted = null;
+  var gateLast = null;               // last good /api/bench result
+  var gateFails = 0;                 // consecutive failed bench fetches
+  var gateTimer = null;
+  var gateSkipTimer = null;
+  var gatePollBusy = false;
+  var gateInerted = [];
+  var gateSig = '';
+  var gateSeatsEl = null, gateSubEl = null, gateNoteEl = null, gateSkipEl = null, gatePanelEl = null;
+
+  function gateSeatOf(d, id) { return arr(d.seats).filter(function (s) { return s.id === id; })[0] || null; }
+
+  // What stands between the operator and the dash.
+  function gateMissing(d) {
+    var claude = gateSeatOf(d, 'claude');
+    var m = { unknown: !claude, claudeDown: !claude || !claude.signedIn, claude: claude, forced: [] };
+    GATE_FORCED.forEach(function (id) {
+      var s = gateSeatOf(d, id);
+      if (s && s.installed && !s.signedIn) m.forced.push(s);
+    });
+    return m;
+  }
+
+  function gateSatisfied(m) {
+    if (m.unknown) return gateSkipped;                       // the seat check itself is broken: never trap the operator
+    return !m.claudeDown && (gateSkipped || !m.forced.length);
+  }
+
+  function gateCanSkip(m) {
+    if (m.unknown) return Date.now() - gateOpenedAt >= GATE_SKIP_AFTER_MS;
+    if (m.claudeDown) return false;                          // Claude is mandatory: no bypass, ever
+    if (!m.forced.length) return false;
+    return gateConsoleOpened || Date.now() - gateOpenedAt >= GATE_SKIP_AFTER_MS;
+  }
+
+  function gateSyncSkip() {
+    if (!gateSkipEl) return;
+    var show;
+    if (!gateLast) show = gateFails > 0 && Date.now() - gateOpenedAt >= GATE_SKIP_AFTER_MS;
+    else show = gateCanSkip(gateMissing(gateLast));
+    gateSkipEl.hidden = !show;
+  }
+
+  function gateSetNote(text) { if (gateNoteEl) gateNoteEl.textContent = text || ''; }
+
+  function capFirst(x) { x = String(x || ''); return x.charAt(0).toUpperCase() + x.slice(1); }
+
+  function gateStateText(s) {
+    var d = s.detail || {};
+    if (!s.installed) return 'not installed';
+    if (s.id === 'claude') {
+      if (!s.signedIn) return 'signed out';
+      var bits = [d.subscription ? capFirst(d.subscription) + ' subscription' : '', d.authMethod].filter(Boolean);
+      return 'signed in' + (bits.length ? ': ' + bits.join(' · ') : '');
+    }
+    if (s.id === 'grok') {
+      if (!s.signedIn) return 'signed out — the sign-in lapses every 7 days';
+      var n = typeof d.ageDays === 'number' ? Math.floor(d.ageDays) : null;
+      var age = n === null ? '' : (n < 1 ? ' today' : ' ' + n + (n === 1 ? ' day ago' : ' days ago'));
+      return 'signed in' + age + (d.expiresSoon ? ' — renew it soon' : '');
+    }
+    if (s.id === 'gemini') return s.signedIn ? 'ready' : 'needs sign-in';
+    return s.signedIn ? 'ready' : (s.canSignIn ? 'needs sign-in' : 'not running');
+  }
+
+  function gateRowNode(s, m) {
+    var blocking = (s.id === 'claude' && !s.signedIn) || m.forced.indexOf(s) !== -1;
+    var cls = 'gate-seat' + (s.installed && s.signedIn ? ' ok' : blocking ? ' need' : '');
+    var row = el('li', cls, []);
+    row.style.setProperty('--seat', seatAccentVar(s.id));
+    row.appendChild(el('span', 'gate-bulb', []));
+    var tag = s.id === 'claude' ? 'Required' : (GATE_FORCED.indexOf(s.id) !== -1 && s.installed ? 'Needed' : 'Optional');
+    var state = gateStateText(s);
+    if (s.installed && !s.signedIn && !s.canSignIn && s.loginCmd) state += ' (run "' + s.loginCmd + '" in a terminal)';
+    row.appendChild(el('div', 'gate-seat-main', [
+      el('div', 'gate-seat-name', [String(s.label || s.id), el('span', 'gate-tag', [tag])]),
+      GATE_ROLE[s.id] ? el('div', 'gate-role', [GATE_ROLE[s.id]]) : null,
+      el('div', 'gate-state', [state]),
+    ]));
+    if (s.installed && !s.signedIn && s.canSignIn) {
+      var btn = el('button', 'btn primary', ['Sign in']);
+      btn.type = 'button';
+      btn.setAttribute('aria-label', 'Sign in to ' + benchShort(s));
+      btn.addEventListener('click', function () { gateSignIn(s, btn); });
+      row.appendChild(btn);
+    }
+    return row;
+  }
+
+  function gateSubText(m) {
+    if (m.unknown) return 'Alfred could not read which seats are signed in. It keeps trying; you can continue in a minute.';
+    if (m.claudeDown) {
+      return m.claude && !m.claude.installed
+        ? 'Claude Code is not installed on this PC. Alfred runs on it, so it has to be installed and signed in first.'
+        : 'Claude is the main seat and everything runs through it, so it has to be signed in. Sign in to continue.';
+    }
+    if (m.forced.length) {
+      var names = m.forced.map(benchShort);
+      var list = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0];
+      return 'Claude is ready. ' + list + (names.length > 1 ? ' still need' : ' still needs') + ' a sign-in so each can take its own jobs.';
+    }
+    return 'All set.';
+  }
+
+  function gateRender(d, m) {
+    var order = GATE_ORDER.concat(arr(d.seats).map(function (s) { return s.id; })
+      .filter(function (id) { return GATE_ORDER.indexOf(id) === -1; }));
+    var seats = order.map(function (id) { return gateSeatOf(d, id); }).filter(Boolean);
+    var sig = JSON.stringify(seats) + '|' + gateSkipped + '|' + m.claudeDown + '|' + m.unknown;
+    if (sig !== gateSig) {
+      var first = !gateSig;
+      gateSig = sig;
+      gateSubEl.textContent = gateSubText(m);
+      gateSeatsEl.textContent = '';
+      seats.forEach(function (s) { gateSeatsEl.appendChild(gateRowNode(s, m)); });
+      if (first) gateFocusFirst();
+    }
+    gateSyncSkip();
+  }
+
+  function gateFocusFirst() {
+    var target = gateEl.querySelector('.gate-seats .btn') || gatePanelEl;
+    if (target && target.focus) target.focus({ preventScroll: true });
+  }
+
+  function gateSignIn(seat, btn) {
+    return ccSignIn(seat, btn).then(function (ok) {
+      if (ok) {
+        gateConsoleOpened = true;
+        signinOpened = seat.id;
+        startBenchWatch(seat.id);
+        gateSetNote('Sign-in window opened for ' + benchShort(seat) + '. Finish it there; this page updates when you are done.');
+        gateSyncSkip();
+      }
+      return ok;
+    });
+  }
+
+  function gateInert(on) {
+    if (on) {
+      gateInerted = [];
+      Array.prototype.forEach.call(document.body.children, function (n) {
+        if (n === gateEl || n.id === 'toast-stack' || /^(SCRIPT|STYLE|LINK|NOSCRIPT)$/.test(n.tagName)) return;
+        if (!n.inert) { n.inert = true; gateInerted.push(n); }
+      });
+    } else {
+      gateInerted.forEach(function (n) { n.inert = false; });
+      gateInerted = [];
+    }
+  }
+
+  function gateRelease() {
+    if (!gateShown) return;
+    gateShown = false;
+    clearInterval(gateTimer);
+    clearTimeout(gateSkipTimer);
+    var hadFocus = gateEl.contains(document.activeElement) || document.activeElement === document.body;
+    gateEl.classList.add('leaving');
+    document.body.classList.remove('gated');
+    gateInert(false);
+    if (hadFocus) {
+      var box = document.getElementById('search-input');
+      if (box) box.focus({ preventScroll: true });
+    }
+    setTimeout(function () { gateEl.hidden = true; gateEl.classList.remove('leaving'); }, 260);
+  }
+
+  // Called with every /api/bench result (renderBench).
+  function gateUpdate(d) {
+    if (!gateShown) return;
+    gateFails = 0;
+    gateLast = d;
+    if (d.serverStarted && !gateServerStarted) {
+      gateServerStarted = d.serverStarted;
+      var key = GATE_SKIP_PREFIX + d.serverStarted;
+      try {
+        if (localStorage.getItem(key)) gateSkipped = true;
+        if (localStorage.getItem(SIGNIN_OPENED_PREFIX + d.serverStarted)) gateConsoleOpened = true;
+        Object.keys(localStorage).forEach(function (k) {
+          if (k.indexOf(GATE_SKIP_PREFIX) === 0 && k !== key) localStorage.removeItem(k);
+        });
+      } catch (e) { /* no storage: the skip lasts this page load only */ }
+    }
+    var m = gateMissing(d);
+    if (gateSatisfied(m)) return gateRelease();
+    gateRender(d, m);
+  }
+
+  // Called when a bench fetch fails while the gate is up.
+  function gateBenchFailed() {
+    if (!gateShown) return;
+    gateFails++;
+    gateSetNote("Alfred can't reach its own server yet. Trying again every 10 seconds.");
+    gateSyncSkip();
+  }
+
+  function gateTick() {
+    if (!gateShown || gatePollBusy || document.hidden) return;
+    gatePollBusy = true;
+    fetchBench(true).then(function () { gatePollBusy = false; });
+  }
+
+  (function initGate() {
+    if (!gateEl) return;
+    if (/[?&]nogate=1(?:&|$)/.test(location.search)) { gateEl.hidden = true; return; }
+    gateSeatsEl = document.getElementById('gate-seats');
+    gateSubEl = document.getElementById('gate-sub');
+    gateNoteEl = document.getElementById('gate-note');
+    gateSkipEl = document.getElementById('gate-skip');
+    gatePanelEl = document.getElementById('gate-panel');
+    var autoBox = document.getElementById('gate-auto');
+    if (autoBox) {
+      autoBox.checked = signinAutoOpenOn();
+      autoBox.addEventListener('change', function () {
+        try { localStorage.setItem(SIGNIN_AUTO_KEY, autoBox.checked ? '1' : '0'); } catch (e) { /* localStorage unavailable */ }
+      });
+    }
+    gateSkipEl.addEventListener('click', function () {
+      gateSkipped = true;
+      try { if (gateServerStarted) localStorage.setItem(GATE_SKIP_PREFIX + gateServerStarted, '1'); } catch (e) { /* no storage */ }
+      if (gateLast) gateUpdate(gateLast); else gateRelease();
+    });
+    // The page behind the scrim must not take focus or hotkeys while the gate is up.
+    window.addEventListener('keydown', function (e) {
+      if (!gateShown) return;
+      if (e.key === 'Tab') {
+        var f = Array.prototype.filter.call(gateEl.querySelectorAll('button, input, [tabindex="0"]'),
+          function (n) { return !n.disabled && !n.hidden && n.offsetParent !== null; });
+        if (!f.length) { e.preventDefault(); return; }
+        var i = f.indexOf(document.activeElement);
+        var next = e.shiftKey ? (i <= 0 ? f.length - 1 : i - 1) : (i === -1 || i === f.length - 1 ? 0 : i + 1);
+        e.preventDefault();
+        f[next].focus();
+        return;
+      }
+      e.stopPropagation();
+    }, true);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) gateTick(); });
+    gateShown = true;
+    gateEl.hidden = false;
+    document.body.classList.add('gated');
+    gateInert(true);
+    gateTimer = setInterval(gateTick, GATE_POLL_MS);
+    gateSkipTimer = setTimeout(gateSyncSkip, GATE_SKIP_AFTER_MS + 50);
+    gatePanelEl.focus({ preventScroll: true });
+  })();
 
   (function wireAssistantRefresh() {
     var btn = document.getElementById('day-refresh');
@@ -5942,7 +6727,7 @@
     ctx.save();
     // Sulci sit behind ~110 nodes and every link between them. At 0.16 they
     // were technically drawn and effectively invisible.
-    ctx.strokeStyle = 'rgba(' + ACCENT_RGB + ',0.34)';
+    ctx.strokeStyle = 'rgba(' + ACCENT_RGB + ',0.24)';
     ctx.lineWidth = Math.max(0.8, 1.4 * cam.scale);
     ctx.lineCap = 'round';
     BRAIN_SULCI.forEach(function (s) {
@@ -5959,8 +6744,8 @@
     });
 
     traceBrainOutline();
-    ctx.strokeStyle = 'rgba(' + ACCENT_RGB + ',0.6)';
-    ctx.shadowColor = 'rgba(' + ACCENT_RGB + ',0.65)';
+    ctx.strokeStyle = 'rgba(' + ACCENT_RGB + ',0.46)';
+    ctx.shadowColor = 'rgba(' + ACCENT_RGB + ',0.5)';
     ctx.shadowBlur = 16;
     ctx.lineWidth = Math.max(1.4, 2.2 * cam.scale);
     ctx.stroke();
@@ -5982,7 +6767,7 @@
       // page background behind each label costs nothing and makes the region
       // names legible at any zoom the outline is visible at.
       var w = ctx.measureText(L.label).width;
-      ctx.fillStyle = 'rgba(8,11,16,0.72)';
+      ctx.fillStyle = 'rgba(7,8,13,0.72)';
       ctx.beginPath();
       ctx.roundRect(c.x - w / 2 - 7, c.y - 9, w + 14, 18, 9);
       ctx.fill();
