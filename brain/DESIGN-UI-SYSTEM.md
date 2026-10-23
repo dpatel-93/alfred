@@ -1443,3 +1443,152 @@ Ordered so nothing breaks mid-way.
 10. Smoke test: entry stagger still sequences; drawer opens and closes; tab rail
     tracks; gauges are sharp; `Tab` through the whole UI shows a visible ring at every
     stop; toggle reduced motion in DevTools and confirm the grid and reactor stop.
+
+---
+
+## 7. Cyberpunk skin (2026-10-23)
+
+The Blend redesign's warm graphite room was replaced by an ink-blue night room with
+neon edges. Every token **name** survived (§0.1); only values moved, one token was
+added (`--hl-line`), and the dormant notch came back. Where this section and the
+tables in §1 / §5.1 disagree, **this section wins** — those tables still quote the
+pre-skin hex values. The component list in §2 is unchanged in structure; the skin is
+one additive block at the foot of the stylesheet (`CYBERPUNK SKIN`), so removing it
+returns the previous look except for the token values.
+
+### 7.1 Token values (names unchanged)
+
+| Token | Was | Now |
+|---|---|---|
+| `--bg` / `--bg-2` | `#131218` / `#17161d` | `#07080d` / `#0b0d14` |
+| `--surface-1` … `-4` | `#1c1b23 #22212b #2a2934 #333240` | `#0f1219 #141825 #1a1f2e #222841` |
+| `--border` / `--border-strong` / `--border-focusable` | `#2b2a35 #3a3947 #56545f` | `#1d2437 #2b3450 #3b4a6b` |
+| `--bone` (Alfred's own colour), `--focus-rgb` | `#f0e9dd`, `240,233,221` | `#e6f7ff` (ice), `230,247,255` |
+| `--mint` `--blue` `--blue-strong` | `#5fd39a #6fa8ff #4f8ff0` | `#2ef2b2 #4cc9ff #1fb6ff` |
+| `--amber` `--red` `--violet` `--orange` | `#f2c15b #ff7a80 #b08cff #e0855c` | `#ffc857 #ff4d6d #c77dff #ff8c42` |
+| `--gray` | `#908b9b` | `#8590a8` (the brief asked for `#7f8aa3`; nudged up so its own 10% badge tint keeps 4.8:1 instead of 4.5:1) |
+| `--text` `--text-soft` `--text-dim` `--text-faint` | `#ece8e3 #c6c1cc #a8a3b0 #726e7c` | `#e8f1ff #b7c6dc #8fa0ba #5c6b85` |
+| `--on-accent` | `#15141a` | `#06080c` |
+| `--p-claude` `--p-gemini` `--p-grok` `--p-ollama` `--p-omniroute` | `#e0855c #6fa8ff #d3d7e0 #b08cff #f2c15b` | `#ff8c42 #4cc9ff #e6f7ff #c77dff #ffc857` |
+| `--r-sm` `--r-md` `--r-lg` | `6px 9px 14px` | `4px 6px 10px` |
+| `--notch` / `--notch-sm` | `0 / 0` | `10px / 6px` |
+| `--scrim-bg` / `--overlay-bg` | `rgba(8,7,11,.62/.72)` | `rgba(4,6,12,.66/.76)` |
+| **new** `--hl-line` | n/a | `linear-gradient(90deg, blue 80%, transparent 60%)`: the 1px top highlight |
+
+Fonts are unchanged (Bahnschrift / Cascadia). The semantic contract (§1.2, §0.4) is
+unchanged: mint live/primary, blue info/selected, amber warn, red critical, gray idle;
+`--p-*` tint identity surfaces only (seat rows, the author chip in the Since-you-last-
+looked strip, the gate's seat bars).
+
+### 7.2 Geometry: the notch is back
+
+* One notch, **top-right corner**, `clip-path: polygon(0 0, calc(100% - var(--notch)) 0,
+  100% var(--notch), 100% 100%, 0 100%)`. A 1.5px diagonal stroke (a `linear-gradient(to
+  top right, ...)` square in the cut corner) draws the missing border edge.
+* Direct clip-path: `.frame` (`--notch-sm`), `.sheet`, `.modal` (`--notch: 14px`),
+  `.gate-panel` (16px). `clip-path` clips outer `box-shadow`, so these carry an inset glow
+  instead.
+* `.day-card` keeps a real outer hover glow by clipping a **pseudo layer** instead of the
+  card: `::before` = ground + border + notch + diagonal stroke, `::after` = the 1px top
+  highlight, the card itself is unclipped and owns the `box-shadow`.
+* **Not notched**: `#composer` (its Local GPU / Status popovers are absolutely positioned
+  above it and would be cut off) and `#panel` (the reader drawer sits flush to the screen
+  edge). Both get the top highlight as a background layer.
+* The 1px top highlight is a background layer (`var(--hl-line) 0 0 / 100% 1px no-repeat
+  border-box`) over a transparent border-top row, on `.sheet`, `.modal`, `#composer`,
+  `#panel`, `.gate-panel`; `.day-card` uses its `::after` so overdue cards can swap to red.
+* Rule from §2.0 still holds: notched frames do not nest.
+
+### 7.3 New and restyled components
+
+| Component | What it is now |
+|---|---|
+| Page ground | `body::before` at `--z-grid`: a 48px grid, 4% `--blue`, under a radial vignette. Fixed, static. `#aura` softened to 6% focus tint. |
+| Header | `#top` glass with a `--blue` hairline glow; brand glyph `.mark-glyph` in `--blue` with a soft text-shadow; `.view-btn` are parallelogram segments (`clip-path`) with a neon inset underline when active; `.dock-btn` and the util buttons (`#utils button`, `#ext-term-btn`) are ghost outlines that light blue on hover. |
+| Day date hero | `--font-display`, uppercase, with a 2px `--blue` to transparent rule and glow under the headline. |
+| Day cards | `--hl` (blue; red on `.overdue`) drives the top highlight, diagonal stroke and hover. Hover = border to `color-mix(--hl 45%)` plus `0 0 24px color-mix(--hl 12%)`. |
+| Kind chips | `.day-kind[data-kind]`: mono, uppercase, 2px coloured left bar: errand amber, reminder blue, todo mint, watch violet, anything else gray. |
+| Bench pills | Sharper corners, mono uppercase; the bulb glows in its state colour: mint ready, amber needs sign-in, gray not installed. |
+| Buttons | Primary (`.btn.primary`, the Day "Done") = mint outline and text, glow on hover/focus; secondary = ghost; danger = red outline. Focus ring stays `2px solid --blue`, offset 2px. |
+| Composer | Slimmer, 1px `--border-strong` input, focus = `--blue` border plus a soft glow, `>` prompt in blue. |
+| Brain canvas | Transparent over the grid; wireframe, sulci, links and org lanes use `ACCENT_RGB`, now a cyan derived from `--focus-rgb` (35% focus, 65% `#4cc9ff`) at lower alpha (sulci .24, outline .46). Node colours untouched (Phase 2 regroups them). |
+| Toasts, tooltip, palette, reader | Inherit the tokens; tighter radius; toasts get a faint accent glow. |
+| Scrollbars | `scrollbar-width: thin`, `--border-focusable` thumb. |
+
+Motion: one entrance stagger on the Day cards (`cyberRise`, 45ms steps, first mount
+only, never on a data poll) and the gate panel's rise. Both, and every new transition,
+are removed under `prefers-reduced-motion: reduce`.
+
+### 7.4 The gate (`#gate`)
+
+A fixed dialog at `--z-landing` ("Before we start") shown at page load until
+`/api/bench` says the seats the dash leans on are signed in. While it is up,
+`body.gated` is set, every other top-level element is `inert`, a capture-phase
+`keydown` listener keeps Tab inside the panel and stops every other key reaching the
+hotkeys behind it, and toasts are lifted above it so "finish the sign-in" is never
+hidden.
+
+* **Claude** signed in: MANDATORY, no bypass at all.
+* **Grok** and **Gemini**, when installed: FORCED. "Continue anyway" appears only once a
+  sign-in console has been opened for a missing seat this boot, or 60 s after the gate
+  opened, and only when Claude is already signed in.
+* **Ollama**, OmniRoute and anything not installed: listed, never block.
+* Rows: bulb, name, `Required / Needed / Optional` tag, role line, state line (Claude:
+  subscription and method; Grok: "signed in N days ago" or "signed out, the sign-in
+  lapses every 7 days"; Gemini and the rest: ready / needs sign-in / not installed) and a
+  Sign in button per missing seat (`ccSignIn`).
+* On the first bench result after load the first missing seat's console (Claude, Grok,
+  Gemini order) opens once per server boot, key `alfred-signin-opened-<serverStarted>`.
+  The banner's "Auto-open sign-in at startup" opt-out (`alfred-signin-autoopen`) is honoured
+  and repeated inside the gate. The Day banner itself stays, for lapses while the dash is
+  open.
+* While shown: `/api/bench?refresh=1` every 10 s. It fades out (220ms) when satisfied.
+  "Continue anyway" is remembered per boot in `alfred-gate-skipped-<serverStarted>`.
+* If the bench cannot be read at all, the gate says so and offers "Continue anyway"
+  after 60 s, so a failed probe never bricks the page.
+* The spoken greeting waits until `body` is no longer `.gated`.
+* `?nogate=1` hides it before first paint and never blocks. The browser test suites use it.
+
+### 7.5 "Since you last looked" (Day, top of column 3)
+
+Reads `recent` from `/api/assistant` (last 24h of edits, newest first, max 20). Title is
+"Since you last looked (N)". Each row: author chip (Grok = `--p-grok` tint, Claude and
+Alfred = `--p-claude` tint, anything else gray; the leading word of `author` decides, and a
+signal with no author is read off its Inbox file name), folder kicker, title, age ("12 min
+ago", "3 h ago"). Click opens the reader. N is the rows modified after
+`localStorage['alfred-last-seen']`, written when the tab is hidden and on `pagehide`, read
+again when the tab becomes visible; unset means the last 6 hours count as new. Older rows
+render dimmer by colour (never by opacity, which would break contrast). Eight rows show,
+"Show all N" reveals the rest. Empty state: "Nothing changed in the last day." A server
+that does not send `recent` gets no card, rather than a false "nothing changed".
+
+### 7.6 Contrast (measured, WCAG 2.1 relative luminance)
+
+| Token | on `--bg` | `--surface-1` | `--surface-2` | `--surface-3` |
+|---|---|---|---|---|
+| `--text` `#e8f1ff` | 17.59 | 16.47 | 15.55 | 14.43 |
+| `--text-soft` `#b7c6dc` | 11.55 | 10.82 | 10.21 | 9.48 |
+| `--text-dim` `#8fa0ba` | 7.53 | **7.05** | 6.66 | 6.18 |
+| `--text-faint` `#5c6b85` | **3.71** | 3.48 | 3.28 | 3.05 |
+| `--gray` `#8590a8` | 6.24 | 5.85 | **5.52** | 5.12 |
+| `--blue` | 10.58 | 9.91 | 9.36 | 8.68 |
+| `--mint` | 13.78 | 12.90 | 12.18 | 11.30 |
+| `--amber` | 13.01 | 12.18 | 11.50 | 10.67 |
+| `--red` | 6.23 | 5.83 | 5.50 | 5.11 |
+| `--violet` | 7.44 | 6.96 | 6.58 | 6.10 |
+| `--orange` | 8.65 | 8.10 | 7.65 | 7.10 |
+
+Floors: text-dim on surface-1 7.05 (needs 4.5), gray on surface-2 5.52 (needs 4.5),
+text-faint on bg 3.71 (needs 3, decorative only).
+
+Badge tints (accent over `color-mix(accent 10%, --surface-2)`): gray 4.83, blue 7.72, mint
+9.80, amber 9.28, red 4.95, violet 5.68, orange 6.53. **The tint ceiling for text-bearing
+chips drops from 18% to 14%** (14%: gray 4.53, red 4.71; at 18% gray falls to 4.23 and red
+to 4.42). Everything the skin block adds uses 12% or less. `--on-accent` `#06080c` on solid
+mint 13.80, blue 10.60, amber 13.03, red 6.24, violet 7.45, orange 8.67.
+
+Known gap, inherited and not widened: `--border-focusable` `#3b4a6b` is 2.27:1 on
+`--bg` and 2.00:1 on `--surface-2`, under the 3:1 non-text floor of §5.1. The previous
+value (`#56545f`) was 2.51 and 2.14, so the gap predates the skin. Controls rely on their
+label text and the 2px `--blue` focus ring, not on the resting border, to be found; if the
+floor is to be enforced, `#52648c` reaches 3.00 on surface-2.
