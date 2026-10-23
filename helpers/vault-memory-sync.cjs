@@ -4,7 +4,12 @@
  *
  * Syncs Claude Code auto-memory files to the Alfred Brain vault on SessionEnd.
  * Each memory becomes a plain-markdown note in Claude-Code/Memory/.
- * A session log entry is appended to Claude-Code/SessionLog.md.
+ * A session log entry is appended to Claude-Code/SessionLog.md, or to a daily
+ * YYYY-MM-DD.md file when the profile sets "Session notes path".
+ *
+ * When ~/.alfred/redact.json exists (see brain-redact.cjs), every copy written
+ * to the vault is redacted first. That is for a vault other AIs read, such as a
+ * shared Google Drive brain, where names and handles must not land.
  *
  * The vault is a plain-markdown folder — Obsidian was retired 2026-08-08 and is
  * not required. YAML frontmatter and wiki-links are kept because they are useful
@@ -18,6 +23,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const brainRedact = require('./brain-redact.cjs');
 
 // --- Configuration ---
 
@@ -38,6 +44,18 @@ function isFixturePath(dir) {
   return /[\\/]test[\\/]fixtures[\\/]/.test(String(dir) + path.sep);
 }
 
+function readProfileValue(label) {
+  try {
+    const text = fs.readFileSync(PROFILE_PATH, 'utf8');
+    const m = text.match(new RegExp(`^\\s*-\\s*\\*\\*${label}[^*]*\\*\\*:\\s*(.+)$`, 'm'));
+    if (!m) return null;
+    const value = m[1].replace(/\s*\(.*?\)\s*$/, '').trim();
+    return !value || /^\(?not specified\)?$/i.test(value) ? null : value;
+  } catch {
+    return null;
+  }
+}
+
 function getVaultRoot() {
   // ALFRED_VAULT wins, matching how the brain server resolves the same folder.
   // One machine, one answer — a hook and a server disagreeing about where the
@@ -55,23 +73,30 @@ function getVaultRoot() {
   if (process.env.ALFRED_VAULT) {
     candidate = process.env.ALFRED_VAULT;
   } else {
-    try {
-      const text = fs.readFileSync(PROFILE_PATH, 'utf8');
-      const m = text.match(/^\s*-\s*\*\*Knowledge vault path[^*]*\*\*:\s*(.+)$/m);
-      if (!m) return null;
-      const value = m[1].replace(/\s*\(.*?\)\s*$/, '').trim();
-      if (!value || /^\(?not specified\)?$/i.test(value)) return null;
-      candidate = value;
-    } catch {
-      return null;
-    }
+    candidate = readProfileValue('Knowledge vault path');
+    if (!candidate) return null;
   }
   return isFixturePath(candidate) ? null : candidate;
+}
+
+// Daily session notes live outside the vault when the brain keeps them in
+// their own folder (Second Brain: Memory/Alfred/sessions/). ALFRED_SESSIONS
+// overrides for tests; ALFRED_VAULT alone means a test vault, so the profile's
+// real sessions folder is not used alongside it.
+function getSessionsDir() {
+  const dir = process.env.ALFRED_SESSIONS ||
+    (process.env.ALFRED_VAULT ? null : readProfileValue('Session notes path'));
+  return dir && !isFixturePath(dir) ? dir : null;
 }
 
 const VAULT_ROOT = getVaultRoot();
 const VAULT_MEMORY_DIR = VAULT_ROOT && path.join(VAULT_ROOT, 'Claude-Code', 'Memory');
 const VAULT_SESSION_LOG = VAULT_ROOT && path.join(VAULT_ROOT, 'Claude-Code', 'SessionLog.md');
+const SESSIONS_DIR = getSessionsDir();
+
+// null = redaction off, vault copies are verbatim.
+const REDACT = brainRedact.load();
+const toVault = (text) => (REDACT ? REDACT.text(text) : text);
 
 // Claude Code memory directories — scan all project memory dirs.
 // Overridable so the round-trip can be tested against throwaway folders rather
@@ -151,7 +176,7 @@ function parseMemoryFile(filePath) {
  * otherwise erase the other's entries. Order of the first argument is kept and
  * lines unique to the second are appended under their own heading.
  */
-function mergeIndexMarkdown(primary, secondary) {
+function mergeIndexMarkdown(primary, secondary, keyFn = (l) => l.trim()) {
   const parse = (text) => {
     const sections = new Map([['', []]]);
     let current = '';
@@ -172,9 +197,9 @@ function mergeIndexMarkdown(primary, secondary) {
   for (const [heading, linesB] of b) {
     if (!a.has(heading)) { a.set(heading, linesB); continue; }
     const linesA = a.get(heading);
-    const seen = new Set(linesA.map((l) => l.trim()).filter(Boolean));
+    const seen = new Set(linesA.map(keyFn).filter(Boolean));
     for (const line of linesB) {
-      const key = line.trim();
+      const key = keyFn(line);
       if (key && !seen.has(key)) { linesA.push(line); seen.add(key); }
     }
   }
@@ -193,10 +218,14 @@ function syncIndexFile(localPath, vaultPath) {
   const vault = fs.existsSync(vaultPath) ? fs.readFileSync(vaultPath, 'utf-8') : '';
   if (!local && !vault) return false;
 
-  const merged = mergeIndexMarkdown(local || vault, vault);
+  // With redaction on, the vault holds redacted lines, so lines are compared in
+  // redacted form: a local line and its own redacted copy count as one entry
+  // instead of the vault copy being appended back into the local index.
+  const merged = mergeIndexMarkdown(local || vault, vault, (l) => toVault(l).trim());
+  const mergedVault = toVault(merged);
   let changed = false;
   if (merged !== local) { fs.writeFileSync(localPath, merged, 'utf-8'); changed = true; }
-  if (merged !== vault) { fs.writeFileSync(vaultPath, merged, 'utf-8'); changed = true; }
+  if (mergedVault !== vault) { fs.writeFileSync(vaultPath, mergedVault, 'utf-8'); changed = true; }
   return changed;
 }
 
@@ -216,8 +245,8 @@ function isLegacyVaultNote(text) {
  * changed, its version is preserved beside it rather than discarded — this hook
  * must never be the reason a memory disappears.
  */
-function copyIfNewer(srcPath, destPath) {
-  const src = fs.readFileSync(srcPath, 'utf-8');
+function copyIfNewer(srcPath, destPath, transform = (t) => t) {
+  const src = transform(fs.readFileSync(srcPath, 'utf-8'));
   if (fs.existsSync(destPath)) {
     const dest = fs.readFileSync(destPath, 'utf-8');
     if (dest === src) return 'same';
@@ -345,7 +374,7 @@ function doSync() {
       const srcPath = path.join(memoryDir, memFile);
 
       try {
-        const result = copyIfNewer(srcPath, path.join(projectSubDir, memFile));
+        const result = copyIfNewer(srcPath, path.join(projectSubDir, memFile), toVault);
         if (result === 'copied') {
           synced++;
           syncedFiles.push({ file: memFile, project: projectName, type: parseMemoryFile(srcPath).type });
@@ -410,7 +439,13 @@ function doPull() {
       try {
         // Never pull a legacy rewritten note down over a real memory. The next
         // push from the machine that owns it replaces the vault copy properly.
-        if (isLegacyVaultNote(fs.readFileSync(vaultFile, 'utf-8'))) continue;
+        const vaultText = fs.readFileSync(vaultFile, 'utf-8');
+        if (isLegacyVaultNote(vaultText)) continue;
+        // A vault copy that is only this machine's own redacted render of the
+        // local memory carries nothing new, and pulling it would overwrite the
+        // real memory with the redacted one.
+        const localFile = path.join(memoryDir, memFile);
+        if (REDACT && fs.existsSync(localFile) && toVault(fs.readFileSync(localFile, 'utf-8')) === vaultText) continue;
         if (copyIfNewer(vaultFile, path.join(memoryDir, memFile)) === 'copied') {
           pulled++;
           dim(`< ${projectName}/${memFile}`);
@@ -425,7 +460,44 @@ function doPull() {
   if (pulled || errors) success(`Pulled ${pulled} memories from the vault (${errors} errors)`);
 }
 
+// Eastern time, which is what the Second Brain's file headers use.
+function getEasternStamp() {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date()).map((p) => [p.type, p.value]));
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` };
+}
+
+/** One file per day in the brain's header format, newest entry at the bottom. */
+function appendDailySessionNote(syncedFiles) {
+  const { date, time } = getEasternStamp();
+  ensureDir(SESSIONS_DIR);
+  const file = path.join(SESSIONS_DIR, `${date}.md`);
+  let content = fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : [
+    `# Alfred sessions: ${date}`,
+    '',
+    '- **Owner:** Alfred',
+    '- **Updated by:** Alfred',
+    `- **Date:** ${date}`,
+    `- **Last updated:** ${date} ${time} ET`,
+    '',
+    'Written by the vault-memory-sync hook at the end of each Claude Code session.',
+    '',
+  ].join('\n');
+  content = content.replace(/^- \*\*Last updated:\*\* .*$/m, `- **Last updated:** ${date} ${time} ET`);
+  const entry = [
+    `## ${time} ET`,
+    '',
+    `**Memories synced:** ${syncedFiles.length}`,
+    ...syncedFiles.map((f) => `- ${f.project}/${f.file.replace('.md', '')} (${f.type})`),
+    '',
+  ].join('\n');
+  fs.writeFileSync(file, toVault(content.trimEnd() + '\n\n' + entry), 'utf-8');
+}
+
 function appendSessionLog(syncedFiles) {
+  if (SESSIONS_DIR) return appendDailySessionNote(syncedFiles);
   const timestamp = getTimestamp();
   const date = getDateStamp();
 
@@ -464,7 +536,9 @@ function doStatus() {
 
   console.log(`  Vault:          ${fs.existsSync(VAULT_ROOT) ? 'Found' : 'NOT FOUND'}`);
   console.log(`  Memory dir:     ${fs.existsSync(VAULT_MEMORY_DIR) ? 'Exists' : 'Will be created on first sync'}`);
-  console.log(`  Session log:    ${fs.existsSync(VAULT_SESSION_LOG) ? 'Exists' : 'Will be created on first sync'}`);
+  if (SESSIONS_DIR) console.log(`  Session notes:  ${SESSIONS_DIR} (one file per day)`);
+  else console.log(`  Session log:    ${fs.existsSync(VAULT_SESSION_LOG) ? 'Exists' : 'Will be created on first sync'}`);
+  console.log(`  Redaction:      ${REDACT ? 'ON (' + REDACT.rulesPath + ')' : 'off'}`);
   console.log(`  Memory base:    ${fs.existsSync(CLAUDE_MEMORY_BASE) ? 'Found' : 'NOT FOUND'}`);
 
   if (fs.existsSync(VAULT_MEMORY_DIR)) {
