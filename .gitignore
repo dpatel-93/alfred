@@ -34,3 +34,6 @@ helpers/package-lock.json
 brain/bench-run*.log
 brain/staffing-ab-run*.log
 brain/bench/results-graded.jsonl
+
+# Per-machine record of what vault-memory-sync last wrote to the shared brain
+helpers/.vault-sync-state.json

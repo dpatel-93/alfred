@@ -23,6 +23,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const brainRedact = require('./brain-redact.cjs');
 
 // --- Configuration ---
@@ -255,7 +256,7 @@ function isLegacyVaultNote(text) {
  * changed, its version is preserved beside it rather than discarded — this hook
  * must never be the reason a memory disappears.
  */
-function copyIfNewer(srcPath, destPath, transform = (t) => t) {
+function copyIfNewer(srcPath, destPath, transform = (t) => t, { track = false } = {}) {
   const src = transform(fs.readFileSync(srcPath, 'utf-8'));
   if (fs.existsSync(destPath)) {
     const dest = fs.readFileSync(destPath, 'utf-8');
@@ -268,11 +269,47 @@ function copyIfNewer(srcPath, destPath, transform = (t) => t) {
       return 'copied';
     }
     if (fs.statSync(destPath).mtimeMs >= fs.statSync(srcPath).mtimeMs) return 'older';
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    fs.writeFileSync(destPath.replace(/\.md$/, `.conflict-${stamp}.md`), dest, 'utf-8');
+    // Only keep the old copy when someone else changed it since this machine
+    // last wrote it. Without this check every ordinary memory update left a
+    // conflict file behind, which in a shared brain is clutter every AI reads.
+    if (!track || !wroteItLast(destPath, dest)) {
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      fs.writeFileSync(destPath.replace(/\.md$/, `.conflict-${stamp}.md`), dest, 'utf-8');
+    }
   }
   fs.writeFileSync(destPath, src, 'utf-8');
+  if (track) rememberWrite(destPath, src);
   return 'copied';
+}
+
+// --- What this machine last wrote to the vault (content hash per file) ---
+// A hash, not an mtime: cloud drives rewrite timestamps on their own.
+const STATE_PATH = process.env.ALFRED_SYNC_STATE ||
+  path.join(os.homedir(), '.claude', 'helpers', '.vault-sync-state.json');
+const STATE_EXISTED = fs.existsSync(STATE_PATH);
+let syncState = null;
+
+function loadState() {
+  if (!syncState) {
+    try { syncState = JSON.parse(fs.readFileSync(STATE_PATH, 'utf-8')); } catch { syncState = {}; }
+    syncState.written = syncState.written || {};
+  }
+  return syncState;
+}
+
+const hashOf = (text) => crypto.createHash('sha256').update(text).digest('hex');
+
+function rememberWrite(p, text) { loadState().written[path.resolve(p)] = hashOf(text); }
+
+// First run with no state: treat the existing mirror as this machine's own.
+function wroteItLast(p, text) {
+  if (!STATE_EXISTED) return true;
+  return loadState().written[path.resolve(p)] === hashOf(text);
+}
+
+function saveState() {
+  if (!syncState) return;
+  try { fs.writeFileSync(STATE_PATH, JSON.stringify(syncState), 'utf-8'); } catch { /* best effort */ }
 }
 
 /**
@@ -384,7 +421,7 @@ function doSync() {
       const srcPath = path.join(memoryDir, memFile);
 
       try {
-        const result = copyIfNewer(srcPath, path.join(projectSubDir, memFile), toVault);
+        const result = copyIfNewer(srcPath, path.join(projectSubDir, memFile), toVault, { track: true });
         if (result === 'copied') {
           synced++;
           syncedFiles.push({ file: memFile, project: projectName, type: parseMemoryFile(srcPath).type });
@@ -403,6 +440,8 @@ function doSync() {
     appendSessionLog(syncedFiles);
   }
 
+  loadState();
+  saveState();
   success(`Synced ${synced} memories (${skipped} unchanged, ${errors} errors)`);
   for (const f of syncedFiles) {
     dim(`+ ${f.project}/${f.file} (${f.type})`);
