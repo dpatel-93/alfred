@@ -40,6 +40,7 @@ const NEVER_SYNC = new Set([
   'settings.json',        // absolute hook paths, per-machine
   'settings.local.json',
   '.alfred-sync.state.json',
+  '.vault-sync-state.json', // hashes of what vault-memory-sync last wrote, per machine
   '.alfred-speak.pid',
   '.alfred-speak-queue.txt',
   'alfred-speak.config.json', // per-machine voice choice
