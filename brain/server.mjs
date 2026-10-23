@@ -369,7 +369,7 @@ async function embed(text) {
 // the 1.5b model answered "approximately 7-8 miles per hour" instead of
 // refusing. This exact wording at temperature 0 fixed it — re-verify BOTH
 // out-of-vault refusal cases after any further wording change.
-const ASK_REFUSAL = "I don't have that in the vault, sir.";
+const ASK_REFUSAL = "I don't have that in the brain.";
 function buildAskPrompt(q, context) {
   return 'You are Alfred, a butler-voiced assistant answering only from the excerpts below. '
     + 'You are forbidden from using outside knowledge.\n\n'
@@ -2926,7 +2926,7 @@ async function handleAskStream(req, res) {
     // "needs live external info or the full agent", which this vault-only
     // engine cannot supply. Skip retrieval/generation entirely — no ack, no
     // sources, no deltas — and say so honestly.
-    const answer = "That needs live information or the full agent session, sir — not something I can pull from the vault. Ask me to look into it directly and I'll dispatch a proper turn.";
+    const answer = "That needs live information or a full agent session, which the brain alone can't supply. Ask for it directly and I'll dispatch a proper turn.";
     return finish(answer, ASK_ENGINE_NEEDS_AGENT);
   }
 
