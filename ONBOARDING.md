@@ -90,7 +90,7 @@ Run `node ~/.claude/helpers/provider-setup.mjs` and show them the result. It is 
 detects what is installed and signed in, sends no prompts, and costs nothing.
 
 Alfred orchestrates **roles** (c-suite, vp, manager, employee, intern), not vendors, so it does not
-require any particular provider — Claude, Gemini via Antigravity, Grok, Codex and local Ollama can
+require any particular provider — Claude, Gemini via Antigravity, Grok and local Ollama can
 each fill roles. **Do not assume they have Claude.** Whatever came back ready is what they have;
 one provider is enough to start.
 
@@ -105,7 +105,7 @@ stdin and so cannot carry the user's content anywhere.
 
 Two things to say out loud, because both cost real money if misunderstood:
 
-- **A consumer subscription is not API access.** Gemini, Grok and Codex all bill their chat
+- **A consumer subscription is not API access.** Gemini and Grok both bill their chat
   subscription and their API separately. Signing in uses capacity they already pay for; an API key
   charges them a second time for the same models. Recommend the login route unless they say
   otherwise.
@@ -115,7 +115,7 @@ Two things to say out loud, because both cost real money if misunderstood:
   CLAUDE.md — but the default ships closed.
 
 If they want a non-Claude agent to host Alfred, run `node ~/.claude/helpers/export-agents-md.mjs`
-in the project to emit `AGENTS.md`, which Grok Build and Codex read natively.
+in the project to emit `AGENTS.md`, which Grok Build reads natively.
 
 ## Step 7 — confirm and orient
 

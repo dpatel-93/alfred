@@ -97,10 +97,8 @@ redesign) — copied here, not re-derived, so the two never drift silently again
   --p-claude:    #e0855c;
   --p-gemini:    #6fa8ff;
   --p-grok:      #d3d7e0;
-  --p-codex:     #45c8c0;   /* teal, not the mint-adjacent green it started as — collides with --mint (live/healthy) otherwise */
   --p-omniroute: #f2c15b;
   --p-ollama:    #b08cff;
-  --p-dsh:       #4fd6d6;
 
   /* ---------- FOCUS — written onto <body> by setFocusSeat(); cascades
      everywhere. --accent-primary and the glow ladder are declared on the

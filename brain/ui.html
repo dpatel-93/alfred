@@ -25,10 +25,8 @@
     --p-claude:    #e0855c;
     --p-gemini:    #6fa8ff;
     --p-grok:      #d3d7e0;
-    --p-codex:     #45c8c0;   /* Atelier had #5fd39a; shifted to TEAL — collides with --mint (live/healthy) otherwise */
     --p-omniroute: #f2c15b;
     --p-ollama:    #b08cff;
-    --p-dsh:       #4fd6d6;
 
     /* ---------- FOCUS — written onto <body> by setFocusSeat(); cascades everywhere ---------- */
     --focus:     var(--bone);
@@ -6475,7 +6473,7 @@
   // versa. Never persisted across reloads — nothing pre-selected on load.
   var ccExtChecked = {};
   var ccPollTimer = null;
-  // Seats whose surface is "web" (e.g. DeepSeek Harness) run a real HTTP UI in
+  // Seats whose surface is "web" run a real HTTP UI in
   // a browser tab, not an in-page terminal pane. The PTY still has to exist —
   // it *is* the web server — so this tracks that PTY's id/status per seat id
   // for the lane card's status dot and kill button, without mounting a pane.
@@ -6508,8 +6506,7 @@
   // app is "about" right now — cascades through --accent-primary to the 85+
   // call sites that already read it).
   var SEAT_COLOR = { claude: '--p-claude', gemini: '--p-gemini', grok: '--p-grok',
-                     codex: '--p-codex', omniroute: '--p-omniroute',
-                     ollama: '--p-ollama', dsh: '--p-dsh' };
+                     omniroute: '--p-omniroute', ollama: '--p-ollama' };
   function seatAccentVar(id) {
     var tok = SEAT_COLOR[id];
     return tok ? 'var(' + tok + ')' : 'var(--gray)';
@@ -6782,7 +6779,7 @@
 
   // Builds the popover's content for one seat: model input, and the
   // open/native/sign-in/web-panel controls a seat card used to show inline.
-  // Verbatim behaviour and labels (including the DeepSeek-style external
+  // Verbatim behaviour and labels (including the web-surface external
   // panel text) from the pre-Bench seat card.
   function buildSeatPopoverBody(s) {
     var frag = document.createDocumentFragment();

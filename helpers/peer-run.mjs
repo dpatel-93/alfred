@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // DEPRECATED — superseded by provider-run.mjs, which reads providers.json and handles every
-// provider (including Ollama and Codex) rather than just Gemini and Grok.
+// provider (including Ollama) rather than just Gemini and Grok.
 //
 // Kept as a forwarding shim because peer-run.mjs shipped in commit 8a7f243; anything already
 // calling it keeps working. Update callers to provider-run.mjs — this shim will be removed.

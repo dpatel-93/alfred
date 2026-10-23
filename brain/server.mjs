@@ -4780,7 +4780,7 @@ function handleChatOpenTerminal(req, res) {
 // --- Command Center: every AI seat in one window, and the council -------------
 // Two affordances on one surface. "Open Terminals" is the Open Terminal button
 // multiplied: one Windows Terminal window, one real console pane per signed-in
-// CLI (claude, agy, grok, codex...). "Ask the Council" sends one question to
+// CLI (claude, agy, grok...). "Ask the Council" sends one question to
 // every chosen seat in parallel and, if asked, has Claude chair the answers.
 //
 // The seat list comes from `council-run.mjs --status` rather than a second copy

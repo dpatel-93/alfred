@@ -12,7 +12,7 @@
 //        node council-run.mjs --json "<question>"                  # NDJSON events (the HUD)
 //        node council-run.mjs --status [--json]                    # who can sit right now
 //
-// APPROVAL: gemini / grok / codex are approval:"ask-per-use" in providers.json. Naming them
+// APPROVAL: gemini / grok are approval:"ask-per-use" in providers.json. Naming them
 // here — or ticking them in the HUD — for THIS question is the operator's yes for this call.
 // The selection is explicit and printed before anything leaves the machine; nothing in this
 // file adds a seat the operator did not choose.
@@ -130,8 +130,8 @@ function councilStatus(registry) {
       loginCmd: spec.loginCmd ?? null, outputContract: spec.outputContract ?? null,
       models: Array.isArray(spec.models) ? spec.models : [],
       councilModel: spec.councilModel ?? null,
-      // Every seat is a console (tty) unless the registry says otherwise — dsh's
-      // "web" surface runs a real HTTP UI in the browser, not a TUI in the pane.
+      // Every seat is a console (tty) unless the registry says otherwise — a "web"
+      // surface runs a real HTTP UI in the browser, not a TUI in the pane.
       surface: spec.surface ?? 'tty',
       webUrl: spec.webUrl ?? null,
       modelFlag: spec.headless?.modelFlag ?? null,
