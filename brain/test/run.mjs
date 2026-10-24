@@ -288,6 +288,9 @@ function makeTestBrain() {
   return BRAIN;
 }
 makeTestBrain();
+// The calendar module's config dir must start empty too, or the api suite's "unconfigured" checks
+// read last run's fake client.
+fs.rmSync(path.join(os.tmpdir(), `alfred-test-config-${PORT}`), { recursive: true, force: true });
 
 const server = spawn(process.execPath, [path.join(HERE, '..', 'server.mjs')], {
   env: {

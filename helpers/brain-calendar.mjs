@@ -35,8 +35,6 @@ const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const API = 'https://www.googleapis.com/calendar/v3';
 const BRAIN_CALENDAR_NAME = 'Second Brain';
 const TIMEZONE = 'America/New_York';
-const VIEW_PAST_DAYS = 7;
-const VIEW_FUTURE_DAYS = 42;
 const CLOSED_LOOKBACK_DAYS = 30;
 
 // The network is injectable so the sync logic is testable against a fake Google.
@@ -327,11 +325,14 @@ export async function syncCalendar(brain = sharedBrainPath(), now = easternNow()
 }
 
 // --- The month view: every calendar the account sees, including shared ones and invites ---
-export async function calendarView(now = easternNow(), { past = VIEW_PAST_DAYS, future = VIEW_FUTURE_DAYS } = {}) {
+// Window: from the 1st of last month through the end of next month, so the grid's ‹ › never
+// steps into blank weeks within one month either side of today.
+const monthStart = (date, offset) => { const [y, m] = date.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + offset, 1)); return d.toISOString().slice(0, 10); };
+export async function calendarView(now = easternNow(), { from: fromOpt, to: toOpt } = {}) {
   const c = loadConfig();
   if (!c.refreshToken) return { connected: false };
-  const from = addDays(now.date, -past);
-  const to = addDays(now.date, future + 1);
+  const from = fromOpt || monthStart(now.date, -1);
+  const to = toOpt || monthStart(now.date, 2);  // exclusive: the first day after next month
   const list = await gcal('GET', '/users/me/calendarList');
   const calendars = (list.items || []).filter((x) => x.selected !== false && !x.deleted).map((x) => ({
     id: x.id, name: x.summaryOverride || x.summary, color: x.backgroundColor || null, primary: !!x.primary,
@@ -353,12 +354,19 @@ export async function calendarView(now = easternNow(), { past = VIEW_PAST_DAYS, 
         if (mine && mine.responseStatus === 'declined') continue;
         const date = dateOf(ev.start);
         if (!date) continue;
-        (days[date] ||= []).push({
+        // A multi-day event sits on every day it covers (all-day end dates are exclusive).
+        let last = ev.end?.date ? addDays(ev.end.date, -1) : (ev.end?.dateTime ? toEastern(ev.end.dateTime) : date);
+        if (last < date) last = date;
+        const row = {
           id: ev.id, calendar: cal.name, calendarId: cal.id, color: cal.color, brain: cal.brain,
           title: ev.summary || '(no title)', allDay: !!ev.start?.date, start: ev.start?.dateTime || ev.start?.date, end: ev.end?.dateTime || ev.end?.date,
-          time: timeOf(ev.start), location: ev.location || null,
+          time: timeOf(ev.start), location: ev.location || null, htmlLink: ev.htmlLink || null,
           invite: !!mine, response: mine ? mine.responseStatus : null, brainFile: ev.extendedProperties?.private?.brainFile || null,
-        });
+        };
+        for (let d = date, i = 0; d <= last && i < 60; d = addDays(d, 1), i++) {
+          if (d < from || d >= to) continue;
+          (days[d] ||= []).push(d === date && d === last ? row : { ...row, spanStart: d === date, spanEnd: d === last, time: d === date ? row.time : null });
+        }
       }
       pageToken = page.nextPageToken;
     } while (pageToken);
