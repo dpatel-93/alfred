@@ -547,6 +547,39 @@ chk('when Grok cannot answer, the words go to Grok\'s inbox and the reason is gi
 chk('the handoff is waiting in the feed\'s signals', (tg.d?.feed?.signals||[]).some((s) => s.file===tg.d?.saved?.[0]?.file && s.to==='grok' && s.type==='handoff'),
   JSON.stringify(tg.d?.feed?.signals).slice(0,300));
 
+// --- Add and edit from the Day page: POST /api/assistant/item ---
+const inDays = (n) => new Date(Date.now() + n * 864e5).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+const itNoTok = await fetch(B+'/api/assistant/item',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'create',type:'reminder',fields:{kind:'todo',title:'x'}})});
+chk('POST /api/assistant/item without token blocked', itNoTok.status===401||itNoTok.status===403, `got ${itNoTok.status}`);
+const itTodo = await post('/api/assistant/item',{op:'create',type:'reminder',fields:{kind:'todo',title:'API to-do from the editor',due:'none',scope:'personal'}});
+chk('a to-do added from the editor is saved and is in the feed of the same reply', itTodo.s===200 && itTodo.d?.ok===true
+  && /^Reminders\/.*api-to-do-from-the-editor\.md$/.test(itTodo.d?.saved?.file||'') && (itTodo.d?.feed?.todos||[]).some((i) => i.file===itTodo.d.saved.file),
+  JSON.stringify(itTodo.d && { s: itTodo.s, saved: itTodo.d.saved, error: itTodo.d.error }));
+const itEdit = await post('/api/assistant/item',{op:'update',type:'reminder',file:itTodo.d?.saved?.file,fields:{kind:'reminder',due:inDays(3),time:'14:00'}});
+const edited = (itEdit.d?.feed?.upcoming||[]).find((i) => i.file===itTodo.d?.saved?.file);
+chk('editing it into a dated reminder moves it to the week with its time', itEdit.s===200 && edited?.kind==='reminder' && edited?.due===inDays(3) && edited?.time==='14:00',
+  JSON.stringify({ s: itEdit.s, error: itEdit.d?.error, edited }));
+const itRoutine = await post('/api/assistant/item',{op:'create',type:'routine',fields:{title:'API stretch',schedule:'monthly on the 15th',time:'07:30'}});
+const listed = [...(itRoutine.d?.feed?.routines?.today||[]), ...(itRoutine.d?.feed?.routines?.other||[])].find((r) => r.file===itRoutine.d?.saved?.file);
+chk('a monthly routine is saved and listed with its time', itRoutine.s===200 && listed?.schedule==='monthly on the 15th 07:30' && listed?.time==='07:30',
+  JSON.stringify({ s: itRoutine.s, error: itRoutine.d?.error, listed }));
+const itPause = await post('/api/assistant/item',{op:'update',type:'routine',file:itRoutine.d?.saved?.file,fields:{status:'paused'}});
+chk('pausing a routine moves it to the paused list', itPause.s===200 && (itPause.d?.feed?.routines?.paused||[]).some((r) => r.file===itRoutine.d?.saved?.file),
+  JSON.stringify(itPause.d?.feed?.routines?.paused));
+const itEvent = await post('/api/assistant/item',{op:'create',type:'event',fields:{title:'API dinner',date:inDays(2),time:'19:00',endTime:'21:00',location:'Home'}});
+chk('an event is added to the calendar file and is on the calendar in the same reply', itEvent.s===200 && itEvent.d?.saved?.file==='Calendar/events.md'
+  && JSON.stringify(itEvent.d?.feed?.calendar?.days?.[inDays(2)]||[]).includes('API dinner'), JSON.stringify({ s: itEvent.s, error: itEvent.d?.error }));
+const itBad = await post('/api/assistant/item',{op:'create',type:'routine',fields:{title:'API odd',schedule:'now and then'}});
+chk('a schedule Alfred cannot read comes back as a 400 with a sentence to show', itBad.s===400 && itBad.d?.ok===false && /can't read the schedule/.test(itBad.d?.error||''),
+  JSON.stringify(itBad.d));
+const itPast = await post('/api/assistant/item',{op:'create',type:'reminder',fields:{kind:'reminder',title:'API past',due:'2020-01-01'}});
+chk('a past date is refused with 400', itPast.s===400 && /in the past/.test(itPast.d?.error||''), JSON.stringify(itPast.d));
+const itTrav = await post('/api/assistant/item',{op:'update',type:'reminder',file:'Reminders/../MANIFESTO.md',fields:{title:'pwned'}});
+chk('an edit outside Reminders/ is refused', itTrav.s===400, `got ${itTrav.s}`);
+const itOdd = await post('/api/assistant/item',{op:'delete',type:'reminder',file:itTodo.d?.saved?.file});
+chk('an unknown operation is refused (nothing is ever deleted from here)', itOdd.s===400 && ((await j('/api/assistant',{headers:{'X-Alfred-Token':TOKEN}})).d?.upcoming||[]).some((i) => i.file===itTodo.d?.saved?.file),
+  JSON.stringify(itOdd.d));
+
 chk('the Google sign-in endpoints are gone', (await fetch(B+'/oauth2/google?code=x')).status===404
   && (await fetch(B+'/api/calendar/status',{headers:{'X-Alfred-Token':TOKEN}})).status===404
   && (await post('/api/calendar/connect',{})).s===404);

@@ -4301,7 +4301,10 @@
       toast((status === 'paused' ? 'Paused: ' : 'Resumed: ') + ((d.saved && d.saved.title) || item.title), 'success');
       var back = { act: 'status', file: item.file };
       if (d.feed) { applyDayFeed(d.feed); ieRestoreFocus(back); }
-      else pollAssistant().then(function () { if (document.activeElement === document.body) ieRestoreFocus(back); });
+      else {  // no feed in the reply: re-arm the row (a poll that finds nothing new repaints nothing), then re-read
+        setRowBusy(row, false);
+        pollAssistant().then(function () { if (document.activeElement === document.body) ieRestoreFocus(back); });
+      }
     }, function () {
       delete dayBusy[item.file];
       setRowBusy(row, false);

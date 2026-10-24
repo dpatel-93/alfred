@@ -251,9 +251,12 @@ chk('a close by number files the reminder in Done', !fs.existsSync(path.join(ROO
 const plants = edits.saved.find((s) => s.type === 'routine' && !s.edit);
 chk('a new routine from Grok is the user\'s, with its day and time', plants && /- \*\*Schedule:\*\* Sundays 10:00/.test(fs.readFileSync(path.join(ROOT, plants.file), 'utf8'))
   && /- \*\*Runs:\*\* the user/.test(fs.readFileSync(path.join(ROOT, plants.file), 'utf8')));
-chk('an unknown number, closing a routine and an unreadable schedule are refused and reported', edits.skipped.length === 3
-  && /no item #999/.test(edits.skipped[0].error) && /only a reminder can be closed/.test(edits.skipped[1].error)
-  && /can't read the schedule/.test(edits.skipped[2].error), JSON.stringify(edits.skipped));
+chk('an unknown number and closing a routine are refused and reported', edits.skipped.length === 2
+  && /no item #999/.test(edits.skipped[0].error) && /only a reminder can be closed/.test(edits.skipped[1].error), JSON.stringify(edits.skipped));
+chk('only the first six items of a plan are taken', !fs.readdirSync(path.join(ROOT, 'Routines')).some((f) => /sometimes/.test(f)));
+const odd = applyGrokPlan(ROOT, { items: [{ type: 'routine', title: 'Sometimes', schedule: 'now and then' }] }, 'sometimes', NOW, list.refs);
+chk('a routine whose schedule Alfred cannot read is refused, and the words go to Grok\'s inbox', /can't read the schedule/.test(odd.skipped[0]?.error)
+  && odd.saved[0]?.type === 'inbox');
 const feed2 = assistantFeed(ROOT, NOW);
 chk('the feed lists paused routines apart and gives reminders their time', Array.isArray(feed2.routines.paused)
   && !feed2.routines.paused.some((r) => r.file === 'Routines/user-paused.md')
