@@ -263,7 +263,8 @@ export function collectOpenItems(brain, now = easternNow()) {
     const h = readFields(text);
     const title = (text.match(/^#\s+(.+)$/m) || [, f])[1].trim();
     return { file: `Reminders/${f}`, title, kind: firstWord(h.kind) || 'reminder', status: firstWord(h.status) || 'open',
-      due: (h.due || '').match(/\d{4}-\d{2}-\d{2}/)?.[0] || null, scope: firstWord(h.scope) || '', author: h.author || '' };
+      due: (h.due || '').match(/\d{4}-\d{2}-\d{2}/)?.[0] || null, time: (h.due || '').match(/\b\d{2}:\d{2}\b/)?.[0] || null,
+      scope: firstWord(h.scope) || '', author: h.author || '' };
   }).filter((i) => ['open', 'snoozed'].includes(i.status));
   const yesterday = addDays(now.date, -1);
   const carryOver = mdFiles(path.join(dir, 'Done')).map((f) => {

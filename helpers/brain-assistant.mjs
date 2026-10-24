@@ -7,41 +7,32 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { addDays, collectOpenItems, easternNow, readFields, runLibrarian, setField, sharedBrainPath } from './brain-librarian.mjs';
-import { addEvent } from './brain-calendar.mjs';
+import {
+  DAYS, createEvent, createReminder, createRoutine, oneLine, routineDueToday, slugify, updateReminder, updateRoutine, weekdayOf,
+} from './brain-items.mjs';
 
-export { sharedBrainPath };
+export { sharedBrainPath, routineDueToday };
 export const easternDate = () => easternNow().date;
 
-const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const TOP_ITEMS = 5;
 
-const weekdayOf = (date) => new Date(`${date}T12:00:00Z`).getUTCDay();
 const firstWord = (v) => (v || '').trim().split(/[\s;,(]/)[0].toLowerCase();
 const titleOf = (text, fallback) => (text.match(/^#\s+(.+)$/m) || [, fallback])[1].trim();
 const plain = (s) => s.replace(/\*\*(.+?)\*\*/g, '$1').replace(/`([^`]+)`/g, '$1').replace(/\s+/g, ' ').trim();
 
-// --- Routines: does a free-text schedule fall on this date? null = no fixed day ---
-export function routineDueToday(schedule, date) {
-  const s = (schedule || '').toLowerCase();
-  const day = weekdayOf(date);
-  if (/\b(daily|every day|each day)\b/.test(s)) return true;
-  if (/\bweekdays\b/.test(s)) return day >= 1 && day <= 5;
-  if (/\bweekends?\b/.test(s)) return day === 0 || day === 6;
-  const named = DAYS.filter((d) => new RegExp(`\\b${d}s?\\b`).test(s));
-  if (named.length) return named.includes(DAYS[day]);
-  return null;
-}
-
+// The user's own routines (Runs: the user): today's, the other active ones, and paused ones,
+// so the dashboard can list, edit, pause and resume them.
 function userRoutines(brain, date) {
   const dir = path.join(brain, 'Routines');
-  if (!fs.existsSync(dir)) return { today: [], other: [] };
+  if (!fs.existsSync(dir)) return { today: [], other: [], paused: [] };
   const all = fs.readdirSync(dir).filter((f) => f.endsWith('.md') && f.toLowerCase() !== 'readme.md').map((f) => {
     const text = fs.readFileSync(path.join(dir, f), 'utf8');
     const h = readFields(text);
     return { file: `Routines/${f}`, title: titleOf(text, f).replace(/^the user:\s*/i, ''), schedule: h.schedule || '',
-      runs: h.runs || '', status: firstWord(h.status) || 'active', today: routineDueToday(h.schedule, date) };
-  }).filter((r) => r.status === 'active' && /\bthe user\b/i.test(r.runs));
-  return { today: all.filter((r) => r.today === true), other: all.filter((r) => r.today !== true) };
+      time: ((h.schedule || '').match(/\b\d{2}:\d{2}\b/) || [])[0] || null, runs: h.runs || '', status: firstWord(h.status) || 'active', today: routineDueToday(h.schedule, date) };
+  }).filter((r) => /\bthe user\b/i.test(r.runs) && ['active', 'paused'].includes(r.status));
+  const active = all.filter((r) => r.status === 'active');
+  return { today: active.filter((r) => r.today === true), other: active.filter((r) => r.today !== true), paused: all.filter((r) => r.status === 'paused') };
 }
 
 // --- Grok's morning brief: newest one on or before today, top items only ---
@@ -88,7 +79,6 @@ export function authorIsOurs(author) {
 }
 
 // --- Signals: one small file in Inbox/, named and headed per MANIFESTO §6 ---
-const slugify = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'item';
 const hhmm = (now) => (now.stamp.match(/ (\d{2}):(\d{2}) ET$/) || ['', '00', '00']).slice(1, 3).join('');
 export function writeSignal(brain, { type, from = 'user', to, re, subject, body = '' }, now = easternNow()) {
   const inbox = path.join(brain, 'Inbox');
@@ -105,32 +95,44 @@ export function writeSignal(brain, { type, from = 'user', to, re, subject, body 
 
 // --- The desk box: "Tell Grok" ----------------------------------------------------------
 // The user types what they would say to Grok in the car. Grok (through its CLI, run by the
-// server) answers with a plan of items; this code checks every field and writes the files
-// itself, so a confused answer can never write anywhere else. Anything that is not a reminder
-// or an event goes to Grok's inbox as a handoff, in the user's own words.
-const KINDS = ['errand', 'reminder', 'todo', 'watch'];
+// server) answers with a plan of items; brain-items.mjs checks every field and writes the
+// files, so a confused answer can never write anywhere else. Anything that is not a reminder,
+// routine, event, edit or close goes to Grok's inbox as a handoff, in the user's own words.
+// To edit or close an existing item Grok refers to it by a number from a list built here;
+// the numbers map back to files only on this side, so Grok never names a path.
 const MAX_ITEMS = 6;
-const isDay = (d) => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(d || '')) return false;
-  const t = new Date(`${d}T12:00:00Z`);
-  return !Number.isNaN(t.getTime()) && t.toISOString().slice(0, 10) === d;
-};
-const isClock = (t) => /^([01]\d|2[0-3]):[0-5]\d$/.test(t || '');
-const oneLine = (s, n) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n);
 
-export function tellGrokPrompt(text, now = easternNow()) {
+export function grokItemList(brain, now = easternNow()) {
+  const open = collectOpenItems(brain, now);
+  const refs = [];
+  const lines = [];
+  const add = (ref, text) => { refs.push(ref); lines.push(`#${refs.length} ${text}`); };
+  for (const i of [...open.overdue, ...open.today, ...open.upcoming, ...open.later, ...open.undated]) {
+    add({ type: 'reminder', file: i.file }, `${i.kind} · ${i.title} · ${i.due ? `due ${i.due}` : 'no date'}`);
+  }
+  const r = userRoutines(brain, now.date);
+  for (const x of [...r.today, ...r.other, ...r.paused]) add({ type: 'routine', file: x.file }, `routine · ${x.title} · ${x.schedule} · ${x.status}`);
+  return { refs, lines };
+}
+
+export function tellGrokPrompt(text, now = easternNow(), list = { lines: [] }) {
   const day = DAYS[weekdayOf(now.date)];
   return [
     "You are Grok, the user's personal executive assistant. The user typed this at their desk, the way they would say it to you in the car:",
     `"${oneLine(text, 500)}"`, '',
     `Now: ${day[0].toUpperCase()}${day.slice(1)} ${now.date}, ${now.stamp.split(' ')[1]} Eastern.`,
+    ...(list.lines.length ? ['', "The user's open reminders and routines, by number (refer to them by id to change or close one):", ...list.lines, ''] : []),
     'Turn it into items for the shared brain. Reply with ONLY one JSON object, no prose and no code fence:',
     '{"reply": "<one short sentence to say back, as you would in the car>", "items": [ ... ]}',
     'Each item is one of:',
     '{"type":"reminder","kind":"errand|reminder|todo|watch","title":"<a few words>","due":"YYYY-MM-DD or none","time":"HH:MM or null","scope":"personal|work","note":"<optional detail>"}',
+    '{"type":"routine","title":"<a few words>","schedule":"daily | weekdays | weekends | Mondays and Thursdays | monthly on the 15th","time":"HH:MM or null","note":"<optional detail>"}',
     '{"type":"event","title":"<a few words>","date":"YYYY-MM-DD","end":"YYYY-MM-DD or null","time":"HH:MM or null","endTime":"HH:MM or null","location":"<place or null>"}',
+    '{"type":"edit","id":<number from the list>,"set":{"title":"...","due":"YYYY-MM-DD or none","time":"HH:MM","kind":"...","schedule":"...","status":"active|paused","note":"..."}} (only the fields that change)',
+    '{"type":"close","id":<number of a reminder the user says is done>}',
     '{"type":"other","summary":"<anything else the user wants: remember a fact, track something, research>"}',
     'Kinds: errand = do it today. todo = no date. reminder = do or remember something on a date. watch = a follow-up being waited on.',
+    'Anything that repeats ("every Monday", "daily", "each month on the 1st") is a routine, not a reminder. To stop a routine, edit its status to paused.',
     'Something that happens on a date (appointment, plan, birthday, trip) is an event. Add a reminder as well only if the user asked to be reminded.',
     'Resolve relative dates ("Saturday", "tomorrow", "next week") from the date above. Times are 24-hour. Never write full names of people: use a relationship or an initial.',
   ].join('\n');
@@ -149,32 +151,6 @@ export function parseGrokPlan(out) {
   } catch { return null; }
 }
 
-export function createReminder(brain, it, words, now = easternNow()) {
-  const kind = KINDS.includes(it.kind) ? it.kind : null;
-  if (!kind) throw new Error(`unknown kind "${oneLine(it.kind, 20)}"`);
-  const title = oneLine(it.title, 80);
-  if (!title) throw new Error('no title');
-  let due = it.due && it.due !== 'none' ? String(it.due) : 'none';
-  if (kind === 'errand' && due === 'none') due = now.date;
-  if (due !== 'none' && !isDay(due)) throw new Error(`"${oneLine(due, 20)}" is not a date`);
-  if (due !== 'none' && due < now.date) throw new Error(`${due} is in the past`);
-  const time = isClock(it.time) ? it.time : null;
-  const dir = path.join(brain, 'Reminders');
-  fs.mkdirSync(dir, { recursive: true });
-  const base = `${due !== 'none' ? due : now.date}--${slugify(title)}`;
-  let name = `${base}.md`;
-  for (let n = 2; fs.existsSync(path.join(dir, name)); n++) name = `${base}-${n}.md`;
-  const note = oneLine(it.note, 300);
-  const text = [`# ${title}`, '',
-    `- **Kind:** ${kind}`, '- **Status:** open', `- **Due:** ${due}${time && due !== 'none' ? ` ${time}` : ''}`,
-    `- **Until:** ${kind === 'errand' ? 'end-of-day' : 'done'}`, `- **Scope:** ${it.scope === 'work' ? 'work' : 'personal'}`,
-    '- **Nudge:** car + wake', '- **Author:** grok (from the Alfred desk box)',
-    `- **Created:** ${now.stamp}`, `- **Last updated:** ${now.stamp}`, '',
-    ...(note ? [note, ''] : []), `The user's words at the desk: "${oneLine(words, 300)}"`, ''].join('\n');
-  fs.writeFileSync(path.join(dir, name), text, 'utf8');
-  return { type: 'reminder', kind, title, due, file: `Reminders/${name}` };
-}
-
 export function handoffToGrok(brain, summary, words, now = easternNow(), why = '') {
   const file = writeSignal(brain, {
     type: 'handoff', from: 'user', to: 'grok', re: 'the Alfred desk box', subject: oneLine(summary || words, 60),
@@ -186,20 +162,35 @@ export function handoffToGrok(brain, summary, words, now = easternNow(), why = '
   return { type: 'inbox', title: oneLine(summary || words, 80), file };
 }
 
-export function applyGrokPlan(brain, plan, words, now = easternNow()) {
+export function applyGrokPlan(brain, plan, words, now = easternNow(), refs = []) {
   const saved = [];
   const skipped = [];
   const items = (plan.items || []).slice(0, MAX_ITEMS);
+  const GROK = 'grok (from the Alfred desk box)';
+  const refFor = (it) => {
+    const ref = refs[Number(it.id) - 1];
+    if (!ref) throw new Error(`no item #${oneLine(it.id, 6)} in the list`);
+    return ref;
+  };
   for (const it of items) {
     try {
-      if (it && it.type === 'reminder') saved.push(createReminder(brain, it, words, now));
-      else if (it && it.type === 'event') {
-        if (!isDay(it.date) || it.date < now.date) throw new Error(`event date "${oneLine(it.date, 20)}" is missing or past`);
-        const ev = { date: it.date, end: isDay(it.end) ? it.end : null, time: isClock(it.time) ? it.time : null,
-          endTime: isClock(it.endTime) ? it.endTime : null, title: oneLine(it.title, 80), location: oneLine(it.location, 80) || null, by: 'grok' };
-        const line = addEvent(brain, ev, now);
-        saved.push({ type: 'event', title: ev.title, date: ev.date, file: 'Calendar/events.md', line });
-      } else if (it && it.type === 'other') saved.push(handoffToGrok(brain, oneLine(it.summary, 300), words, now));
+      if (it && it.type === 'reminder') saved.push(createReminder(brain, it, { words, author: GROK, now }));
+      else if (it && it.type === 'routine') saved.push(createRoutine(brain, it, { words, author: GROK, now }));
+      else if (it && it.type === 'edit') {
+        const ref = refFor(it);
+        const set = it.set && typeof it.set === 'object' ? it.set : {};
+        const pick = (keys) => Object.fromEntries(keys.filter((k) => set[k] !== undefined).map((k) => [k, set[k]]));
+        saved.push({ ...(ref.type === 'routine'
+          ? updateRoutine(brain, ref.file, pick(['title', 'schedule', 'time', 'status', 'note']), { by: GROK, now })
+          : updateReminder(brain, ref.file, pick(['title', 'due', 'time', 'kind', 'scope', 'note']), { by: GROK, now })), edit: true });
+      } else if (it && it.type === 'close') {
+        const ref = refFor(it);
+        if (ref.type !== 'reminder') throw new Error('only a reminder can be closed; pause a routine instead');
+        const r = applyAction(brain, { file: ref.file, action: 'close', by: 'user' }, now);
+        if (r.status !== 200) throw new Error(r.error || 'could not close it');
+        saved.push({ type: 'close', file: r.file || ref.file, title: r.title || ref.file });
+      } else if (it && it.type === 'event') saved.push(createEvent(brain, it, { by: 'grok', now }));
+      else if (it && it.type === 'other') saved.push(handoffToGrok(brain, oneLine(it.summary, 300), words, now));
       else throw new Error('unknown item type');
     } catch (err) { skipped.push({ item: it, error: err.message }); }
   }
@@ -301,8 +292,8 @@ export function assistantFeed(brain = sharedBrainPath(), now = easternNow()) {
   // for its curator) is marked so the dashboard shows "pending" instead of offering the action again.
   const pending = new Map();
   for (const s of open.signals) if (s.re && ['close', 'amend'].includes(s.type)) pending.set(path.basename(s.re), s.type);
-  const slim = ({ file, title, kind, due, scope, author }) => ({
-    file, title, kind, due, scope,
+  const slim = ({ file, title, kind, due, time, scope, author }) => ({
+    file, title, kind, due, time: time || null, scope,
     author: String(author || '').split('(')[0].trim(), ours: authorIsOurs(author),
     pending: pending.get(path.basename(file)) || null,
   });

@@ -2108,14 +2108,53 @@ async function handleAssistantLibrarian(req, res) {
   }
 }
 
+// --- POST /api/assistant/item [token]: add or edit one item from the Day page ---
+// {op:'create', type:'reminder'|'routine'|'event', fields} or
+// {op:'update', type:'reminder'|'routine', file, fields}. brain-items.mjs checks every
+// field and writes the file (the same writer Grok's desk-box plans use); a refusal comes
+// back as 400 with a sentence the editor shows as is.
+const ITEMS_MODULE = path.join(__dirname, '..', 'helpers', 'brain-items.mjs');
+
+async function handleAssistantItem(req, res) {
+  let body;
+  try { body = await readJsonBody(req); } catch { return sendJson(res, 400, { ok: false, error: 'invalid JSON body' }); }
+  const op = String(body.op || '');
+  const type = String(body.type || '');
+  const fields = body.fields && typeof body.fields === 'object' && !Array.isArray(body.fields) ? body.fields : {};
+  try {
+    const I = await import(pathToFileURL(ITEMS_MODULE).href);
+    const { sharedBrainPath } = await import(pathToFileURL(ASSISTANT_MODULE).href);
+    const { easternNow } = await import(pathToFileURL(LIBRARIAN_MODULE).href);
+    const brain = sharedBrainPath();
+    if (!brain || !fs.existsSync(brain)) return sendJson(res, 404, { ok: false, error: 'shared brain not found' });
+    const now = easternNow();
+    const who = { author: 'user (Alfred dashboard)', by: 'user (Alfred dashboard)', now };
+    let saved;
+    if (op === 'create' && type === 'reminder') saved = I.createReminder(brain, fields, who);
+    else if (op === 'create' && type === 'routine') saved = I.createRoutine(brain, fields, who);
+    else if (op === 'create' && type === 'event') saved = I.createEvent(brain, fields, { by: 'user', now });
+    else if (op === 'update' && type === 'reminder') saved = I.updateReminder(brain, String(body.file || ''), fields, who);
+    else if (op === 'update' && type === 'routine') saved = I.updateRoutine(brain, String(body.file || ''), fields, who);
+    else return sendJson(res, 400, { ok: false, error: `can't ${op || '?'} a ${type || '?'} here` });
+    console.log(`[item] ${op} ${type}: ${saved.file}`);
+    await runLibrarianPass('dashboard edit');
+    bumpBrainVersion();
+    return sendJson(res, 200, { ok: true, saved, feed: await fullFeed() });
+  } catch (err) {
+    const status = err.status === 400 ? 400 : 500;
+    return sendJson(res, status, { ok: false, error: String(err.message || err).slice(0, 200) });
+  }
+}
+
 // --- POST /api/assistant/tell-grok [token]: the desk box ---
 // The user types what they would say to Grok in the car. Grok's CLI (the user's own
 // subscription, run per click, never in the background) turns it into a plan; the
 // helper checks every field and writes the reminder files and calendar lines itself.
 // If Grok cannot answer (signed out, timed out, garbled), the words go to Grok's
 // Inbox as a handoff so nothing typed is lost. The CLI runs in an empty temp folder,
-// so it has nothing of the brain to read or edit; only the user's sentence and today's
-// date leave the machine.
+// so it has nothing of the brain to read or edit; what leaves the machine is the
+// user's sentence, today's date and the titles of the open reminders and the user's
+// routines (which Grok already reads in the Drive folder).
 // HELPERS_DIR is declared further down the file; this helper lives in the same folder.
 // Tests point ALFRED_TELL_GROK_RUNNER at a stand-in that behaves like provider-run.mjs.
 const PROVIDER_RUN = process.env.ALFRED_TELL_GROK_RUNNER || path.join(os.homedir(), '.claude', 'helpers', 'provider-run.mjs');
@@ -2161,12 +2200,15 @@ async function handleTellGrok(req, res) {
     const { easternNow } = await import(pathToFileURL(LIBRARIAN_MODULE).href);
     const brain = A.sharedBrainPath();
     if (!brain || !fs.existsSync(brain)) return sendJson(res, 404, { error: 'shared brain not found' });
-    const g = await runGrokOnce(A.tellGrokPrompt(text, easternNow()));
+    // Grok gets the open items by number so "move the dentist to Friday" or "that's done" can
+    // point at one; the numbers map back to files only here, in this request.
+    const list = A.grokItemList(brain, easternNow());
+    const g = await runGrokOnce(A.tellGrokPrompt(text, easternNow(), list));
     const plan = g.ok ? A.parseGrokPlan(g.out) : null;
     const now = easternNow();
     let result;
     if (plan) {
-      result = { via: 'grok', ...A.applyGrokPlan(brain, plan, text, now) };
+      result = { via: 'grok', ...A.applyGrokPlan(brain, plan, text, now, list.refs) };
     } else {
       const why = g.ok ? 'Grok answered, but not with a plan Alfred could read' : g.error;
       result = { via: 'inbox', reply: null, why, saved: [A.handoffToGrok(brain, null, text, now, why)], skipped: [] };
@@ -6043,6 +6085,7 @@ async function main() {
           || url.pathname === '/api/assistant/action'
           || url.pathname === '/api/assistant/librarian'
           || url.pathname === '/api/assistant/tell-grok'
+          || url.pathname === '/api/assistant/item'
           || termAction
           || agentAction;
         if (!isBridgePost) return sendJson(res, 404, { error: 'not found' });
@@ -6051,6 +6094,7 @@ async function main() {
         if (url.pathname === '/api/assistant/action') return await handleAssistantAction(req, res);
         if (url.pathname === '/api/assistant/librarian') return await handleAssistantLibrarian(req, res);
         if (url.pathname === '/api/assistant/tell-grok') return await handleTellGrok(req, res);
+        if (url.pathname === '/api/assistant/item') return await handleAssistantItem(req, res);
         if (url.pathname === '/api/terminals') return await handleTerminalCreate(req, res);
         if (termAction && termAction[2] === 'kill') return handleTerminalKill(req, res, termAction[1]);
         if (termAction && termAction[2] === 'resize') return await handleTerminalResize(req, res, termAction[1]);

@@ -364,6 +364,17 @@ if (!(await up())) {
       const day = (n) => new Date(Date.parse(iso + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10);
       const [y, m] = [Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1];
       j.brain = j.brain || 'test-brain';
+      // The add/edit checks below need known reminder and routine rows, whatever brain the server found.
+      j.today = [{ file: 'Reminders/test-call-plumber.md', title: 'Call the plumber', kind: 'reminder', due: iso, time: '09:30',
+        scope: 'personal', author: 'grok', ours: true, pending: false }];
+      j.routines = {
+        today: [{ file: 'Routines/test-walk.md', title: 'Morning walk', schedule: 'daily', status: 'active', today: true }],
+        other: [
+          { file: 'Routines/test-review.md', title: 'Weekly review', schedule: 'Fridays', status: 'active', today: false },
+          { file: 'Routines/test-odd.md', title: 'Deep clean', schedule: 'every other Friday', status: 'active', today: false },
+        ],
+        paused: [{ file: 'Routines/test-water.md', title: 'Water the plants', schedule: 'Mondays and Thursdays', status: 'paused', today: false }],
+      };
       const timed = { id: 'ev-1', title: 'Test event', date: iso, end: null, time: '09:30', endTime: '10:00', allDay: false,
         location: 'Room 4', by: 'grok', line: 8 };
       const span = { id: 'ev-2', title: 'Team offsite', date: iso, end: day(1), time: null, endTime: null, allDay: true,
@@ -475,6 +486,317 @@ if (!(await up())) {
       const src = await fetch('/').then((r) => r.text());
       return !src.includes('/api/calendar/') && !src.includes('Google Calendar');
     }));
+
+    // --- Day: add and edit (the item editor) ---------------------------------------------
+    // POST /api/assistant/item is stubbed: it records the body and answers like the server does (a
+    // saved summary, no feed, so the page re-reads the injected one). The real server is never written to.
+    const itemCalls = [];
+    let itemAnswer = null;   // { status, json } to answer the next save with, once, instead of success
+    await page.route('**/api/assistant/item', async (route) => {
+      let sent = {};
+      try { sent = JSON.parse(route.request().postData() || '{}'); } catch { /* checked below */ }
+      itemCalls.push(sent);
+      if (itemAnswer) {
+        const a = itemAnswer; itemAnswer = null;
+        return route.fulfill({ status: a.status, json: a.json }).catch(() => {});
+      }
+      await route.fulfill({ json: { ok: true, saved: { type: sent.type, title: (sent.fields && sent.fields.title) || 'Saved item',
+        file: sent.file || 'Reminders/x.md' } } }).catch(() => {});
+    });
+    await page.waitForFunction(() => /Call the plumber/.test((document.getElementById('day-body') || {}).textContent || ''),
+      null, { timeout: 8000 }).catch(() => {});
+    const ie = '.ie-modal';
+    const openAdd = async () => { await page.click('#day-add'); await page.waitForSelector(ie, { timeout: 4000 }); };
+    const dialogGone = () => page.waitForFunction(() => !document.querySelector('.ie-modal'), null, { timeout: 4000 }).catch(() => {});
+    const waitCalls = async (n) => { const t = Date.now(); while (itemCalls.length < n && Date.now() - t < 4000) await sleep(50); };
+    const save = () => page.click(ie + ' button[type="submit"]');
+    const lastCall = () => JSON.stringify(itemCalls[itemCalls.length - 1] || null);
+
+    chk(tag('Day: the header has a + Add button beside Refresh'), await page.evaluate(() => {
+      const t = document.querySelector('.day-tools');
+      const kids = t ? [...t.children].map((c) => c.id) : [];
+      return JSON.stringify(kids) === '["day-add","day-refresh"]' && /\+ Add/.test(document.getElementById('day-add').textContent);
+    }));
+
+    // + Add opens a labelled modal dialog with focus inside; Tab stays in it; Esc closes it and focus returns.
+    await openAdd();
+    chk(tag('Day: + Add opens a modal dialog, labelled by its title, with focus inside it'), await page.evaluate(() => {
+      const d = document.querySelector('.ie-modal');
+      const label = d && document.getElementById(d.getAttribute('aria-labelledby'));
+      return !!d && d.getAttribute('role') === 'dialog' && d.getAttribute('aria-modal') === 'true'
+        && !!label && /Add to your day/.test(label.textContent) && d.contains(document.activeElement)
+        && document.querySelectorAll('.ie-type').length === 5
+        && document.querySelector('.ie-type[aria-pressed="true"]').textContent === 'To-do';
+    }));
+    const inside = [];
+    for (let i = 0; i < 24; i++) {
+      await page.keyboard.press(i % 2 ? 'Tab' : 'Shift+Tab');
+      inside.push(await page.evaluate(() => document.querySelector('.ie-modal').contains(document.activeElement)));
+    }
+    for (let i = 0; i < 30; i++) {
+      await page.keyboard.press('Tab');
+      inside.push(await page.evaluate(() => document.querySelector('.ie-modal').contains(document.activeElement)));
+    }
+    chk(tag('Day: Tab and Shift+Tab never leave the open dialog'), inside.every(Boolean), inside.join(','));
+    await page.focus(ie + ' .icon-btn');
+    await page.keyboard.press('Shift+Tab');
+    chk(tag('Day: Shift+Tab from the first control wraps to Save, and Tab from Save wraps back to the first'), await page.evaluate(() =>
+      document.activeElement.type === 'submit') && await (async () => {
+      await page.keyboard.press('Tab');
+      return page.evaluate(() => document.activeElement.classList.contains('icon-btn'));
+    })());
+    await page.keyboard.press('Escape');
+    await dialogGone();
+    chk(tag('Day: Esc closes the dialog and focus returns to the + Add button'), await page.evaluate(() =>
+      !document.querySelector('.ie-modal') && !document.querySelector('.scrim.open') && document.activeElement.id === 'day-add'));
+
+    // A To-do: title, scope, note. Sent as a reminder of kind todo with no date.
+    await openAdd();
+    chk(tag('Day: the To-do form has no date, no time and no schedule fields'), await page.evaluate(() =>
+      ['ie-f-date', 'ie-f-time', 'ie-f-freq', 'ie-f-end'].every((id) => !document.getElementById(id).offsetParent)
+      && !!document.getElementById('ie-f-scope').offsetParent && !!document.getElementById('ie-f-note').offsetParent));
+    await save();
+    chk(tag('Day: saving with no title is refused inline and sends nothing'), await page.evaluate(() => {
+      const e = document.querySelector('.ie-error');
+      return !!document.querySelector('.ie-modal') && e.getAttribute('role') === 'alert' && !e.hidden && /title/i.test(e.textContent);
+    }) && itemCalls.length === 0);
+    await page.fill('#ie-f-title', 'Buy stamps');
+    await save();
+    await waitCalls(1);
+    await dialogGone();
+    chk(tag('Day: adding a To-do sends a reminder of kind todo with due none'), lastCall() === JSON.stringify({ op: 'create',
+      type: 'reminder', fields: { kind: 'todo', title: 'Buy stamps', due: 'none', time: null, scope: 'personal', note: '' } }), lastCall());
+    chk(tag('Day: after a save the dialog is gone, a Saved toast shows, and focus is back on + Add'), await page.evaluate(() =>
+      !document.querySelector('.ie-modal') && [...document.querySelectorAll('.toast')].some((t) => /Saved: Buy stamps/.test(t.textContent))
+      && document.activeElement.id === 'day-add'));
+
+    // A Reminder needs a date; an Errand has none (it is for today).
+    await openAdd();
+    await page.click('.ie-type[data-type="reminder"]');
+    await page.fill('#ie-f-title', 'Renew passport');
+    await save();
+    chk(tag('Day: a Reminder without a date is refused inline'), await page.evaluate(() =>
+      !!document.querySelector('.ie-modal') && /date/i.test(document.querySelector('.ie-error').textContent)) && itemCalls.length === 1);
+    await page.fill('#ie-f-date', '2027-03-04');
+    await page.fill('#ie-f-time', '14:15');
+    await page.selectOption('#ie-f-scope', 'work');
+    await save();
+    await waitCalls(2);
+    await dialogGone();
+    chk(tag('Day: adding a Reminder sends its date, time and scope'), lastCall() === JSON.stringify({ op: 'create', type: 'reminder',
+      fields: { kind: 'reminder', title: 'Renew passport', due: '2027-03-04', time: '14:15', scope: 'work', note: '' } }), lastCall());
+    await openAdd();
+    await page.click('.ie-type[data-type="errand"]');
+    chk(tag('Day: the Errand form has no date field'), await page.evaluate(() => !document.getElementById('ie-f-date').offsetParent));
+    await page.fill('#ie-f-title', 'Pick up dry cleaning');
+    await save();
+    await waitCalls(3);
+    await dialogGone();
+    const todayIso = await page.evaluate(() => document.querySelector('.cal-day.today').getAttribute('data-date'));
+    chk(tag("Day: adding an Errand sends today's date"), lastCall() === JSON.stringify({ op: 'create', type: 'reminder',
+      fields: { kind: 'errand', title: 'Pick up dry cleaning', due: todayIso, time: null, scope: 'personal', note: '' } }), lastCall());
+
+    // Routines: the schedule builder composes the words the brain stores.
+    await openAdd();
+    await page.click('.ie-type[data-type="routine"]');
+    await page.fill('#ie-f-title', 'Take vitamins');
+    await page.selectOption('#ie-f-freq', 'weekly');
+    await save();
+    chk(tag('Day: a weekly routine with no day picked is refused inline'), await page.evaluate(() =>
+      !!document.querySelector('.ie-modal') && /at least one day/i.test(document.querySelector('.ie-error').textContent)) && itemCalls.length === 3);
+    await page.check(ie + ' input[aria-label="Monday"]');
+    await page.check(ie + ' input[aria-label="Thursday"]');
+    chk(tag('Day: the schedule preview reads "Mondays and Thursdays"'), await page.evaluate(() =>
+      [...document.querySelectorAll('.ie-modal .ie-hint')].some((h) => h.textContent === 'Saved as: Mondays and Thursdays')));
+    await page.check(ie + ' input[aria-label="Wednesday"]');
+    await page.uncheck(ie + ' input[aria-label="Thursday"]');
+    await page.check(ie + ' input[aria-label="Friday"]');
+    chk(tag('Day: three days read "Mondays, Wednesdays and Fridays"'), await page.evaluate(() =>
+      [...document.querySelectorAll('.ie-modal .ie-hint')].some((h) => h.textContent === 'Saved as: Mondays, Wednesdays and Fridays')));
+    await page.uncheck(ie + ' input[aria-label="Wednesday"]');
+    await page.uncheck(ie + ' input[aria-label="Friday"]');
+    await page.check(ie + ' input[aria-label="Thursday"]');
+    await page.fill('#ie-f-time', '08:00');
+    await save();
+    await waitCalls(4);
+    await dialogGone();
+    chk(tag('Day: a weekly routine on Monday and Thursday sends "Mondays and Thursdays"'), lastCall() === JSON.stringify({ op: 'create',
+      type: 'routine', fields: { title: 'Take vitamins', schedule: 'Mondays and Thursdays', time: '08:00', note: '' } }), lastCall());
+    await openAdd();
+    await page.click('.ie-type[data-type="routine"]');
+    await page.fill('#ie-f-title', 'Pay rent');
+    await page.selectOption('#ie-f-freq', 'monthly');
+    const previews = [];
+    for (const day of ['1', '2', '3', '11', '12', '13', '15', '22', '23', '31']) {
+      await page.fill('#ie-f-monthDay', day);
+      previews.push(await page.evaluate(() => [...document.querySelectorAll('.ie-modal .ie-hint')].map((h) => h.textContent).find((t) => /^Saved as/.test(t))));
+    }
+    chk(tag('Day: monthly days get the right ordinal suffix (1st 2nd 3rd 11th 12th 13th 15th 22nd 23rd 31st)'),
+      previews.map((p) => p.replace('Saved as: monthly on the ', '')).join(' ') === '1st 2nd 3rd 11th 12th 13th 15th 22nd 23rd 31st', previews.join(' | '));
+    await page.fill('#ie-f-monthDay', '32');
+    await save();
+    chk(tag('Day: a monthly day outside 1 to 31 is refused inline'), await page.evaluate(() =>
+      !!document.querySelector('.ie-modal') && /1 to 31/.test(document.querySelector('.ie-error').textContent)) && itemCalls.length === 4);
+    await page.fill('#ie-f-monthDay', '15');
+    await save();
+    await waitCalls(5);
+    await dialogGone();
+    chk(tag('Day: a monthly routine on day 15 sends "monthly on the 15th"'), lastCall() === JSON.stringify({ op: 'create',
+      type: 'routine', fields: { title: 'Pay rent', schedule: 'monthly on the 15th', time: null, note: '' } }), lastCall());
+
+    // Events: a date, an optional end that cannot come first, optional times and a place.
+    await openAdd();
+    await page.click('.ie-type[data-type="event"]');
+    await page.fill('#ie-f-title', 'Team offsite');
+    await save();
+    chk(tag('Day: an Event without a date is refused inline'), await page.evaluate(() =>
+      !!document.querySelector('.ie-modal') && /date/i.test(document.querySelector('.ie-error').textContent)));
+    await page.fill('#ie-f-date', '2027-05-10');
+    await page.fill('#ie-f-end', '2027-05-09');
+    await save();
+    chk(tag('Day: an Event that ends before it starts is refused inline'), await page.evaluate(() =>
+      !!document.querySelector('.ie-modal') && /end date/i.test(document.querySelector('.ie-error').textContent)) && itemCalls.length === 5);
+    await page.fill('#ie-f-end', '2027-05-12');
+    await page.fill('#ie-f-time', '09:00');
+    await page.fill('#ie-f-endTime', '17:30');
+    await page.fill('#ie-f-place', 'Lake house');
+    await save();
+    await waitCalls(6);
+    await dialogGone();
+    chk(tag('Day: adding an Event sends its dates, times and place'), lastCall() === JSON.stringify({ op: 'create', type: 'event',
+      fields: { title: 'Team offsite', date: '2027-05-10', end: '2027-05-12', time: '09:00', endTime: '17:30', location: 'Lake house' } }), lastCall());
+
+    // Edit on a "Due today" row: prefilled from the row, and only what changed is sent.
+    chk(tag('Day: every reminder row with a Done button also has an Edit button'), await page.evaluate(() => {
+      const groups = [...document.querySelectorAll('.day-actions')].filter((g) => /Done/.test(g.textContent));
+      return groups.length > 0 && groups.every((g) => [...g.querySelectorAll('button')].some((b) => b.textContent === 'Edit'));
+    }));
+    const dueRow = '.day-card:has(> .day-card-title:text-matches("^Due today")) .day-item';
+    await page.click(dueRow + ' button:text-is("Edit")');
+    await page.waitForSelector(ie, { timeout: 4000 });
+    const prefill = await page.evaluate(() => ({
+      head: document.getElementById('ie-title').textContent,
+      title: document.getElementById('ie-f-title').value, kind: document.getElementById('ie-f-kind').value,
+      date: document.getElementById('ie-f-date').value, time: document.getElementById('ie-f-time').value,
+      scope: document.getElementById('ie-f-scope').value, types: document.querySelectorAll('.ie-type').length,
+      kindShown: !!document.getElementById('ie-f-kind').offsetParent,
+      focusInside: document.querySelector('.ie-modal').contains(document.activeElement),
+    }));
+    chk(tag('Day: Edit on a Due today row opens the editor prefilled with that row (title, kind, date, time, scope)'),
+      prefill.head === 'Edit item' && prefill.title === 'Call the plumber' && prefill.kind === 'reminder' && /^\d{4}-\d{2}-\d{2}$/.test(prefill.date)
+        && prefill.time === '09:30' && prefill.scope === 'personal' && prefill.focusInside, JSON.stringify(prefill));
+    chk(tag('Day: editing shows a Kind select instead of the type buttons'), prefill.kindShown && prefill.types === 0, JSON.stringify(prefill));
+    await save();
+    chk(tag('Day: saving an edit with nothing changed is refused inline'), await page.evaluate(() =>
+      !!document.querySelector('.ie-modal') && /nothing has changed/i.test(document.querySelector('.ie-error').textContent)) && itemCalls.length === 6);
+    await page.fill('#ie-f-title', 'Call the plumber back');
+    await save();
+    await waitCalls(7);
+    await dialogGone();
+    chk(tag('Day: saving an edited title sends only the changed field, with that row\'s file'), lastCall() === JSON.stringify({ op: 'update',
+      type: 'reminder', file: 'Reminders/test-call-plumber.md', fields: { title: 'Call the plumber back' } }), lastCall());
+    await page.waitForFunction(() => !!document.querySelector('.day-card .day-item'), null, { timeout: 5000 }).catch(() => {});
+    chk(tag('Day: after saving an edit, focus is back on that row\'s Edit button or + Add'), await page.evaluate(() => {
+      const a = document.activeElement;
+      return a.id === 'day-add' || (a.textContent === 'Edit' && a.getAttribute('data-file') === 'Reminders/test-call-plumber.md');
+    }));
+    await page.click(dueRow + ' button:text-is("Edit")');
+    await page.waitForSelector(ie, { timeout: 4000 });
+    await page.selectOption('#ie-f-kind', 'watch');
+    await page.fill('#ie-f-date', '');
+    await page.fill('#ie-f-time', '');
+    await page.fill('#ie-f-note', 'Ask about the leak');
+    await save();
+    await waitCalls(8);
+    await dialogGone();
+    chk(tag('Day: editing kind, date, time and a note sends each, the date as none and the time as null'), lastCall() === JSON.stringify({
+      op: 'update', type: 'reminder', file: 'Reminders/test-call-plumber.md',
+      fields: { kind: 'watch', due: 'none', time: null, note: 'Ask about the leak' } }), lastCall());
+
+    // A refusal from the server keeps the dialog open and shows its words.
+    await openAdd();
+    await page.click('.ie-type[data-type="routine"]');
+    await page.fill('#ie-f-title', 'Odd routine');
+    await page.selectOption('#ie-f-freq', 'custom');
+    await page.fill('#ie-f-custom', 'whenever the moon is full');
+    itemAnswer = { status: 400, json: { error: 'I cannot read that schedule' } };
+    await save();
+    await waitCalls(9);
+    await page.waitForFunction(() => /cannot read that schedule/.test((document.querySelector('.ie-error') || {}).textContent || ''), null, { timeout: 4000 }).catch(() => {});
+    chk(tag('Day: a 400 keeps the dialog open and shows the server\'s message inline (and in a toast)'), await page.evaluate(() => {
+      const e = document.querySelector('.ie-error');
+      return !!document.querySelector('.ie-modal') && !e.hidden && e.getAttribute('role') === 'alert' && e.textContent === 'I cannot read that schedule'
+        && [...document.querySelectorAll('.toast')].some((t) => /I cannot read that schedule/.test(t.textContent));
+    }));
+    chk(tag('Day: after a refusal Save is enabled again, so the user can fix it and retry'), await page.evaluate(() =>
+      !document.querySelector('.ie-modal button[type="submit"]').disabled));
+    await page.keyboard.press('Escape');
+    await dialogGone();
+
+    // My routines: the card, its rows, Edit prefill, and Pause / Resume.
+    const myRoutines = await page.evaluate(() => {
+      const cols = [...document.querySelectorAll('.day-col')];
+      const card = cols[2] && [...cols[2].children].find((c) => /^My routines/.test(c.firstElementChild.textContent));
+      if (!card) return null;
+      return { tag: card.tagName, open: card.open, count: card.querySelector('.day-count').textContent,
+        rows: [...card.querySelectorAll('.day-item')].map((r) => r.textContent), cardIndex: [...cols[2].children].indexOf(card) };
+    });
+    chk(tag('Day: a collapsed "My routines" card sits in the right column, counting every routine'),
+      !!myRoutines && myRoutines.tag === 'DETAILS' && myRoutines.open === false && myRoutines.count === '4', JSON.stringify(myRoutines));
+    chk(tag('Day: My routines lists active and paused routines with their schedules, paused marked'),
+      !!myRoutines && myRoutines.rows.length === 4 && /Morning walk.*daily/.test(myRoutines.rows[0]) && /Weekly review.*Fridays/.test(myRoutines.rows[1])
+        && /Water the plants.*Mondays and Thursdays.*paused/.test(myRoutines.rows[3]), JSON.stringify(myRoutines));
+    chk(tag('Day: a routine row in "Routines today" has an Edit button'), await page.evaluate(() => {
+      const card = [...document.querySelectorAll('.day-card')].find((c) => /^Routines today/.test(c.firstElementChild.textContent));
+      return !!card && [...card.querySelectorAll('.day-item button')].some((b) => b.textContent === 'Edit');
+    }));
+    await page.evaluate(() => { [...document.querySelectorAll('details.day-card')].find((c) => /^My routines/.test(c.textContent)).open = true; });
+    const mine = 'details.day-card:has(> summary:text-matches("^My routines"))';
+    await page.click(mine + ' [aria-label="Pause routine: Morning walk"]');
+    await waitCalls(10);
+    chk(tag('Day: Pause sends only the status'), lastCall() === JSON.stringify({ op: 'update', type: 'routine',
+      file: 'Routines/test-walk.md', fields: { status: 'paused' } }), lastCall());
+    await page.waitForFunction(() => [...document.querySelectorAll('.toast')].some((t) => /Paused: /.test(t.textContent)), null, { timeout: 4000 }).catch(() => {});
+    await page.click(mine + ' [aria-label="Resume routine: Water the plants"]');
+    await waitCalls(11);
+    chk(tag('Day: Resume sends active'), lastCall() === JSON.stringify({ op: 'update', type: 'routine',
+      file: 'Routines/test-water.md', fields: { status: 'active' } }), lastCall());
+    await page.click(mine + ' [aria-label="Edit routine: Water the plants"]');
+    await page.waitForSelector(ie, { timeout: 4000 });
+    const routinePrefill = await page.evaluate(() => ({
+      head: document.getElementById('ie-title').textContent, title: document.getElementById('ie-f-title').value,
+      freq: document.getElementById('ie-f-freq').value,
+      days: [...document.querySelectorAll('.ie-modal .ie-days input')].filter((c) => c.checked).map((c) => c.getAttribute('aria-label')),
+    }));
+    chk(tag('Day: editing a routine parses "Mondays and Thursdays" back into the builder'),
+      routinePrefill.head === 'Edit routine' && routinePrefill.title === 'Water the plants' && routinePrefill.freq === 'weekly'
+        && routinePrefill.days.join() === 'Monday,Thursday', JSON.stringify(routinePrefill));
+    await page.check(ie + ' input[aria-label="Saturday"]');
+    await save();
+    await waitCalls(12);
+    await dialogGone();
+    chk(tag('Day: changing a routine\'s days sends the new schedule and nothing else'), lastCall() === JSON.stringify({ op: 'update',
+      type: 'routine', file: 'Routines/test-water.md', fields: { schedule: 'Mondays, Thursdays and Saturdays' } }), lastCall());
+    await page.click(mine + ' [aria-label="Edit routine: Deep clean"]');
+    await page.waitForSelector(ie, { timeout: 4000 });
+    chk(tag('Day: a schedule the builder cannot parse opens as free text with a hint'), await page.evaluate(() => {
+      const f = document.getElementById('ie-f-freq'), c = document.getElementById('ie-f-custom');
+      return f.value === 'custom' && c.value === 'every other Friday' && !!c.offsetParent
+        && /Write it the way you would say it/.test(c.closest('.ie-field').textContent);
+    }));
+    await page.keyboard.press('Escape');
+    await dialogGone();
+    await page.click(mine + ' button:text-is("+ Add routine")');
+    await page.waitForSelector(ie, { timeout: 4000 });
+    chk(tag('Day: "+ Add routine" opens the editor on the Routine type'), await page.evaluate(() =>
+      document.querySelector('.ie-type[aria-pressed="true"]').textContent === 'Routine' && !!document.getElementById('ie-f-freq').offsetParent));
+    await page.keyboard.press('Escape');
+    await dialogGone();
+    chk(tag('Day: Esc from "+ Add routine" returns focus to that button'), await page.evaluate(() =>
+      document.activeElement.getAttribute('data-act') === 'add-routine'));
+    chk(tag('Day: the editor leaves nothing behind (no dialog, scrim or ie-open class)'), await page.evaluate(() =>
+      !document.querySelector('.ie-modal') && !document.querySelector('.scrim.open') && !document.body.classList.contains('ie-open')));
+    await page.unroute('**/api/assistant/item').catch(() => {});
 
     // --- Brain map regions follow the Second Brain's folders -------------------
     const regions = await page.evaluate(() => ({

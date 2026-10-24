@@ -779,6 +779,57 @@
     min-height: 24px; padding: 2px 8px; border: 1px solid var(--border-focusable); border-radius: var(--r-xs);
     background: var(--surface-2); color: var(--text); font-family: var(--font-mono); font-size: var(--fs-xs);
   }
+  .day-item.paused { --accent: var(--gray); color: var(--text-soft); }
+
+  /* --- ITEM EDITOR (Day: add and edit; DESIGN-UI-SYSTEM §9) ---------------------------
+     A .modal/.scrim dialog built on demand by openItemEditor(). Inputs share the Tell Grok
+     input's look; the chosen type is --blue (selected), a problem is --red. */
+  body.ie-open .toast-stack { z-index: 120; } /* above the dialog's scrim (100) and panel (110) */
+  .modal.ie-modal { width: min(540px, calc(100vw - 32px)); max-height: 88vh; }
+  .ie-form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; margin: 0; }
+  .ie-modal .modal-body { display: flex; flex-direction: column; gap: var(--sp-6); }
+  .ie-types { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+  .ie-types .btn.ie-type[aria-pressed="true"] {
+    color: var(--text); border-color: var(--blue); background: color-mix(in srgb, var(--blue) 20%, transparent);
+  }
+  .ie-field { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+  .ie-group { display: flex; flex-direction: column; gap: var(--sp-6); }
+  .ie-field[hidden], .ie-row[hidden], .ie-group[hidden], .ie-hint[hidden], .ie-error[hidden] { display: none; }
+  .day-item.routine .day-when { flex: 0 1 auto; white-space: normal; }
+  .ie-row { display: flex; gap: var(--sp-5); }
+  .ie-row > .ie-field { flex: 1 1 0; }
+  .ie-label {
+    font-family: var(--font-mono); font-size: var(--fs-micro); font-weight: 600;
+    letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text-dim);
+  }
+  .ie-input {
+    width: 100%; min-height: 32px; padding: 4px var(--sp-4);
+    border: 1px solid var(--border-focusable); border-radius: var(--r-sm);
+    background: var(--surface-2); color: var(--text); font: inherit; font-size: var(--fs-sm);
+  }
+  textarea.ie-input { min-height: 64px; resize: vertical; line-height: var(--lh-base); }
+  .ie-input:focus-visible, .ie-day input:focus-visible {
+    outline: 2px solid var(--blue); outline-offset: 1px; border-color: var(--blue);
+  }
+  .ie-days { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+  .ie-day {
+    display: inline-flex; align-items: center; gap: var(--sp-3); cursor: pointer;
+    padding: 3px var(--sp-4); border: 1px solid var(--border-focusable); border-radius: var(--r-sm);
+    background: var(--surface-2); color: var(--text-soft); font-size: var(--fs-sm);
+  }
+  .ie-day:has(input:checked) { border-color: var(--blue); color: var(--text); }
+  .ie-day input { accent-color: var(--blue); margin: 0; }
+  .ie-hint { margin: 0; color: var(--text-dim); font-size: var(--fs-xs); line-height: var(--lh-base); }
+  .ie-error {
+    margin: 0; padding-left: var(--sp-4); border-left: 2px solid var(--red);
+    color: var(--red); font-size: var(--fs-sm); line-height: var(--lh-base);
+  }
+  .ie-foot {
+    display: flex; justify-content: flex-end; gap: var(--sp-4);
+    padding: var(--sp-6) 22px var(--sp-7); border-top: 1px solid var(--hairline);
+  }
+  @media (max-width: 520px) { .ie-row { flex-direction: column; } }
+
   .day-brief-item {
     display: flex; flex-direction: column; gap: var(--sp-1);
     padding: var(--sp-3) var(--sp-5); border-left: 2px solid var(--border-strong);
@@ -2425,6 +2476,8 @@
           <button id="tell-grok-send" class="btn" type="submit">Send</button>
         </form>
         <div class="day-tools">
+          <button id="day-add" class="btn primary" type="button" aria-haspopup="dialog"
+                  title="Add a to-do, reminder, errand, routine or event">+ Add</button>
           <button id="day-refresh" class="btn" type="button" title="Re-read the shared brain now">Refresh</button>
         </div>
         <div id="bench" class="bench" role="group" aria-label="AI seats"></div>
@@ -3786,6 +3839,476 @@
     });
   })();
 
+  // --- Add and edit: the item editor -------------------------------------------------------
+  // One dialog for everything the Day view can write: to-dos, reminders, errands and watches
+  // (Reminders/), routines (Routines/) and events (Calendar/events.md). "+ Add" opens it on a
+  // type; an Edit button on a row opens it prefilled. A save is POST /api/assistant/item; the
+  // reply carries the fresh feed. Built on demand with el()/textContent; one editor at a time.
+  var IE_TYPES = [['todo', 'To-do'], ['reminder', 'Reminder'], ['errand', 'Errand'], ['routine', 'Routine'], ['event', 'Event']];
+  var IE_KINDS = [['todo', 'To-do'], ['reminder', 'Reminder'], ['errand', 'Errand'], ['watch', 'Watch']];
+  var IE_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  var IE_FREQS = [['daily', 'Daily'], ['weekdays', 'Weekdays'], ['weekends', 'Weekends'],
+    ['weekly', 'Weekly on…'], ['monthly', 'Monthly on…'], ['custom', 'Other (type it)']];
+  var IE_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+  var itemEditor = null;    // the open editor's state, or null
+
+  function ordinal(n) {
+    var v = n % 100;
+    if (v >= 11 && v <= 13) return n + 'th';
+    return n + ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th');
+  }
+
+  // 'daily' | 'weekdays' | 'weekends' | 'Mondays' | 'Mondays and Thursdays' | 'monthly on the 15th'
+  function composeSchedule(freq, days, monthDay) {
+    if (freq === 'monthly') return 'monthly on the ' + ordinal(monthDay);
+    if (freq !== 'weekly') return freq;
+    var names = days.slice().sort(function (a, b) { return a - b; }).map(function (i) { return IE_DAYS[i] + 's'; });
+    if (names.length < 2) return names[0] || '';
+    return names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+  }
+
+  // The reverse, for editing: { freq, days: [0..6, Monday first], monthDay }, or null when the
+  // text is not one of the shapes composeSchedule writes (it is then shown as free text).
+  function parseSchedule(text) {
+    var s = String(text || '').trim().replace(/\.$/, '').toLowerCase();
+    if (s === 'daily' || s === 'weekdays' || s === 'weekends') return { freq: s };
+    var m = /^monthly on the (\d{1,2})(?:st|nd|rd|th)$/.exec(s);
+    if (m) {
+      var day = parseInt(m[1], 10);
+      return day >= 1 && day <= 31 ? { freq: 'monthly', monthDay: day } : null;
+    }
+    var days = [];
+    var parts = s.split(/\s*,\s*(?:and\s+)?|\s+and\s+/);
+    for (var i = 0; i < parts.length; i++) {
+      var idx = IE_DAYS.map(function (d) { return d.toLowerCase(); }).indexOf(parts[i].replace(/s$/, ''));
+      if (idx < 0) return null;
+      if (days.indexOf(idx) < 0) days.push(idx);
+    }
+    return days.length ? { freq: 'weekly', days: days } : null;
+  }
+
+  function scheduleKey(s) { return String(s || '').trim().replace(/\.$/, '').toLowerCase(); }
+  function ieTimeOf(v) { return IE_TIME.test(String(v || '')) ? v : ''; }
+  function ieDateOf(v) { return ISO_DATE.test(String(v || '')) ? v : ''; }
+  function ieKindOf(item) { return String((item && item.kind) || 'reminder').toLowerCase(); }
+
+  function ieDomain(st) { // which family of fields is on screen: reminder | routine | event
+    if (st.edit) return st.edit;
+    return st.type === 'routine' || st.type === 'event' ? st.type : 'reminder';
+  }
+
+  function ieKind(st) { return st.edit ? st.nodes.kind.value : st.type; } // the reminder kind being written
+
+  function ieOpener(btn) {
+    if (!btn) return null;
+    return { el: btn, id: btn.id || '', act: btn.getAttribute('data-act') || '', file: btn.getAttribute('data-file') || '' };
+  }
+
+  // Focus goes back to what opened the editor. A save repaints Day, which replaces the row's
+  // buttons, so fall back to the same kind of button for the same file, then to "+ Add".
+  function ieRestoreFocus(op) {
+    var t = null;
+    if (op && op.el && op.el.isConnected) t = op.el;
+    if (!t && op && op.id) t = document.getElementById(op.id);
+    if (!t && op && op.act) {
+      Array.prototype.some.call(document.querySelectorAll('[data-act="' + op.act + '"]'), function (c) {
+        if (op.file && c.getAttribute('data-file') !== op.file) return false;
+        t = c;
+        return true;
+      });
+    }
+    if (!t || t.disabled) t = document.getElementById('day-add');
+    if (t && t.focus) t.focus({ preventScroll: true });
+  }
+
+  function ieShowError(st, msg) {
+    st.nodes.error.textContent = msg || '';
+    st.nodes.error.hidden = !msg;
+  }
+
+  function ieSetBusy(st, on) {
+    st.busy = on;
+    st.nodes.save.disabled = on;
+    st.nodes.save.textContent = on ? 'Saving…' : 'Save';
+  }
+
+  // Show only the fields the chosen type or kind uses, and keep the labels and the schedule preview true.
+  function ieSync(st) {
+    var n = st.nodes, dom = ieDomain(st);
+    var rem = dom === 'reminder', rou = dom === 'routine', evt = dom === 'event';
+    var kind = rem ? ieKind(st) : '';
+    var showDate = evt || (rem && (kind === 'reminder' || kind === 'watch' || (!!st.edit && kind === 'todo')));
+    var showTime = evt || rou || (rem && (kind === 'reminder' || kind === 'watch'));
+    if (n.typeBtns) {
+      n.typeBtns.forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-type') === st.type ? 'true' : 'false'); });
+    }
+    n.kindField.hidden = !(rem && st.edit);
+    n.scopeField.hidden = !rem;
+    n.dateField.hidden = !showDate;
+    n.timeField.hidden = !showTime;
+    n.dateRow.hidden = !showDate && !showTime;
+    n.endRow.hidden = !evt;
+    n.placeField.hidden = !evt;
+    n.noteField.hidden = evt;
+    n.routineBox.hidden = !rou;
+    n.dateLabel.textContent = evt || kind === 'reminder' ? 'Date' : 'Date (optional)';
+    n.timeLabel.textContent = evt ? 'Starts at (optional)' : 'Time (optional)';
+    n.noteLabel.textContent = st.edit ? 'Add a note (optional)' : 'Note (optional)';
+    var freq = n.freq.value;
+    n.daysField.hidden = freq !== 'weekly';
+    n.monthDayField.hidden = freq !== 'monthly';
+    n.customField.hidden = freq !== 'custom';
+    n.preview.hidden = freq === 'custom';
+    var s = freq === 'custom' ? null : ieSchedule(st, true);
+    n.preview.textContent = s && s.text ? 'Saved as: ' + s.text : '';
+  }
+
+  // The schedule the builder describes: { text } or { error, focus }. quiet = for the preview only.
+  function ieSchedule(st, quiet) {
+    var n = st.nodes, freq = n.freq.value;
+    if (freq === 'custom') {
+      var typed = n.custom.value.trim();
+      return typed ? { text: typed } : { error: 'Write when it repeats.', focus: n.custom };
+    }
+    if (freq === 'weekly') {
+      var days = [];
+      n.dayBoxes.forEach(function (cb, i) { if (cb.checked) days.push(i); });
+      if (!days.length) return { error: 'Pick at least one day.', focus: n.dayBoxes[0] };
+      return { text: composeSchedule('weekly', days, 0) };
+    }
+    if (freq === 'monthly') {
+      var raw = n.monthDay.value.trim();
+      var day = /^\d+$/.test(raw) ? parseInt(raw, 10) : 0;
+      if (day < 1 || day > 31) return { error: 'Pick a day of the month from 1 to 31.', focus: n.monthDay };
+      return { text: composeSchedule('monthly', [], day) };
+    }
+    return { text: freq };
+  }
+
+  function ieBuildReminder(st, title, note) {
+    var n = st.nodes, item = st.item, kind = ieKind(st);
+    var date = n.dateField.hidden ? '' : n.date.value;
+    var time = n.timeField.hidden ? '' : n.time.value;
+    if (kind === 'reminder' && !date) return { error: 'A reminder needs a date.', focus: n.date };
+    var scope = n.scope.value;
+    if (!st.edit) {
+      return { body: { op: 'create', type: 'reminder', fields: {
+        kind: kind, title: title, due: kind === 'errand' ? calTodayIso(dayFeed) : (date || 'none'),
+        time: time || null, scope: scope, note: note,
+      } } };
+    }
+    var f = {};   // only what changed; the server appends a note rather than replacing one
+    if (title !== String(item.title || '')) f.title = title;
+    if (kind !== ieKindOf(item)) f.kind = kind;
+    if (!n.dateField.hidden && date !== ieDateOf(item.due)) f.due = date || 'none';
+    if (!n.timeField.hidden && time !== ieTimeOf(item.time)) f.time = time || null;
+    if (scope !== (item.scope === 'work' ? 'work' : 'personal')) f.scope = scope;
+    if (note) f.note = note;
+    if (!Object.keys(f).length) return { error: 'Nothing has changed yet.', focus: n.title };
+    return { body: { op: 'update', type: 'reminder', file: item.file, fields: f } };
+  }
+
+  function ieBuildRoutine(st, title, note) {
+    var n = st.nodes, item = st.item;
+    var sched = ieSchedule(st, false);
+    if (sched.error) return sched;
+    var time = n.time.value;
+    if (!st.edit) {
+      return { body: { op: 'create', type: 'routine', fields: { title: title, schedule: sched.text, time: time || null, note: note } } };
+    }
+    var f = {};
+    if (title !== String(item.title || '')) f.title = title;
+    if (scheduleKey(sched.text) !== scheduleKey(item.schedule)) f.schedule = sched.text;
+    if (time !== ieTimeOf(item.time)) f.time = time || null;
+    if (note) f.note = note;
+    if (!Object.keys(f).length) return { error: 'Nothing has changed yet.', focus: n.title };
+    return { body: { op: 'update', type: 'routine', file: item.file, fields: f } };
+  }
+
+  function ieBuildEvent(st, title) {
+    var n = st.nodes;
+    var date = n.date.value, end = n.end.value, time = n.time.value, endTime = n.endTime.value;
+    if (!date) return { error: 'An event needs a date.', focus: n.date };
+    if (end && end < date) return { error: 'The end date cannot be before the start date.', focus: n.end };
+    if ((!end || end === date) && time && endTime && endTime < time) {
+      return { error: 'The end time is before the start time.', focus: n.endTime };
+    }
+    return { body: { op: 'create', type: 'event', fields: {
+      title: title, date: date, end: end || null, time: time || null, endTime: endTime || null,
+      location: n.place.value.trim() || null,
+    } } };
+  }
+
+  function ieBuild(st) {
+    var n = st.nodes, dom = ieDomain(st);
+    var title = n.title.value.trim();
+    if (!title) return { error: 'Give it a title.', focus: n.title };
+    if (dom === 'routine') return ieBuildRoutine(st, title, n.note.value.trim());
+    if (dom === 'event') return ieBuildEvent(st, title);
+    return ieBuildReminder(st, title, n.note.value.trim());
+  }
+
+  function ieSave(st) {
+    if (st.busy || st.closed) return;
+    var built = ieBuild(st);
+    if (built.error) {
+      ieShowError(st, built.error);
+      if (built.focus) built.focus.focus();
+      return;
+    }
+    ieShowError(st, '');
+    ieSetBusy(st, true);
+    bridgePost('/api/assistant/item', built.body).then(function (r) {
+      var d = r.data || {};
+      ieSetBusy(st, false);
+      if (!r.ok || d.ok === false) {
+        var msg = d.error || 'Could not save that.';
+        if (!st.closed) ieShowError(st, msg);
+        toast(msg, 'critical', { title: 'Day' });
+        return;
+      }
+      var f = built.body.fields;
+      toast('Saved: ' + ((d.saved && d.saved.title) || f.title || (st.item && st.item.title) || 'item'), 'success');
+      if (d.feed) {
+        applyDayFeed(d.feed);
+        closeItemEditor(st);
+      } else {  // no feed in the reply: close now, re-read, and put focus back if the repaint dropped it
+        closeItemEditor(st);
+        pollAssistant().then(function () { if (document.activeElement === document.body) ieRestoreFocus(st.opener); });
+      }
+    }, function () {
+      ieSetBusy(st, false);
+      if (!st.closed) ieShowError(st, 'Could not reach Alfred.');
+      toast('Could not reach Alfred.', 'critical', { title: 'Day' });
+    });
+  }
+
+  function closeItemEditor(st) {
+    if (!st || st.closed) return;
+    st.closed = true;
+    if (itemEditor === st) itemEditor = null;
+    document.removeEventListener('keydown', ieKeydown, true);
+    document.removeEventListener('focusin', ieFocusIn);
+    document.body.classList.remove('ie-open');
+    [st.modal, st.scrim].forEach(function (n) { if (n.parentNode) n.parentNode.removeChild(n); });
+    ieRestoreFocus(st.opener);
+  }
+
+  function ieFocusables(st) {
+    return Array.prototype.filter.call(st.modal.querySelectorAll('button, input, select, textarea'), function (c) {
+      return !c.disabled && c.getClientRects().length > 0;
+    });
+  }
+
+  // Esc closes; Tab and Shift+Tab cycle inside the dialog. In the capture phase on the document, so
+  // the page's own Esc ladder and number-key shortcuts never see these keys.
+  function ieKeydown(e) {
+    var st = itemEditor;
+    if (!st) return;
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeItemEditor(st); return; }
+    if (e.key !== 'Tab') return;
+    var list = ieFocusables(st);
+    if (!list.length) return;
+    var first = list[0], last = list[list.length - 1], a = document.activeElement;
+    if (!st.modal.contains(a)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+    else if (e.shiftKey && a === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && a === last) { e.preventDefault(); first.focus(); }
+  }
+
+  function ieFocusIn(e) {
+    var st = itemEditor;
+    if (!st || st.modal.contains(e.target)) return;
+    if (e.target.closest && e.target.closest('#toast-stack')) return; // a toast's own buttons stay usable
+    var list = ieFocusables(st);
+    if (list.length) list[0].focus({ preventScroll: true });
+  }
+
+  // o: { type } to add (todo | reminder | errand | routine | event), or { edit: 'reminder' | 'routine', item }
+  // to change one; o.opener is the button that was pressed.
+  function openItemEditor(o) {
+    if (itemEditor) return;
+    o = o || {};
+    var edit = o.edit || null, item = o.item || null;
+    var st = { edit: edit, item: item, type: o.type || 'todo', busy: false, closed: false, nodes: {}, opener: ieOpener(o.opener) };
+    if (edit) st.type = edit;
+    var n = st.nodes;
+
+    function control(tag, type) { var c = el(tag, 'ie-input', []); if (type) c.type = type; return c; }
+    function select(options) {
+      var c = el('select', 'ie-input', []);
+      options.forEach(function (p) { var op = el('option', null, [p[1]]); op.value = p[0]; c.appendChild(op); });
+      return c;
+    }
+    // A labelled field. Keeps the control as n[name], the wrapper as n[name + 'Field'], the label as n[name + 'Label'].
+    function field(name, label, c, hint) {
+      c.id = 'ie-f-' + name;
+      var lab = el('label', 'ie-label', [label]);
+      lab.htmlFor = c.id;
+      var f = el('div', 'ie-field', [lab, c, hint ? el('span', 'ie-hint', [hint]) : null]);
+      n[name] = c; n[name + 'Field'] = f; n[name + 'Label'] = lab;
+      return f;
+    }
+
+    // Type choice (adding only)
+    var typeRow = null;
+    if (!edit) {
+      typeRow = el('div', 'ie-types', []);
+      typeRow.setAttribute('role', 'group');
+      typeRow.setAttribute('aria-label', 'Type of item');
+      n.typeBtns = IE_TYPES.map(function (t) {
+        var b = el('button', 'btn ie-type', [t[1]]);
+        b.type = 'button';
+        b.setAttribute('data-type', t[0]);
+        b.addEventListener('click', function () { st.type = t[0]; ieShowError(st, ''); ieSync(st); });
+        typeRow.appendChild(b);
+        return b;
+      });
+    }
+
+    // Shared fields
+    var kindOptions = IE_KINDS.slice();
+    if (edit === 'reminder' && !kindOptions.some(function (k) { return k[0] === ieKindOf(item); })) {
+      kindOptions.push([ieKindOf(item), ieKindOf(item)]);
+    }
+    var kindField = field('kind', 'Kind', select(kindOptions));
+    var titleField = field('title', 'Title', control('input', 'text'));
+    n.title.maxLength = 200;
+    n.title.autocomplete = 'off';
+    var dateField = field('date', 'Date', control('input', 'date'));
+    var timeField = field('time', 'Time (optional)', control('input', 'time'));
+    n.dateRow = el('div', 'ie-row', [dateField, timeField]);
+    var endField = field('end', 'Ends on (optional)', control('input', 'date'));
+    var endTimeField = field('endTime', 'Ends at (optional)', control('input', 'time'));
+    n.endRow = el('div', 'ie-row', [endField, endTimeField]);
+    var placeField = field('place', 'Place (optional)', control('input', 'text'));
+    n.place.maxLength = 200;
+    var scopeField = field('scope', 'Scope', select([['personal', 'Personal'], ['work', 'Work']]));
+    var noteField = field('note', 'Note (optional)', control('textarea'));
+    n.note.rows = 3;
+    n.note.maxLength = 2000;
+
+    // Routine schedule builder
+    var freqField = field('freq', 'Repeats', select(IE_FREQS));
+    freqField.querySelector('select').addEventListener('change', function () { ieSync(st); });
+    var daysWrap = el('div', 'ie-days', []);
+    daysWrap.setAttribute('role', 'group');
+    daysWrap.setAttribute('aria-labelledby', 'ie-days-label');
+    n.dayBoxes = IE_DAYS.map(function (name, i) {
+      var cb = el('input', null, []);
+      cb.type = 'checkbox';
+      cb.value = String(i);
+      cb.setAttribute('aria-label', name);
+      cb.addEventListener('change', function () { ieSync(st); });
+      daysWrap.appendChild(el('label', 'ie-day', [cb, el('span', null, [name.slice(0, 3)])]));
+      return cb;
+    });
+    var daysLabel = el('span', 'ie-label', ['On these days']);
+    daysLabel.id = 'ie-days-label';
+    n.daysField = el('div', 'ie-field', [daysLabel, daysWrap]);
+    n.monthDayField = field('monthDay', 'Day of the month (1 to 31)', control('input', 'number'));
+    n.monthDay.min = '1'; n.monthDay.max = '31'; n.monthDay.step = '1'; n.monthDay.value = '1';
+    n.monthDay.addEventListener('input', function () { ieSync(st); });
+    n.customField = field('custom', 'Schedule', control('input', 'text'),
+      'Write it the way you would say it, such as "Mondays and Thursdays" or "monthly on the 15th".');
+    n.custom.addEventListener('input', function () { ieSync(st); });
+    n.preview = el('p', 'ie-hint', []);
+    n.routineBox = el('div', 'ie-group', [freqField, n.daysField, n.monthDayField, n.customField, n.preview]);
+
+    n.error = el('p', 'ie-error', []);
+    n.error.setAttribute('role', 'alert');
+    n.error.hidden = true;
+
+    // Prefill when editing
+    if (edit === 'reminder') {
+      n.kind.value = ieKindOf(item);
+      n.title.value = String(item.title || '');
+      n.date.value = ieDateOf(item.due);
+      n.time.value = ieTimeOf(item.time);
+      n.scope.value = item.scope === 'work' ? 'work' : 'personal';
+      n.kind.addEventListener('change', function () { ieShowError(st, ''); ieSync(st); });
+    } else if (edit === 'routine') {
+      n.title.value = String(item.title || '');
+      n.time.value = ieTimeOf(item.time);
+      var parsed = parseSchedule(item.schedule);
+      if (parsed) {
+        n.freq.value = parsed.freq;
+        (parsed.days || []).forEach(function (i) { n.dayBoxes[i].checked = true; });
+        if (parsed.monthDay) n.monthDay.value = String(parsed.monthDay);
+      } else {
+        n.freq.value = 'custom';
+        n.custom.value = String(item.schedule || '');
+      }
+    }
+
+    // Chrome
+    var heading = el('h2', null, [edit === 'routine' ? 'Edit routine' : edit ? 'Edit item' : 'Add to your day']);
+    heading.id = 'ie-title';
+    var closeX = el('button', 'icon-btn', ['✕']);
+    closeX.type = 'button';
+    closeX.setAttribute('aria-label', 'Close');
+    closeX.addEventListener('click', function () { closeItemEditor(st); });
+    var head = el('div', 'modal-head', [heading, closeX]);
+    var body = el('div', 'modal-body', [typeRow, kindField, titleField, n.dateRow, n.endRow, placeField,
+      scopeField, n.routineBox, noteField, n.error]);
+    var cancel = el('button', 'btn', ['Cancel']);
+    cancel.type = 'button';
+    cancel.addEventListener('click', function () { closeItemEditor(st); });
+    n.save = el('button', 'btn primary', ['Save']);
+    n.save.type = 'submit';
+    var form = el('form', 'ie-form', [head, body, el('div', 'ie-foot', [cancel, n.save])]);
+    form.noValidate = true;
+    form.addEventListener('submit', function (e) { e.preventDefault(); ieSave(st); });
+    st.modal = el('div', 'modal ie-modal', [form]);
+    st.modal.setAttribute('role', 'dialog');
+    st.modal.setAttribute('aria-modal', 'true');
+    st.modal.setAttribute('aria-labelledby', 'ie-title');
+    // Keys typed in the dialog are for the dialog; the page's one-key shortcuts must not fire.
+    st.modal.addEventListener('keydown', function (e) { if (e.key !== 'Escape') e.stopPropagation(); });
+    st.scrim = el('div', 'scrim', []);
+
+    ieSync(st);
+    itemEditor = st;
+    document.body.classList.add('ie-open');
+    document.body.appendChild(st.scrim);
+    document.body.appendChild(st.modal);
+    void st.modal.offsetWidth; // so the fade-in runs
+    st.scrim.classList.add('open');
+    st.modal.classList.add('open');
+    document.addEventListener('keydown', ieKeydown, true);
+    document.addEventListener('focusin', ieFocusIn);
+    n.title.focus({ preventScroll: true });
+  }
+
+  (function wireDayAdd() {
+    var btn = document.getElementById('day-add');
+    if (!btn) return;
+    btn.addEventListener('click', function () { openItemEditor({ type: 'todo', opener: btn }); });
+  })();
+
+  // Pause / Resume a routine: the same endpoint, just { status }.
+  function routineSetStatus(item, status, row) {
+    if (dayBusy[item.file]) return;
+    dayBusy[item.file] = true;
+    setRowBusy(row, true);
+    bridgePost('/api/assistant/item', { op: 'update', type: 'routine', file: item.file, fields: { status: status } }).then(function (r) {
+      delete dayBusy[item.file];
+      var d = r.data || {};
+      if (!r.ok || d.ok === false) {
+        setRowBusy(row, false);
+        toast(d.error || 'Could not change that routine.', 'critical', { title: 'Day' });
+        return;
+      }
+      toast((status === 'paused' ? 'Paused: ' : 'Resumed: ') + ((d.saved && d.saved.title) || item.title), 'success');
+      var back = { act: 'status', file: item.file };
+      if (d.feed) { applyDayFeed(d.feed); ieRestoreFocus(back); }
+      else pollAssistant().then(function () { if (document.activeElement === document.body) ieRestoreFocus(back); });
+    }, function () {
+      delete dayBusy[item.file];
+      setRowBusy(row, false);
+      toast('Could not reach Alfred.', 'critical', { title: 'Day' });
+    });
+  }
+
   function dayButton(label, cls, tip, item, onClick) {
     var b = el('button', 'btn day-act' + (cls ? ' ' + cls : ''), [label]);
     b.type = 'button';
@@ -3795,13 +4318,38 @@
     return b;
   }
 
-  // mode: 'full' = Done / Tomorrow / Snooze, 'lite' = Done / Snooze, 'carry' = Carry over.
-  // Appends the button group (and, when snoozing is offered, its date line) to the row.
+  // Edit opens the item editor on this row's item. what: 'reminder' | 'routine'.
+  function dayEditButton(item, what) {
+    var b = dayButton('Edit', '', what === 'routine' ? 'Edit routine' : 'Edit', item, function () {
+      openItemEditor({ edit: what, item: item, opener: b });
+    });
+    b.setAttribute('data-act', 'edit');
+    b.setAttribute('data-file', item.file);
+    return b;
+  }
+
+  // mode: 'full' = Done / Tomorrow / Edit / Snooze, 'lite' = Done / Edit / Snooze, 'carry' = Carry over / Edit,
+  // 'routine' = Edit, 'routine-manage' = Edit / Pause (or Resume). Appends the button group (and, when
+  // snoozing is offered, its date line) to the row.
   function dayActions(item, row, mode) {
     var wrap = el('div', 'day-actions', []);
+    if (mode === 'routine' || mode === 'routine-manage') {
+      wrap.appendChild(dayEditButton(item, 'routine'));
+      if (mode === 'routine-manage') {
+        var paused = item.status === 'paused';
+        var flip = dayButton(paused ? 'Resume' : 'Pause', '', paused ? 'Resume routine' : 'Pause routine', item,
+          function () { routineSetStatus(item, paused ? 'active' : 'paused', row); });
+        flip.setAttribute('data-act', 'status');
+        flip.setAttribute('data-file', item.file);
+        wrap.appendChild(flip);
+      }
+      row.appendChild(wrap);
+      return;
+    }
     if (mode === 'carry') {
       wrap.appendChild(dayButton('Carry over', '', 'Carry over into today', item,
         function () { dayAct(item, 'carryover', null, row); }));
+      wrap.appendChild(dayEditButton(item, 'reminder'));
       row.appendChild(wrap);
       return;
     }
@@ -3811,6 +4359,7 @@
       wrap.appendChild(dayButton('→ Tomorrow', '', 'Move to tomorrow', item,
         function () { dayAct(item, 'tomorrow', null, row); }));
     }
+    wrap.appendChild(dayEditButton(item, 'reminder'));
     var more = dayButton('⋯', '', 'Snooze to a date', item, function () {
       snooze.hidden = !snooze.hidden;
       more.setAttribute('aria-expanded', snooze.hidden ? 'false' : 'true');
@@ -3862,6 +4411,7 @@
     row.appendChild(title);
     if (item.scope === 'work') row.appendChild(el('span', 'badge info', ['work']));
     if (o.when) row.appendChild(el('span', 'day-when', [o.when]));
+    if (o.tag) row.appendChild(el('span', 'badge idle', [o.tag]));
     if (item.pending) {
       var tag = el('span', 'badge warn day-pending', ['pending']);
       tag.title = 'A change is waiting for ' + (item.author || 'its owner') + ' to apply';
@@ -3923,7 +4473,7 @@
     }
     cards.push(dayCard('Routines today', { count: routines.length,
       body: [routines.length ? dayRows(routines, function (r) {
-        return { cls: 'routine', when: String(r.schedule || '').split(/[;(]/)[0].trim(), actions: 'none' };
+        return { cls: 'routine', when: String(r.schedule || '').split(/[;(]/)[0].trim(), actions: 'routine' };
       }) : dayEmpty('No routines today.')] }));
     // Everything to act on lives in this one column: today, then the week, then the open to-dos.
     var todos = arr(d.todos), later = arr(d.later);
@@ -4326,6 +4876,38 @@
     return dayCard('End of day', { body: body });
   }
 
+  // Every routine, whether or not it runs today: active ones (today's first), then paused ones.
+  // Each can be edited and paused or resumed; "+ Add routine" opens the editor on a new one.
+  function dayMyRoutinesCard(d) {
+    var rt = d.routines || {};
+    var seen = {}, list = [];
+    function take(items, paused) {
+      arr(items).forEach(function (r) {
+        if (!r || !r.file || seen[r.file]) return;
+        seen[r.file] = true;
+        var c = {};
+        Object.keys(r).forEach(function (k) { c[k] = r[k]; });
+        c.status = paused || r.status === 'paused' ? 'paused' : 'active';
+        list.push(c);
+      });
+    }
+    take(rt.today, false);
+    take(rt.other, false);
+    take(rt.paused, true);
+    var add = el('button', 'btn', ['+ Add routine']);
+    add.type = 'button';
+    add.setAttribute('data-act', 'add-routine');
+    add.addEventListener('click', function () { openItemEditor({ type: 'routine', opener: add }); });
+    return dayCard('My routines', { collapsed: true, count: list.length, body: [
+      list.length ? dayRows(list, function (r) {
+        var paused = r.status === 'paused';
+        return { cls: 'routine' + (paused ? ' paused' : ''), when: String(r.schedule || ''),
+          tag: paused ? 'paused' : null, actions: 'routine-manage' };
+      }) : dayEmpty('No routines yet.'),
+      el('div', 'day-card-actions', [add]),
+    ] });
+  }
+
   // Right column: what to read, not what to do. Grok's brief leads; the things to
   // act on (due, week, to-dos) all live in the left column.
   function dayOpenColumn(d) {
@@ -4334,6 +4916,7 @@
       dayBriefCard(d),
       dayCard('Watching', { collapsed: true, count: watching.length,
         body: [watching.length ? dayRows(watching, { actions: 'lite' }) : dayEmpty('Nothing being watched.')] }),
+      dayMyRoutinesCard(d),
       dayCard('Projects', { count: projects.length,
         body: projects.length ? projects.map(dayProjectRow) : [dayEmpty('No active projects.')] }),
     ];

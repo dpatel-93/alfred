@@ -10,7 +10,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { applyAction, applyGrokPlan, assistantFeed, authorIsOurs, brainNote, latestBrief, parseGrokPlan, routineDueToday, tellGrokPrompt, writeSignal } from '../brain-assistant.mjs';
+import { applyAction, applyGrokPlan, assistantFeed, authorIsOurs, brainNote, grokItemList, latestBrief, parseGrokPlan, routineDueToday, tellGrokPrompt, writeSignal } from '../brain-assistant.mjs';
 import { easternNow } from '../brain-librarian.mjs';
 
 const ROOT = path.join(os.tmpdir(), `assistant-test-${process.pid}`);
@@ -220,6 +220,45 @@ chk('when nothing in the plan can be saved, the words still reach Grok\'s inbox'
 const errand = applyGrokPlan(ROOT, { items: [{ type: 'reminder', kind: 'errand', title: 'Buy milk', due: 'none' }] }, 'add milk to my errands', NOW);
 chk('an errand with no date is due today and ends with the day', errand.saved[0]?.due === NOW.date
   && /- \*\*Until:\*\* end-of-day/.test(fs.readFileSync(path.join(ROOT, errand.saved[0].file), 'utf8')));
+
+// --- Tell Grok: routines, edits and closes by number ---
+console.log('\nTell Grok: routines and edits');
+const list = grokItemList(ROOT, NOW);
+const plumberRef = list.refs.findIndex((r) => r.file === rem.file) + 1;
+const pausedRef = list.refs.findIndex((r) => r.file === 'Routines/user-paused.md') + 1;
+const milkRef = list.refs.findIndex((r) => r.file === errand.saved[0].file) + 1;
+chk('the list numbers open reminders and the user\'s routines, paused ones included, never AI routines',
+  plumberRef > 0 && pausedRef > 0 && milkRef > 0 && !list.refs.some((r) => /grok-brief/.test(r.file))
+  && list.lines[plumberRef - 1].startsWith(`#${plumberRef} reminder · Call the plumber · due 2026-10-31`), list.lines.join(' | '));
+const listed = tellGrokPrompt('move the plumber to Friday', NOW, list);
+chk('the prompt carries the numbered list and the edit, close and routine shapes', listed.includes(list.lines[0])
+  && /"type":"edit","id"/.test(listed) && /"type":"close","id"/.test(listed) && /"type":"routine"/.test(listed));
+const edits = applyGrokPlan(ROOT, { reply: 'Done.', items: [
+  { type: 'edit', id: plumberRef, set: { due: '2026-10-30', time: '16:00', file: '../../evil.md' } },
+  { type: 'edit', id: pausedRef, set: { status: 'active' } },
+  { type: 'close', id: milkRef },
+  { type: 'routine', title: 'Water the plants', schedule: 'Sundays', time: '10:00' },
+  { type: 'edit', id: 999, set: { title: 'x' } },
+  { type: 'close', id: pausedRef },
+  { type: 'routine', title: 'Sometimes', schedule: 'now and then' },
+] }, 'move the plumber to Friday 4pm, restart my paused habit, milk is done, water plants Sundays at 10', NOW, list.refs);
+chk('an edit by number moves the reminder and logs it as Grok from the desk box', /- \*\*Due:\*\* 2026-10-30 16:00/.test(fs.readFileSync(path.join(ROOT, rem.file), 'utf8'))
+  && /Edited: .* by grok \(from the Alfred desk box\): due 2026-10-31 → 2026-10-30 16:00/.test(fs.readFileSync(path.join(ROOT, rem.file), 'utf8')));
+chk('a field Grok should not set (a path) is ignored', !fs.existsSync(path.join(ROOT, '..', '..', 'evil.md')));
+chk('an edit by number resumes a paused routine', /- \*\*Status:\*\* active/.test(fs.readFileSync(path.join(ROOT, 'Routines/user-paused.md'), 'utf8')));
+chk('a close by number files the reminder in Done', !fs.existsSync(path.join(ROOT, errand.saved[0].file))
+  && fs.existsSync(path.join(ROOT, 'Reminders', 'Done', path.basename(errand.saved[0].file))));
+const plants = edits.saved.find((s) => s.type === 'routine' && !s.edit);
+chk('a new routine from Grok is the user\'s, with its day and time', plants && /- \*\*Schedule:\*\* Sundays 10:00/.test(fs.readFileSync(path.join(ROOT, plants.file), 'utf8'))
+  && /- \*\*Runs:\*\* the user/.test(fs.readFileSync(path.join(ROOT, plants.file), 'utf8')));
+chk('an unknown number, closing a routine and an unreadable schedule are refused and reported', edits.skipped.length === 3
+  && /no item #999/.test(edits.skipped[0].error) && /only a reminder can be closed/.test(edits.skipped[1].error)
+  && /can't read the schedule/.test(edits.skipped[2].error), JSON.stringify(edits.skipped));
+const feed2 = assistantFeed(ROOT, NOW);
+chk('the feed lists paused routines apart and gives reminders their time', Array.isArray(feed2.routines.paused)
+  && !feed2.routines.paused.some((r) => r.file === 'Routines/user-paused.md')
+  && feed2.upcoming.find((i) => i.file === rem.file)?.time === '16:00', JSON.stringify(feed2.routines.paused));
+chk('the feed gives a routine its time from the schedule', [...feed2.routines.today, ...feed2.routines.other].find((r) => r.file === plants?.file)?.time === '10:00');
 
 fs.rmSync(ROOT, { recursive: true, force: true });
 console.log(`\n${pass} passed, ${fails.length} failed`);
