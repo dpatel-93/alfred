@@ -1552,18 +1552,16 @@ hidden.
 * The spoken greeting waits until `body` is no longer `.gated`.
 * `?nogate=1` hides it before first paint and never blocks. The browser test suites use it.
 
-### 7.5 "Since you last looked" (Day, top of column 3)
+### 7.5 Day columns (revised 2026-10-23)
 
-Reads `recent` from `/api/assistant` (last 24h of edits, newest first, max 20). Title is
-"Since you last looked (N)". Each row: author chip (Grok = `--p-grok` tint, Claude and
-Alfred = `--p-claude` tint, anything else gray; the leading word of `author` decides, and a
-signal with no author is read off its Inbox file name), folder kicker, title, age ("12 min
-ago", "3 h ago"). Click opens the reader. N is the rows modified after
-`localStorage['alfred-last-seen']`, written when the tab is hidden and on `pagehide`, read
-again when the tab becomes visible; unset means the last 6 hours count as new. Older rows
-render dimmer by colour (never by opacity, which would break contrast). Eight rows show,
-"Show all N" reveals the rest. Empty state: "Nothing changed in the last day." A server
-that does not send `recent` gets no card, rather than a false "nothing changed".
+The user asked for the calendar in the middle and everything to act on to the left. The
+"Since you last looked" card is removed, and `/api/assistant` no longer sends `recent`.
+
+| Column | Cards, top to bottom |
+|---|---|
+| Left: today, this week and to-dos | Today on the calendar (when connected), Overdue, Due today, Carry over, Routines today, This week, To-dos, Later (collapsed) |
+| Middle: calendar | The month calendar and the picked day's agenda, alone |
+| Right: brief and wrap-up | Grok's morning brief, Watching (collapsed), Projects, Signals waiting, End of day |
 
 ### 7.6 Contrast (measured, WCAG 2.1 relative luminance)
 
@@ -1603,7 +1601,7 @@ floor is to be enforced, `#52648c` reaches 3.00 on surface-2.
 The Day view gained a date layer: dots on a month grid for what needs to happen which day,
 fed by the brain's dated reminders (the truth) and by Google Calendar (every calendar the
 account sees, shared ones and invitations included). No new tokens; the classes live in one
-block, `CALENDAR`, after "Since you last looked". Built with `el()`/`textContent` only.
+block, `CALENDAR`. Built with `el()`/`textContent` only.
 
 | Surface | Where | Notes |
 |---|---|---|

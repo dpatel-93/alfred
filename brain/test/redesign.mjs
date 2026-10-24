@@ -382,6 +382,25 @@ if (!(await up())) {
 
     // --- Day: the calendar (month grid, today, dots, agenda, today's events) ------------
     await page.waitForFunction(() => !!document.querySelector('.cal-event'), null, { timeout: 8000 }).catch(() => {});
+
+    // Layout the user asked for: everything to act on on the left, the calendar alone in
+    // the middle, Grok's brief leading the right, and no "Since you last looked" card.
+    const dayLayout = await page.evaluate(() => [...document.querySelectorAll('.day-col')].map((c) =>
+      [...c.children].map((card) => {
+        const h = card.firstElementChild;
+        return card.classList.contains('cal-card') ? 'CALENDAR' : String((h && h.firstChild && h.firstChild.textContent) || '').trim();
+      })));
+    const leftTitles = dayLayout[0] || [];
+    chk(tag('Day: due today, this week and to-dos are in the left column, in that order'),
+      ['Due today', 'This week', 'To-dos'].every((t) => leftTitles.includes(t))
+        && leftTitles.indexOf('Due today') < leftTitles.indexOf('This week')
+        && leftTitles.indexOf('This week') < leftTitles.indexOf('To-dos'), JSON.stringify(dayLayout));
+    chk(tag('Day: the calendar has the middle column to itself'),
+      JSON.stringify(dayLayout[1]) === '["CALENDAR"]', JSON.stringify(dayLayout[1]));
+    chk(tag("Day: Grok's morning brief leads the right column"),
+      (dayLayout[2] || [])[0] === "Grok's morning brief", JSON.stringify(dayLayout[2]));
+    chk(tag('Day: there is no "Since you last looked" card'),
+      !dayLayout.flat().some((t) => /since you last looked/i.test(t)), JSON.stringify(dayLayout));
     chk(tag('Day: the Calendar card tops column 2 with a 6-week grid (42 day buttons)'), await page.evaluate(() => {
       const cols = document.querySelectorAll('.day-col');
       const card = cols[1] && cols[1].firstElementChild;

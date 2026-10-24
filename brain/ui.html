@@ -2127,42 +2127,6 @@
   #tooltip { border-radius: var(--r-sm); }
 
   /* ==========================================================================
-     SINCE YOU LAST LOOKED (Day card, column 3).
-     ========================================================================== */
-  .day-recent { display: flex; flex-direction: column; gap: var(--sp-2); }
-  .day-recent-row {
-    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--sp-1) var(--sp-4);
-    width: 100%; padding: var(--sp-3) var(--sp-5); border: 0; border-radius: var(--r-sm);
-    background: color-mix(in srgb, var(--surface-2) 78%, transparent);
-    box-shadow: inset 3px 0 0 var(--blue);
-    color: var(--text); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer;
-    transition: background var(--t-fast) var(--ease-out);
-  }
-  .day-recent-row:hover { background: color-mix(in srgb, var(--blue) 7%, var(--surface-2)); }
-  .day-recent-row.is-old { box-shadow: inset 3px 0 0 var(--border-strong); color: var(--text-dim); }
-  .day-recent-row .rc-author {
-    --ac: var(--gray);
-    grid-row: 1 / span 2; align-self: start; margin-top: 2px;
-    padding: 1px 6px; border: 1px solid color-mix(in srgb, var(--ac) 40%, transparent); border-radius: var(--r-xs);
-    background: color-mix(in srgb, var(--ac) 10%, var(--surface-2)); color: var(--ac);
-    font-family: var(--font-mono); font-size: var(--fs-micro); font-weight: 600;
-    letter-spacing: var(--track-kicker); text-transform: uppercase; white-space: nowrap;
-  }
-  .day-recent-row .rc-author[data-a="grok"]   { --ac: var(--p-grok); }
-  .day-recent-row .rc-author[data-a="claude"] { --ac: var(--p-claude); }
-  .day-recent-row .rc-title { min-width: 0; overflow-wrap: anywhere; }
-  .day-recent-row .rc-age {
-    font-family: var(--font-mono); font-size: var(--fs-xs); font-variant-numeric: tabular-nums;
-    color: var(--text-dim); white-space: nowrap;
-  }
-  .day-recent-row .rc-kicker {
-    grid-column: 2 / -1; color: var(--text-dim); font-family: var(--font-mono); font-size: var(--fs-micro);
-    letter-spacing: var(--track-kicker); text-transform: uppercase;
-  }
-  .day-recent-row:focus-visible, .day-recent-more:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
-  .day-recent-more { align-self: flex-start; }
-
-  /* ==========================================================================
      CALENDAR (Day): the month card at the top of column 2, "Today on the
      calendar" at the top of column 1, and the Google Calendar block in
      Settings. Dots: mint = a brain reminder due that day, the calendar's own
@@ -2381,7 +2345,7 @@
   }
   @media (prefers-reduced-motion: reduce) {
     #gate { transition-duration: .01ms !important; }
-    .day-card, .day-card::before, .day-recent-row, .view-btn, .btn, #utils button, .composer-input,
+    .day-card, .day-card::before, .view-btn, .btn, #utils button, .composer-input,
     .bench-seat { transition-duration: .01ms !important; }
   }
 
@@ -3926,7 +3890,16 @@
       body: [routines.length ? dayRows(routines, function (r) {
         return { cls: 'routine', when: String(r.schedule || '').split(/[;(]/)[0].trim(), actions: 'none' };
       }) : dayEmpty('No routines today.')] }));
-    return dayColumn('Today', cards);
+    // Everything to act on lives in this one column: today, then the week, then the open to-dos.
+    var todos = arr(d.todos), later = arr(d.later);
+    cards.push(dayWeekCard(d));
+    cards.push(dayCard('To-dos', { count: todos.length,
+      body: [todos.length ? dayRows(todos, { actions: 'lite' }) : dayEmpty('No open to-dos.')] }));
+    cards.push(dayCard('Later', { collapsed: true, count: later.length,
+      body: [later.length ? dayRows(later, function (i) {
+        return { when: dayLabel(i.due), actions: 'lite' };
+      }) : dayEmpty('Nothing scheduled further out.')] }));
+    return dayColumn('Today, this week and to-dos', cards);
   }
 
   // --- Calendar: dots on the days, an agenda for the picked day --------------------------
@@ -4255,17 +4228,9 @@
     return dayCard('This week', { count: upcoming.length, body: body });
   }
 
-  function dayBriefColumn(d) {
-    var later = arr(d.later);
-    return dayColumn("Calendar, brief and week", [
-      dayCalendarCard(d),
-      dayBriefCard(d),
-      dayWeekCard(d),
-      dayCard('Later', { collapsed: true, count: later.length,
-        body: [later.length ? dayRows(later, function (i) {
-          return { when: dayLabel(i.due), actions: 'lite' };
-        }) : dayEmpty('Nothing scheduled further out.')] }),
-    ]);
+  // The calendar is the centrepiece and gets the middle column to itself.
+  function dayCalendarColumn(d) {
+    return dayColumn('Calendar', [dayCalendarCard(d)]);
   }
 
   function dayProjectRow(p) {
@@ -4318,111 +4283,12 @@
     return dayCard('End of day', { body: body });
   }
 
-  // --- Since you last looked: the last 24h of edits across the shared brain ---
-  // /api/assistant carries `recent` (newest first, max 20). A row is "new" when it was
-  // modified after the last time this page was looked at: alfred-last-seen is written
-  // when the tab is hidden or closed, and read again when it comes back. Never written
-  // yet? Treat the last 6 hours as new.
-  var LAST_SEEN_KEY = 'alfred-last-seen';
-  var RECENT_FALLBACK_MS = 6 * 60 * 60 * 1000;
-  var RECENT_FOLD = 8;
-  var recentShowAll = false;
-
-  function readLastSeen() {
-    var t = NaN;
-    try { t = parseInt(localStorage.getItem(LAST_SEEN_KEY), 10); } catch (e) { /* no storage */ }
-    return isFinite(t) && t > 0 ? t : Date.now() - RECENT_FALLBACK_MS;
-  }
-  function writeLastSeen() {
-    try { localStorage.setItem(LAST_SEEN_KEY, String(Date.now())); } catch (e) { /* no storage */ }
-  }
-  var recentBaseline = readLastSeen();
-
-  document.addEventListener('visibilitychange', function () {
-    if (document.hidden) { writeLastSeen(); return; }
-    recentBaseline = readLastSeen();       // what changed while away is what is new now
-    if (dayFeed) renderDay(dayFeed, true);
-  });
-  window.addEventListener('pagehide', writeLastSeen);
-
-  function recentAgeMinutes(r) {
-    var t = Date.parse(r.modified);
-    if (isFinite(t)) return Math.max(0, Math.floor((Date.now() - t) / 60000));
-    return typeof r.ageMinutes === 'number' ? Math.max(0, Math.floor(r.ageMinutes)) : 0;
-  }
-
-  function recentAgeText(mins) {
-    if (mins < 1) return 'just now';
-    if (mins < 60) return mins + ' min ago';
-    var h = Math.floor(mins / 60);
-    if (h < 24) return h + ' h ago';
-    return Math.floor(h / 24) + ' d ago';
-  }
-
-  function recentIsNew(r) {
-    var t = Date.parse(r.modified);
-    return isFinite(t) && t > recentBaseline;
-  }
-
-  // The leading word of the author decides ("Claude Code (migrated; originally captured by Grok)" is
-  // Claude's). A signal has no author field, but its file name says who sent it:
-  // Inbox/2026-10-23-1900--claude-code--grok--fyi--slug.md is from claude-code.
-  function recentAuthor(r) {
-    var a = String(r.author || '').trim().toLowerCase();
-    if (!a) {
-      var m = /^Inbox\/(?:Done\/)?\d{4}-\d{2}-\d{2}-\d{4}--([a-z0-9-]+)--/.exec(String(r.file || ''));
-      if (m) a = m[1];
-    }
-    var lead = a.split(/[^a-z]+/)[0];
-    if (lead === 'grok') return { key: 'grok', label: 'Grok' };
-    if (lead === 'claude') return { key: 'claude', label: 'Claude' };
-    if (lead === 'alfred' || (!lead && r.ours)) return { key: 'claude', label: 'Alfred' };
-    return { key: 'other', label: lead ? capFirst(lead.slice(0, 10)) : 'Other' };
-  }
-
-  function dayRecentRow(r) {
-    var isNew = recentIsNew(r);
-    var au = recentAuthor(r);
-    var b = el('button', 'day-recent-row ' + (isNew ? 'is-new' : 'is-old'), []);
-    b.type = 'button';
-    var chip = el('span', 'rc-author', [au.label]);
-    chip.setAttribute('data-a', au.key);
-    b.appendChild(chip);
-    b.appendChild(el('span', 'rc-title', [r.title || r.file]));
-    b.appendChild(el('span', 'rc-age', [recentAgeText(recentAgeMinutes(r))]));
-    var kicker = [r.folder, r.kind && String(r.kind).toLowerCase() !== String(r.folder || '').toLowerCase() ? r.kind : '']
-      .filter(Boolean).join(' · ');
-    if (kicker) b.appendChild(el('span', 'rc-kicker', [kicker]));
-    if (isNew) b.appendChild(el('span', 'day-sr', ['new']));
-    b.title = 'Open ' + r.file;
-    b.addEventListener('click', function () { dayOpenFile(r.file, r.title); });
-    return b;
-  }
-
-  function dayRecentCard(d) {
-    if (!Array.isArray(d.recent)) return null;     // an older server: no strip rather than a false "nothing changed"
-    var rows = d.recent;
-    var fresh = rows.filter(recentIsNew).length;
-    var body = [];
-    if (!rows.length) {
-      body.push(dayEmpty('Nothing changed in the last day.'));
-    } else {
-      body.push(el('div', 'day-recent', (recentShowAll ? rows : rows.slice(0, RECENT_FOLD)).map(dayRecentRow)));
-      if (rows.length > RECENT_FOLD) {
-        var more = el('button', 'btn day-recent-more', [recentShowAll ? 'Show fewer' : 'Show all ' + rows.length]);
-        more.type = 'button';
-        more.addEventListener('click', function () { recentShowAll = !recentShowAll; renderDay(dayFeed, true); });
-        body.push(more);
-      }
-    }
-    return dayCard('Since you last looked (' + fresh + ')', { body: body });
-  }
-
+  // Right column: what to read, not what to do. Grok's brief leads; the things to
+  // act on (due, week, to-dos) all live in the left column.
   function dayOpenColumn(d) {
-    var todos = arr(d.todos), watching = arr(d.watching), projects = arr(d.projects), signals = arr(d.signals);
+    var watching = arr(d.watching), projects = arr(d.projects), signals = arr(d.signals);
     var cards = [
-      dayCard('To-dos', { count: todos.length,
-        body: [todos.length ? dayRows(todos, { actions: 'lite' }) : dayEmpty('No open to-dos.')] }),
+      dayBriefCard(d),
       dayCard('Watching', { collapsed: true, count: watching.length,
         body: [watching.length ? dayRows(watching, { actions: 'lite' }) : dayEmpty('Nothing being watched.')] }),
       dayCard('Projects', { count: projects.length,
@@ -4430,9 +4296,7 @@
     ];
     if (signals.length) cards.push(dayCard('Signals waiting', { count: signals.length, body: signals.map(daySignalRow) }));
     cards.push(dayEndOfDayCard(d));
-    var recent = dayRecentCard(d);
-    if (recent) cards.unshift(recent);
-    return dayColumn('Open and wrap-up', cards);
+    return dayColumn('Brief and wrap-up', cards);
   }
 
   function renderDay(d, force) {
@@ -4445,7 +4309,7 @@
     daySummaryEl.title = d.generatedAt ? 'Read ' + d.generatedAt : '';
 
     var sig = JSON.stringify(d, function (k, v) { return k === 'generatedAt' || k === 'ageMinutes' ? undefined : v; })
-      + '|' + Math.floor(Date.now() / 300000) + '|' + recentBaseline + '|' + recentShowAll;
+      + '|' + Math.floor(Date.now() / 300000);
     if (!force && sig === daySig) return;
     daySig = sig;
 
@@ -4460,7 +4324,7 @@
         'Set "Shared brain path" in alfred-profile.md to the Google Drive "Second Brain" folder.'));
       return;
     }
-    var grid = el('div', 'day-grid', [dayTodayColumn(d), dayBriefColumn(d), dayOpenColumn(d)]);
+    var grid = el('div', 'day-grid', [dayTodayColumn(d), dayCalendarColumn(d), dayOpenColumn(d)]);
     if (!dayEntered) { // one entrance stagger, on first mount only (never on a data poll)
       dayEntered = true;
       grid.classList.add('enter');
