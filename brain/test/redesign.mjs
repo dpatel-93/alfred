@@ -351,21 +351,30 @@ if (!(await up())) {
       }
     }
 
-    // The feed carries `calendar` once Google is connected, and a test run never is. Inject one Google
-    // event for today into the real feed, so the calendar card and "Today on the calendar" are checked
-    // against the shape the server sends rather than against a stub of the whole page.
+    // The feed carries `calendar` (parsed from Calendar/events.md), and the fixture vault has no such
+    // file. Inject the shape the server sends into the real feed: one timed event today with a place
+    // and an author, plus one all-day event that spans today and tomorrow, with one unreadable line,
+    // so the calendar card and "Today on the calendar" are checked against the real feed shape
+    // rather than against a stub of the whole page.
     await page.route('**/api/assistant', async (route) => {
       // A poll can still be in flight when the context closes; that must not become an unhandled rejection.
       let resp, j;
       try { resp = await route.fetch(); j = await resp.json(); } catch { return route.abort().catch(() => {}); }
       const iso = j.date || new Date().toISOString().slice(0, 10);
+      const day = (n) => new Date(Date.parse(iso + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10);
+      const [y, m] = [Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1];
       j.brain = j.brain || 'test-brain';
+      const timed = { id: 'ev-1', title: 'Test event', date: iso, end: null, time: '09:30', endTime: '10:00', allDay: false,
+        location: 'Room 4', by: 'grok', line: 8 };
+      const span = { id: 'ev-2', title: 'Team offsite', date: iso, end: day(1), time: null, endTime: null, allDay: true,
+        location: null, by: 'claude-code', line: 9 };
       j.calendar = {
-        configured: true, connected: true, account: 'me@example.com', brainCalendarId: 'b@x', lastSync: null, lastError: null,
-        from: iso, to: iso, fetchedAt: new Date().toISOString(), calendars: [],
-        days: { [iso]: [{ id: 'e1', calendar: 'Home', calendarId: 'home@x', color: '#4cc9ff', brain: false, title: 'Test event',
-          allDay: false, start: iso + 'T09:30:00-04:00', end: iso + 'T10:00:00-04:00', time: '09:30', location: null,
-          invite: true, response: 'needsAction', brainFile: null }] },
+        source: 'file', file: 'Calendar/events.md', exists: true,
+        from: new Date(Date.UTC(y, m - 1, 1, 12)).toISOString().slice(0, 10),
+        to: new Date(Date.UTC(y, m + 2, 0, 12)).toISOString().slice(0, 10),
+        count: 2,
+        days: { [iso]: [timed, { ...span, spanStart: true, spanEnd: false }], [day(1)]: [{ ...span, date: day(1), spanStart: false, spanEnd: true }] },
+        problems: [{ line: 12, text: '- 2026-13-40 broken line' }],
       };
       await route.fulfill({ response: resp, json: j }).catch(() => {});
     });
@@ -412,11 +421,38 @@ if (!(await up())) {
       return t.length === 1 && t[0].classList.contains('selected') && t[0].getAttribute('aria-current') === 'date'
         && document.querySelectorAll('.cal-day[tabindex="0"]').length === 1 && !!document.querySelector('.cal-agenda');
     }));
-    chk(tag('Day: a pending invitation is a hollow dot, its event is in the agenda, and "Today on the calendar" lists it'), await page.evaluate(() => {
+    chk(tag("Day: today's cell shows an event dot for each of the 2 events, and none is hollow"), await page.evaluate(() => {
       const t = document.querySelector('.cal-day.today');
+      return t.querySelectorAll('.cal-dot:not(.rem)').length === 2 && t.querySelectorAll('.cal-dot.hollow').length === 0;
+    }));
+    chk(tag('Day: the agenda lists the timed event with its time range, place and author, and the all-day one'), await page.evaluate(() => {
+      const a = document.querySelector('.cal-agenda').textContent;
+      return /09:30–10:00/.test(a) && /Test event/.test(a) && /Room 4/.test(a) && /Grok/.test(a)
+        && /all day/.test(a) && /Team offsite/.test(a) && /Claude/.test(a);
+    }));
+    chk(tag('Day: "Today on the calendar" leads column 1 and lists the timed event'), await page.evaluate(() => {
       const first = document.querySelector('.day-col').firstElementChild;
-      return t.querySelectorAll('.cal-dot.hollow').length === 1 && /invite · needs answer/.test(document.querySelector('.cal-agenda').textContent)
-        && /Today on the calendar/.test(first.textContent) && /\b1 event\b/.test(document.getElementById('day-summary').textContent);
+      return /Today on the calendar/.test(first.textContent) && /Test event/.test(first.textContent) && /09:30–10:00/.test(first.textContent);
+    }));
+    chk(tag('Day: the day summary says "2 events"'), await page.evaluate(() =>
+      /\b2 events\b/.test(document.getElementById('day-summary').textContent)));
+    chk(tag('Day: the note under the grid counts the month and links the events file; unreadable lines get a warning'), await page.evaluate(() => {
+      const notes = [...document.querySelectorAll('.cal-card .cal-note')];
+      const count = notes.find((n) => /events this month/.test(n.textContent));
+      const warn = notes.find((n) => n.classList.contains('warn'));
+      return !!count && /^2 events this month · Calendar\/events\.md$/.test(count.textContent)
+        && !!count.querySelector('button.cal-link') && !!warn
+        && /^1 line in Calendar\/events\.md could not be read$/.test(warn.textContent) && /12/.test(warn.title);
+    }));
+    await page.evaluate(() => { document.getElementById('panel').classList.remove('open'); });
+    await page.click('.cal-agenda .cal-event');
+    await page.waitForFunction(() => document.getElementById('panel').classList.contains('open'), null, { timeout: 5000 }).catch(() => {});
+    chk(tag('Day: clicking an event opens Calendar/events.md in the reader'), await page.evaluate(() =>
+      document.getElementById('panel').classList.contains('open') && /Calendar/.test(document.getElementById('panel-title').textContent)));
+    await page.evaluate(() => { document.getElementById('panel').classList.remove('open'); });
+    chk(tag('Day: the page served at / has no Google Calendar and no /api/calendar/ calls left in it'), await page.evaluate(async () => {
+      const src = await fetch('/').then((r) => r.text());
+      return !src.includes('/api/calendar/') && !src.includes('Google Calendar');
     }));
 
     // --- Brain map regions follow the Second Brain's folders -------------------

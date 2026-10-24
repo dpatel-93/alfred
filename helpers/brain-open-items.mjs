@@ -14,7 +14,7 @@
 // ---------------------------------------------------------------------------
 
 import fs from 'node:fs';
-import { sharedBrainPath, collectOpenItems, easternNow } from './brain-librarian.mjs';
+import { sharedBrainPath, collectOpenItems, easternNow, upcomingEvents } from './brain-librarian.mjs';
 
 // --- Configuration ---
 const NAMES = (process.env.ALFRED_INBOX_NAMES || 'claude,claude-code,librarian,all')
@@ -33,6 +33,11 @@ function main() {
   if (o.today.length) out.push('  Due today:', ...o.today.map(line));
   if (o.overdue.length) out.push('  Overdue:', ...o.overdue.map(line));
   if (o.carryOver.length) out.push('  Yesterday\'s errands not done (ask once whether to carry over):', ...o.carryOver.map(line));
+  const events = upcomingEvents(brain, now);
+  if (events.length) {
+    out.push('  On the calendar, next 7 days (Calendar/events.md):', ...events.map((e) =>
+      `    - ${e.date}${e.end ? `..${e.end}` : ''}${e.time ? ` ${e.time}${e.endTime ? `-${e.endTime}` : ''}` : ''} ${e.title}${e.location ? ` @ ${e.location}` : ''}`));
+  }
   if (o.upcoming.length) out.push('  Next 7 days:', ...o.upcoming.map(line));
   if (o.undated.length) {
     out.push(`  Open, no date (${o.undated.length}):`, ...o.undated.slice(0, MAX_UNDATED).map(line));

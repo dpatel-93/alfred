@@ -20,6 +20,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CALENDAR_FILE, eventsBetween, formatEvent } from './brain-calendar.mjs';
 
 // --- Configuration ---
 const PROFILE_PATH = path.join(os.homedir(), '.claude', 'alfred-profile.md');
@@ -322,8 +323,20 @@ function catalog(brain) {
     return `- \`Routines/${e.name}\` · ${h.schedule || ''} · ${h.status || ''}`;
   });
   out.push('', '### Knowledge', '- `Knowledge/Runbooks/`, `Knowledge/Docs/`, `Knowledge/Decisions/`, `Knowledge/Patterns/`, `Knowledge/Learning/`, `Knowledge/Investigations/`');
+  out.push('', '### Calendar', `- \`${CALENDAR_FILE}\`: dated events (appointments, plans, trips), one line each; any AI adds and reads`);
   out.push('', '### Everything else', '- `Memory/profile.md`, `Memory/timeline/`, `Memory/agents/` · `Research/` · `Health/` · `Outputs/briefs/`, `Outputs/news/`, `Outputs/reports/` · `System/agents/`, `System/ai-stack.md`, `System/CHANGELOG.md`, `System/templates/` · `Archive/`');
   return out;
+}
+
+// The shared calendar's next 7 days, so an AI reading only the top of the index still
+// hears about tomorrow's appointment (the events themselves live in Calendar/events.md).
+export function upcomingEvents(brain, now = easternNow(), days = 7) {
+  return eventsBetween(brain, now.date, addDays(now.date, days));
+}
+function calendarSection(brain, now) {
+  const ev = upcomingEvents(brain, now);
+  return [`### On the calendar, next 7 days (${ev.length})`,
+    ...(ev.length ? ev.map((e) => `${formatEvent({ ...e, by: null })} · \`${CALENDAR_FILE}\``) : ['- nothing']), ''];
 }
 
 export function renderIndex(brain, now = easternNow()) {
@@ -339,6 +352,7 @@ export function renderIndex(brain, now = easternNow()) {
     `### Due today (${o.today.length})`, ...(o.today.length ? o.today.map(bullet) : ['- nothing']), '',
     `### Overdue (${o.overdue.length})`, ...(o.overdue.length ? o.overdue.map(bullet) : ['- nothing']), '',
     `### Next 7 days (${o.upcoming.length})`, ...(o.upcoming.length ? o.upcoming.map(bullet) : ['- nothing']), '',
+    ...calendarSection(brain, now),
     `### Yesterday's errands not done: offer to carry over (${o.carryOver.length})`,
     ...(o.carryOver.length ? o.carryOver.map((i) => `- ${i.title} · \`${i.file}\``) : ['- none']), '',
     `### Open, no date (${o.undated.length})`, ...(o.undated.length ? o.undated.map(bullet) : ['- nothing']), '',
