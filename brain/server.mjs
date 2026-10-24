@@ -2117,18 +2117,20 @@ async function handleAssistantLibrarian(req, res) {
 // so it has nothing of the brain to read or edit; only the user's sentence and today's
 // date leave the machine.
 // HELPERS_DIR is declared further down the file; this helper lives in the same folder.
-const PROVIDER_RUN = path.join(os.homedir(), '.claude', 'helpers', 'provider-run.mjs');
-const TELL_GROK_TIMEOUT_MS = 120 * 1000;
+// Tests point ALFRED_TELL_GROK_RUNNER at a stand-in that behaves like provider-run.mjs.
+const PROVIDER_RUN = process.env.ALFRED_TELL_GROK_RUNNER || path.join(os.homedir(), '.claude', 'helpers', 'provider-run.mjs');
+const TELL_GROK_TIMEOUT_MS = Number(process.env.ALFRED_TELL_GROK_TIMEOUT_MS) || 120 * 1000;
 const TELL_GROK_MAX_CHARS = 500;
 let tellGrokBusy = false;
 
 function runGrokOnce(prompt) {
   return new Promise((resolve) => {
-    if (process.env.ALFRED_TELL_GROK_STUB != null) return resolve({ ok: true, out: process.env.ALFRED_TELL_GROK_STUB });
-    if (process.env.ALFRED_CC_DRY_RUN === '1') return resolve({ ok: false, error: 'Grok is not called in a dry run' });
+    if (process.env.ALFRED_CC_DRY_RUN === '1' && !process.env.ALFRED_TELL_GROK_RUNNER) {
+      return resolve({ ok: false, error: 'Grok is not called in a dry run' });
+    }
     let cwd;
     try { cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'alfred-tell-grok-')); } catch (err) { return resolve({ ok: false, error: err.message }); }
-    execFile(process.execPath, [PROVIDER_RUN, 'grok', prompt], {
+    const child = execFile(process.execPath, [PROVIDER_RUN, 'grok', prompt], {
       cwd, timeout: TELL_GROK_TIMEOUT_MS, maxBuffer: 1 << 20, windowsHide: true,
       env: { ...process.env, ALFRED_PROVIDER_TIMEOUT_MS: String(TELL_GROK_TIMEOUT_MS - 5000) },
     }, (err, stdout, stderr) => {
@@ -2139,6 +2141,10 @@ function runGrokOnce(prompt) {
       }
       resolve({ ok: true, out: String(stdout || '') });
     });
+    // provider-run.mjs reads stdin to the end whenever it is not a terminal (to append piped
+    // text to the prompt). execFile hands it an open pipe, so without this it waits forever
+    // and Grok is never called: the first live test on 2026-10-23 timed out exactly that way.
+    child.stdin.end();
   });
 }
 

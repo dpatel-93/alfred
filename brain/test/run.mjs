@@ -299,11 +299,14 @@ const server = spawn(process.execPath, [path.join(HERE, '..', 'server.mjs')], {
     PORT: String(PORT),
     ALFRED_VAULT: path.join(HERE, 'fixtures', 'vault'),
     ALFRED_SHARED_BRAIN: BRAIN,
-    // The calendar module keeps its OAuth client and refresh token under this dir; the api
-    // suite writes a fake client there and must never touch the operator's ~/.alfred.
+    // Local settings the server writes (~/.alfred by default) go here, never to the operator's.
     ALFRED_LOCAL_CONFIG_DIR: path.join(os.tmpdir(), `alfred-test-config-${PORT}`),
     // The Day view auto-opens a sign-in console for a signed-out seat; never on a test run.
     ALFRED_CC_DRY_RUN: '1',
+    // The desk box (Tell Grok) spawns this stand-in instead of the real Grok runner, through the
+    // same code path, so a hang in that path fails the api suite in seconds rather than shipping.
+    ALFRED_TELL_GROK_RUNNER: path.join(HERE, 'fixtures', 'grok-runner-stub.mjs'),
+    ALFRED_TELL_GROK_TIMEOUT_MS: '15000',
     // Never the live token file — see TOKEN_FILE in server.mjs.
     ALFRED_TOKEN_FILE: path.join(os.tmpdir(), `alfred-test-${PORT}.token`),
     // The brain suite exists to cover the DEGRADED path — keyword fallback with

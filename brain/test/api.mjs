@@ -526,14 +526,24 @@ const todayEv = (cal.days?.[feedCal?.date] || []).find((e) => e.title === 'Test 
 chk('the feed reads the calendar file', cal.source==='file' && cal.exists===true && cal.file==='Calendar/events.md', JSON.stringify(cal).slice(0,200));
 chk('today\'s event carries its time, place and author', !!todayEv && todayEv.time==='09:30' && todayEv.endTime==='10:00' && todayEv.location==='the office' && todayEv.by==='grok', JSON.stringify(todayEv));
 chk('an unreadable line is reported, not dropped', Array.isArray(cal.problems) && cal.problems.length===1 && /99:99/.test(cal.problems[0].text), JSON.stringify(cal.problems));
-// --- The desk box: Tell Grok (tests run with ALFRED_CC_DRY_RUN=1, so Grok is never called) ---
+// --- The desk box: Tell Grok. Grok is never called: run.mjs points ALFRED_TELL_GROK_RUNNER at a
+// stand-in that is spawned exactly like the real runner and reads stdin the same way. ---
 const tgNoTok = await fetch(B+'/api/assistant/tell-grok',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:'x'})});
 chk('POST /api/assistant/tell-grok without token blocked', tgNoTok.status===401||tgNoTok.status===403, `got ${tgNoTok.status}`);
 chk('an empty request is refused', (await post('/api/assistant/tell-grok',{text:'   '})).s===400);
 chk('an over-long request is refused', (await post('/api/assistant/tell-grok',{text:'a'.repeat(501)})).s===400);
-const tg = await post('/api/assistant/tell-grok',{text:'remind me to test the desk box tomorrow'});
+const tgT0 = Date.now();
+const tgOk = await post('/api/assistant/tell-grok',{text:'remind me to test the desk box tomorrow'});
+const tgSecs = (Date.now() - tgT0) / 1000;
+chk('the Grok runner gets a closed stdin and answers promptly (the 2026-10-23 hang)', tgOk.s===200 && tgOk.d?.via==='grok' && tgSecs < 10,
+  `${tgSecs.toFixed(1)}s ${JSON.stringify(tgOk.d && { via: tgOk.d.via, why: tgOk.d.why })}`);
+const tgRem = (tgOk.d?.saved||[]).find((s) => s.type==='reminder');
+chk('Grok\'s plan is saved as a reminder and is on the page in the same reply', !!tgRem && tgRem.title==='Stub reminder from the desk box'
+  && (tgOk.d?.feed?.upcoming||[]).some((i) => i.title==='Stub reminder from the desk box' && i.file===tgRem.file) && /tomorrow/i.test(tgOk.d?.reply||''),
+  JSON.stringify({ saved: tgOk.d?.saved, reply: tgOk.d?.reply }).slice(0,300));
+const tg = await post('/api/assistant/tell-grok',{text:'STUB-FAIL remind me to test the desk box tomorrow'});
 chk('when Grok cannot answer, the words go to Grok\'s inbox and the reason is given', tg.s===200 && tg.d?.via==='inbox' && tg.d?.saved?.[0]?.type==='inbox'
-  && /--user--grok--handoff--/.test(tg.d.saved[0].file) && /dry run/i.test(tg.d?.why||''), JSON.stringify(tg.d).slice(0,300));
+  && /--user--grok--handoff--/.test(tg.d.saved[0].file) && /stub was told to fail/i.test(tg.d?.why||''), JSON.stringify(tg.d).slice(0,300));
 chk('the handoff is waiting in the feed\'s signals', (tg.d?.feed?.signals||[]).some((s) => s.file===tg.d?.saved?.[0]?.file && s.to==='grok' && s.type==='handoff'),
   JSON.stringify(tg.d?.feed?.signals).slice(0,300));
 
