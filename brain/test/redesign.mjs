@@ -355,8 +355,9 @@ if (!(await up())) {
     // event for today into the real feed, so the calendar card and "Today on the calendar" are checked
     // against the shape the server sends rather than against a stub of the whole page.
     await page.route('**/api/assistant', async (route) => {
-      const resp = await route.fetch();
-      const j = await resp.json();
+      // A poll can still be in flight when the context closes; that must not become an unhandled rejection.
+      let resp, j;
+      try { resp = await route.fetch(); j = await resp.json(); } catch { return route.abort().catch(() => {}); }
       const iso = j.date || new Date().toISOString().slice(0, 10);
       j.brain = j.brain || 'test-brain';
       j.calendar = {
@@ -366,7 +367,7 @@ if (!(await up())) {
           allDay: false, start: iso + 'T09:30:00-04:00', end: iso + 'T10:00:00-04:00', time: '09:30', location: null,
           invite: true, response: 'needsAction', brainFile: null }] },
       };
-      await route.fulfill({ response: resp, json: j });
+      await route.fulfill({ response: resp, json: j }).catch(() => {});
     });
 
     // --- Day: key 1 returns to it; the date header and the bench strip are mounted -------
@@ -402,6 +403,7 @@ if (!(await up())) {
     // --- 7/8. no uncaught JS errors, at this width -------------------------
     chk(tag('no uncaught JS errors'), errs.length === 0, errs.slice(0, 3).join(' | '));
 
+    await page.unroute('**/api/assistant').catch(() => {});
     await ctx.close();
   }
 
