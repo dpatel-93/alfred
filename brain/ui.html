@@ -2262,7 +2262,7 @@
   .cal-day:focus-visible { z-index: 1; }
 
   /* Settings -> Google Calendar (inside the shared modal; reuses .settings-*). */
-  .cal-set { margin-top: var(--sp-9); }
+  .cal-set { margin: var(--sp-9) 0; }
   .cal-set, .cal-set-body { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
   .cal-set-status {
     display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--sp-2) var(--sp-6);
@@ -4181,8 +4181,10 @@
     } else if (!ix.loaded) {
       root.appendChild(calNote(['Loading Google events…']));
     } else if (ISO_DATE.test(String(ix.cal.from || '')) && ISO_DATE.test(String(ix.cal.to || ''))
-      && (start < ix.cal.from || addDaysIso(start, 41) > ix.cal.to)) {
-      root.appendChild(calNote(['Google events are loaded for ' + dayLabel(ix.cal.from) + ' to ' + dayLabel(ix.cal.to) + '.']));
+      && (first < ix.cal.from || addDaysIso(calShiftMonth(ym, 1) + '-01', -1) > ix.cal.to)) {
+      // The server reads a window around today; days outside it show reminders only, so say so.
+      root.appendChild(calNote(['Google events cover ' + dayLabel(ix.cal.from) + ' to ' + dayLabel(ix.cal.to)
+        + '; other days show reminders only.']));
     }
 
     root.appendChild(calAgenda(ix, sel, today));
