@@ -136,7 +136,12 @@ function applyToReminder(brain, n, t, ctx) {
   if (n.set.status && ['open', 'snoozed'].includes(firstWord(n.set.status))) { text = setField(text, 'Status', firstWord(n.set.status)); raw.push(`status → ${firstWord(n.set.status)}`); }
   else if (reopen) { text = setField(text, 'Status', 'open'); raw.push('status → open'); }
   else if (n.set.status) fail(`status "${oneLine(n.set.status, 20)}" can't be set by note`);
-  for (const f of REMINDER_RAW) if (n.set[f]) { text = setField(text, cap(f), oneLine(n.set[f], 80)); raw.push(`${f} → ${oneLine(n.set[f], 40)}`); }
+  const cur = readFields(text);
+  for (const f of REMINDER_RAW) {
+    if (!n.set[f] || oneLine(n.set[f], 80) === (cur[f] || '')) continue;  // record real changes only
+    text = setField(text, cap(f), oneLine(n.set[f], 80));
+    raw.push(`${f} → ${oneLine(n.set[f], 40)}`);
+  }
   if (raw.length) {
     text = `${setField(text, 'Last updated', ctx.asOf.stamp).trimEnd()}\n- Edited: ${ctx.asOf.stamp} by ${ctx.by}: ${raw.join('; ')}\n`;
     ctx.run.write(t.full, text, 'changed by change note');
