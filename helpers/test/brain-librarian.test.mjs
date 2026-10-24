@@ -61,6 +61,7 @@ put('Inbox/2026-10-24-0600--grok--claude--close--missing.md', signal('close', 'g
 put('Memory/topics/home.md', '# Home\n\n- (2026-10-01) Permanent fact · via grok\n- (2026-10-01) Away this week · until 2026-10-20 · via grok\n- (2026-10-01) Future temp · until 2026-12-01 · via grok\n');
 put('System/logs/grok-2026-06.md', '# old log\n', old);
 put('index.md', '# Second Brain: Index\n\n- **Author:** Grok\n');
+put('Calendar/events.md', '# Calendar\n\n## 2026-10 (October 2026)\n\n- 2026-10-20 Past event (added by grok)\n- 2026-10-27 10:00 Dentist @ clinic (added by grok)\n- ~~2026-10-28 Cancelled lunch~~ (cancelled by user via claude-code)\n\n## 2026-11 (November 2026)\n\n- 2026-11-20 Too far out (added by grok)\n');
 
 // --- Dry run changes nothing ---
 console.log('\nDry run');
@@ -101,12 +102,15 @@ chk('index lists today\'s errand and the reopened one under Due today', /### Due
 chk('index lists the overdue item', /### Overdue \(1\)[\s\S]*Overdue thing/.test(index));
 chk('index offers yesterday\'s errand for carry-over', /carry over \(1\)[\s\S]*Yesterday errand/.test(index));
 chk('index flags the stale signal', /older than 7 days/.test(index));
+chk('index lists the calendar\'s next 7 days: upcoming only, no cancelled, no past, nothing beyond a week',
+  /### On the calendar, next 7 days \(1\)\n- 2026-10-27 10:00 Dentist @ clinic · `Calendar\/events\.md`/.test(index), (index.match(/### On the calendar[\s\S]*?\n\n/) || [''])[0]);
+chk('the catalog points at the calendar file', /### Calendar\n- `Calendar\/events\.md`/.test(index));
 chk('index keeps Grok as author line', /Author:\*\* Grok/.test(index));
 chk('run is logged', /Librarian log/.test(read(p('System/logs/librarian-2026-10.md'))));
 
 console.log('\nAmend signals');
 const movedTodo = read(p('Reminders/2026-10-21--todo.md'));
-chk('a Set: amend changes the field and notes who asked', /\*\*Due:\*\* 2026-10-28/.test(movedTodo) && /- Amended: 2026-10-24 09:00 ET by grok \(Due = 2026-10-28; signal /.test(movedTodo), movedTodo);
+chk('a Set: amend changes the field and notes who asked', /\*\*Due:\*\* 2026-10-28/.test(movedTodo) && /- Edited: 2026-10-24 09:00 ET by grok \(change note, applied 2026-10-24 09:00 ET\): due none → 2026-10-28/.test(movedTodo), movedTodo);
 chk('its signal is filed as applied', !fs.existsSync(p('Inbox/2026-10-24-0810--grok--claude--amend--move-todo.md'))
   && /done \(applied by librarian/.test(read(p('Inbox/Done/2026-10-24-0810--grok--claude--amend--move-todo.md'))));
 const reopened = read(p('Reminders/2026-10-23--expired-errand.md'));
@@ -122,6 +126,8 @@ const open = spawnSync(process.execPath, [OPEN], { env: { ...process.env, ALFRED
 chk('open-items hook shows due today and overdue', /Today errand/.test(open.stdout) && /Overdue thing/.test(open.stdout), open.stdout);
 chk('open-items hook lists signals addressed to Claude', /capture--stale/.test(open.stdout), open.stdout);
 chk('open-items hook offers carry-over', /Yesterday errand/.test(open.stdout), open.stdout);
+chk('open-items hook shows the calendar\'s next 7 days', /On the calendar, next 7 days[\s\S]*2026-10-27 10:00 Dentist @ clinic/.test(open.stdout)
+  && !/Cancelled lunch|Too far out|Past event/.test(open.stdout), open.stdout);
 
 fs.rmSync(ROOT, { recursive: true, force: true });
 console.log(`\n${pass} passed, ${fails.length} failed`);

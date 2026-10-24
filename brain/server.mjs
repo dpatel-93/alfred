@@ -12,7 +12,7 @@ import { execFile, spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WebSocketServer } from 'ws';
 import pty from 'node-pty';
-import { buildIndex, linkKey, noteKey, resolveVaultDir, SKIP_DIRS, vaultExcludes, isExcludedPath } from './index-vault.mjs';
+import { buildIndex, linkKey, noteKey, resolveVaultDir, isSkippedDir, vaultExcludes, isExcludedPath } from './index-vault.mjs';
 import { composeGreeting, composeGreetingLines, parseMcpList } from './greeting.mjs';
 import { composeMorningBriefParagraphs } from './morning-brief.mjs';
 
@@ -2006,7 +2006,7 @@ function maskKey(k) {
 // many notes are actually in it, because that is what tells the operator they
 // pointed at the right folder. Capped depth-first walk, not a full index build.
 //
-// Applies the INDEXER's own SKIP_DIRS rather than a second, similar-looking
+// Applies the INDEXER's own skip rule rather than a second, similar-looking
 // list. The first version skipped only dotfiles and node_modules and reported
 // 349 files against an index of 111 — two numbers describing the same folder
 // and disagreeing, which is worse than not showing a number at all.
@@ -2021,7 +2021,7 @@ function countMarkdown(dir, budget = 20000) {
     for (const e of entries) {
       if (e.isDirectory()) {
         const full = path.join(current, e.name);
-        if (!e.name.startsWith('.') && !SKIP_DIRS.has(e.name) && !isExcludedPath(dir, full, excludes)) stack.push(full);
+        if (!e.name.startsWith('.') && !isSkippedDir(e.name) && !isExcludedPath(dir, full, excludes)) stack.push(full);
       } else if (e.name.toLowerCase().endsWith('.md')) {
         n++;
       }
@@ -2082,12 +2082,14 @@ async function handleAssistantAction(req, res) {
   try { body = await readJsonBody(req); } catch { return sendJson(res, 400, { error: 'invalid JSON body' }); }
   try {
     const { applyAction, sharedBrainPath } = await import(pathToFileURL(ASSISTANT_MODULE).href);
+    // Grok's waiting change notes go in first, so a desk click lands on top of them and a
+    // note written before the click can never overwrite it afterwards (brain-notes.mjs).
+    await runLibrarianPass('before a dashboard action');
     const { status, ...result } = applyAction(sharedBrainPath(), {
       file: String(body.file || ''), action: String(body.action || ''),
       due: body.due ? String(body.due) : undefined, by: 'user',
     });
     bumpBrainVersion();
-    if (status === 200) scheduleCalendarSync('dashboard action');
     return sendJson(res, status, status === 200 ? { ...result, feed: await fullFeed() } : result);
   } catch (err) {
     return sendJson(res, 500, { error: String(err.message || err).slice(0, 200) });
@@ -2109,13 +2111,130 @@ async function handleAssistantLibrarian(req, res) {
   }
 }
 
+// --- POST /api/assistant/item [token]: add or edit one item from the Day page ---
+// {op:'create', type:'reminder'|'routine'|'event', fields} or
+// {op:'update', type:'reminder'|'routine', file, fields}. brain-items.mjs checks every
+// field and writes the file (the same writer Grok's desk-box plans use); a refusal comes
+// back as 400 with a sentence the editor shows as is.
+const ITEMS_MODULE = path.join(__dirname, '..', 'helpers', 'brain-items.mjs');
+
+async function handleAssistantItem(req, res) {
+  let body;
+  try { body = await readJsonBody(req); } catch { return sendJson(res, 400, { ok: false, error: 'invalid JSON body' }); }
+  const op = String(body.op || '');
+  const type = String(body.type || '');
+  const fields = body.fields && typeof body.fields === 'object' && !Array.isArray(body.fields) ? body.fields : {};
+  try {
+    const I = await import(pathToFileURL(ITEMS_MODULE).href);
+    const { sharedBrainPath } = await import(pathToFileURL(ASSISTANT_MODULE).href);
+    const { easternNow } = await import(pathToFileURL(LIBRARIAN_MODULE).href);
+    const brain = sharedBrainPath();
+    if (!brain || !fs.existsSync(brain)) return sendJson(res, 404, { ok: false, error: 'shared brain not found' });
+    await runLibrarianPass('before a dashboard edit');  // Grok's waiting notes first (brain-notes.mjs)
+    const now = easternNow();
+    const who = { author: 'user (Alfred dashboard)', by: 'user (Alfred dashboard)', now };
+    let saved;
+    if (op === 'create' && type === 'reminder') saved = I.createReminder(brain, fields, who);
+    else if (op === 'create' && type === 'routine') saved = I.createRoutine(brain, fields, who);
+    else if (op === 'create' && type === 'event') saved = I.createEvent(brain, fields, { by: 'user', now });
+    else if (op === 'update' && type === 'reminder') saved = I.updateReminder(brain, String(body.file || ''), fields, who);
+    else if (op === 'update' && type === 'routine') saved = I.updateRoutine(brain, String(body.file || ''), fields, who);
+    else return sendJson(res, 400, { ok: false, error: `can't ${op || '?'} a ${type || '?'} here` });
+    console.log(`[item] ${op} ${type}: ${saved.file}`);
+    await runLibrarianPass('dashboard edit');
+    bumpBrainVersion();
+    return sendJson(res, 200, { ok: true, saved, feed: await fullFeed() });
+  } catch (err) {
+    const status = err.status === 400 ? 400 : 500;
+    return sendJson(res, status, { ok: false, error: String(err.message || err).slice(0, 200) });
+  }
+}
+
+// --- POST /api/assistant/tell-grok [token]: the desk box ---
+// The user types what they would say to Grok in the car. Grok's CLI (the user's own
+// subscription, run per click, never in the background) turns it into a plan; the
+// helper checks every field and writes the reminder files and calendar lines itself.
+// If Grok cannot answer (signed out, timed out, garbled), the words go to Grok's
+// Inbox as a handoff so nothing typed is lost. The CLI runs in an empty temp folder,
+// so it has nothing of the brain to read or edit; what leaves the machine is the
+// user's sentence, today's date and the titles of the open reminders and the user's
+// routines (which Grok already reads in the Drive folder).
+// HELPERS_DIR is declared further down the file; this helper lives in the same folder.
+// Tests point ALFRED_TELL_GROK_RUNNER at a stand-in that behaves like provider-run.mjs.
+const PROVIDER_RUN = process.env.ALFRED_TELL_GROK_RUNNER || path.join(os.homedir(), '.claude', 'helpers', 'provider-run.mjs');
+const TELL_GROK_TIMEOUT_MS = Number(process.env.ALFRED_TELL_GROK_TIMEOUT_MS) || 120 * 1000;
+const TELL_GROK_MAX_CHARS = 500;
+let tellGrokBusy = false;
+
+function runGrokOnce(prompt) {
+  return new Promise((resolve) => {
+    if (process.env.ALFRED_CC_DRY_RUN === '1' && !process.env.ALFRED_TELL_GROK_RUNNER) {
+      return resolve({ ok: false, error: 'Grok is not called in a dry run' });
+    }
+    let cwd;
+    try { cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'alfred-tell-grok-')); } catch (err) { return resolve({ ok: false, error: err.message }); }
+    const child = execFile(process.execPath, [PROVIDER_RUN, 'grok', prompt], {
+      cwd, timeout: TELL_GROK_TIMEOUT_MS, maxBuffer: 1 << 20, windowsHide: true,
+      env: { ...process.env, ALFRED_PROVIDER_TIMEOUT_MS: String(TELL_GROK_TIMEOUT_MS - 5000) },
+    }, (err, stdout, stderr) => {
+      try { fs.rmSync(cwd, { recursive: true, force: true }); } catch { /* temp */ }
+      if (err) {
+        const why = String(stderr || '').trim().split('\n').filter(Boolean).pop() || (err.killed ? 'Grok took too long' : err.message);
+        return resolve({ ok: false, error: why.slice(0, 200) });
+      }
+      resolve({ ok: true, out: String(stdout || '') });
+    });
+    // provider-run.mjs reads stdin to the end whenever it is not a terminal (to append piped
+    // text to the prompt). execFile hands it an open pipe, so without this it waits forever
+    // and Grok is never called: the first live test on 2026-10-23 timed out exactly that way.
+    child.stdin.end();
+  });
+}
+
+async function handleTellGrok(req, res) {
+  let body;
+  try { body = await readJsonBody(req); } catch { return sendJson(res, 400, { error: 'invalid JSON body' }); }
+  const text = String(body.text || '').replace(/\s+/g, ' ').trim();
+  if (!text) return sendJson(res, 400, { error: 'type what you want Grok to do' });
+  if (text.length > TELL_GROK_MAX_CHARS) return sendJson(res, 400, { error: `keep it under ${TELL_GROK_MAX_CHARS} characters` });
+  if (tellGrokBusy) return sendJson(res, 409, { error: 'Grok is still on the last one' });
+  tellGrokBusy = true;
+  try {
+    const A = await import(pathToFileURL(ASSISTANT_MODULE).href);
+    const { easternNow } = await import(pathToFileURL(LIBRARIAN_MODULE).href);
+    const brain = A.sharedBrainPath();
+    if (!brain || !fs.existsSync(brain)) return sendJson(res, 404, { error: 'shared brain not found' });
+    // Grok gets the open items by number so "move the dentist to Friday" or "that's done" can
+    // point at one; the numbers map back to files only here, in this request.
+    const list = A.grokItemList(brain, easternNow());
+    const g = await runGrokOnce(A.tellGrokPrompt(text, easternNow(), list));
+    const plan = g.ok ? A.parseGrokPlan(g.out) : null;
+    const now = easternNow();
+    let result;
+    if (plan) {
+      result = { via: 'grok', ...A.applyGrokPlan(brain, plan, text, now, list.refs) };
+    } else {
+      const why = g.ok ? 'Grok answered, but not with a plan Alfred could read' : g.error;
+      result = { via: 'inbox', reply: null, why, saved: [A.handoffToGrok(brain, null, text, now, why)], skipped: [] };
+    }
+    console.log(`[tell-grok] via ${result.via}: ${result.saved.map((s) => `${s.type} ${s.file}`).join('; ')}${result.why ? ` (${result.why})` : ''}`);
+    await runLibrarianPass('tell grok');
+    bumpBrainVersion();
+    return sendJson(res, 200, { ...result, feed: await fullFeed() });
+  } catch (err) {
+    return sendJson(res, 500, { error: String(err.message || err).slice(0, 200) });
+  } finally {
+    tellGrokBusy = false;
+  }
+}
+
 // --- Shared-brain change signal ---
 // Grok writes the brain from the car through Google Drive; Drive for Desktop puts
 // the file on this disk within seconds. A watcher on the day-to-day folders bumps a
 // version that /api/status (polled every 10s anyway) carries, so the day view
 // re-reads its feed when something changed instead of waiting for its own timer.
 // fs.watch is best-effort on a Drive-backed volume, so a slow mtime poll backs it up.
-const BRAIN_WATCH_DIRS = ['Reminders', 'Reminders/Done', 'Inbox', 'Routines', 'Outputs/briefs', 'Projects'];
+const BRAIN_WATCH_DIRS = ['Reminders', 'Reminders/Done', 'Inbox', 'Routines', 'Outputs/briefs', 'Projects', 'Calendar'];
 const BRAIN_WATCH_POLL_MS = 45 * 1000;
 let brainVersion = 0;
 let brainChangedAt = null;
@@ -2165,7 +2284,6 @@ async function runLibrarianPass(why) {
     if (!brain || !fs.existsSync(brain)) return [];
     const actions = runLibrarian(brain);
     if (actions.length) { console.log(`[librarian] ${why}: ${actions.length} action(s)`); bumpBrainVersion(); }
-    scheduleCalendarSync(`after librarian (${why})`, 1000);
     return actions;
   } catch (err) {
     console.log(`[librarian] ${why}: ${err.message}`);
@@ -2195,8 +2313,6 @@ async function startBrainWatch() {
         bumpBrainVersion();
         // A new or changed signal in Inbox/ (not Inbox/Done/) asks for a pass.
         if (rel === 'Inbox' && name && /\.md$/i.test(String(name)) && !/readme/i.test(String(name))) scheduleLibrarian('signal landed');
-        // A reminder written from the car or by the Librarian should reach the calendar soon.
-        if (rel.startsWith('Reminders')) scheduleCalendarSync('reminders changed', 10000);
       });
       w.on('error', () => {});
     } catch { /* no watcher here; the poll below still catches up */ }
@@ -2209,10 +2325,6 @@ async function startBrainWatch() {
   if (t.unref) t.unref();
   const l = setInterval(() => runLibrarianPass('timer'), LIBRARIAN_INTERVAL_MS);
   if (l.unref) l.unref();
-  const v = setInterval(() => refreshCalendarView(true), CALENDAR_VIEW_TTL_MS);
-  if (v.unref) v.unref();
-  refreshCalendarView(true);
-  scheduleCalendarSync('startup', 5000);
 }
 
 // --- Bench: who is signed in, with a real probe for Claude and an age for Grok ---
@@ -2252,147 +2364,30 @@ function grokAuthAge() {
   } catch { return null; }
 }
 
-// --- Google Calendar: the date bus (helpers/brain-calendar.mjs) ---
-// Reminders/ stays the truth; a dedicated "Second Brain" calendar mirrors every
-// dated reminder and anything created there becomes a reminder. The month view
-// reads every calendar the account sees. Credentials never reach the page: the
-// OAuth code lands on the loopback callback below and only a refresh token is
-// kept, in an owner-only file under ~/.alfred.
+// --- The shared calendar file (helpers/brain-calendar.mjs) ---
+// Calendar/events.md in the brain: one line per dated event, written by Grok and
+// Claude alike (it replaced the Google Calendar bus on 2026-10-23). Read straight
+// from the file for every feed; it is small, and the brain watcher already bumps
+// the version when it changes.
 const CALENDAR_MODULE = path.join(__dirname, '..', 'helpers', 'brain-calendar.mjs');
-const CALENDAR_VIEW_TTL_MS = 5 * 60 * 1000;
-let calendarCache = { at: 0, view: null };
-let calendarSyncTimer = null;
-let calendarBusy = false;
+const NOTES_MODULE = path.join(__dirname, '..', 'helpers', 'brain-notes.mjs');
 const calendarMod = () => import(pathToFileURL(CALENDAR_MODULE).href);
-
-async function refreshCalendarView(force) {
-  if (!force && calendarCache.view && Date.now() - calendarCache.at < CALENDAR_VIEW_TTL_MS) return calendarCache.view;
-  try {
-    const cal = await calendarMod();
-    if (!cal.calendarStatus().connected) { calendarCache = { at: Date.now(), view: null }; return null; }
-    const view = await cal.calendarView();
-    calendarCache = { at: Date.now(), view };
-    return view;
-  } catch (err) {
-    console.log(`[calendar] view: ${err.message}`);
-    return calendarCache.view;
-  }
-}
-
-async function runCalendarSync(why) {
-  if (calendarBusy) return null;
-  calendarBusy = true;
-  try {
-    const cal = await calendarMod();
-    if (!cal.calendarStatus().connected) return null;
-    const result = await cal.syncCalendar();
-    if (result.actions.length) { console.log(`[calendar] ${why}: ${result.actions.join('; ')}`); bumpBrainVersion(); }
-    if (!result.ok) console.log(`[calendar] ${why}: ${result.error}`);
-    await refreshCalendarView(true);
-    return result;
-  } catch (err) {
-    console.log(`[calendar] ${why}: ${err.message}`);
-    return null;
-  } finally {
-    calendarBusy = false;
-  }
-}
-
-function scheduleCalendarSync(why, delay = 3000) {
-  clearTimeout(calendarSyncTimer);
-  calendarSyncTimer = setTimeout(() => runCalendarSync(why), delay);
-  if (calendarSyncTimer.unref) calendarSyncTimer.unref();
-}
-
-// What the feed and /api/calendar/status carry: the connection state plus the cached month.
-function calendarPayload(status) {
-  const view = calendarCache.view;
-  return { ...status, ...(view ? { from: view.from, to: view.to, calendars: view.calendars, days: view.days, fetchedAt: view.fetchedAt } : {}) };
-}
 
 // The day view's feed with the calendar folded in. Used by every handler that returns a feed.
 async function fullFeed() {
-  const { assistantFeed } = await import(pathToFileURL(ASSISTANT_MODULE).href);
+  const { assistantFeed, sharedBrainPath } = await import(pathToFileURL(ASSISTANT_MODULE).href);
   const feed = assistantFeed();
   try {
-    const cal = await calendarMod();
-    const status = cal.calendarStatus();
-    if (status.connected && !calendarCache.view) refreshCalendarView(true);  // warm in the background; never block the page
-    feed.calendar = calendarPayload(status);
-  } catch { feed.calendar = { connected: false }; }
-  return feed;
-}
-
-function openBrowser(url) {
-  if (process.platform === 'win32') execFile('rundll32', ['url.dll,FileProtocolHandler', url], () => {});
-  else if (process.platform === 'darwin') execFile('open', [url], () => {});
-  else execFile('xdg-open', [url], () => {});
-}
-
-async function handleCalendarStatus(req, res) {
-  try {
-    const cal = await calendarMod();
-    return sendJson(res, 200, calendarPayload(cal.calendarStatus()));
-  } catch (err) { return sendJson(res, 500, { error: String(err.message || err).slice(0, 200) }); }
-}
-
-async function handleCalendarConfig(req, res) {
-  let body;
-  try { body = await readJsonBody(req); } catch { return sendJson(res, 400, { error: 'invalid JSON body' }); }
-  const clientId = String(body.clientId || '').trim();
-  const clientSecret = String(body.clientSecret || '').trim();
-  if (!/^[\w-]+\.apps\.googleusercontent\.com$/.test(clientId)) return sendJson(res, 400, { error: 'the client ID should end in .apps.googleusercontent.com' });
-  if (!/^[\w-]{8,}$/.test(clientSecret)) return sendJson(res, 400, { error: 'the client secret looks wrong' });
-  try {
-    const cal = await calendarMod();
-    cal.saveConfig({ clientId, clientSecret, lastError: null });
-    return sendJson(res, 200, cal.calendarStatus());
-  } catch (err) { return sendJson(res, 500, { error: String(err.message || err).slice(0, 200) }); }
-}
-
-async function handleCalendarConnect(req, res) {
-  try {
-    const cal = await calendarMod();
-    const url = cal.connectUrl(PORT);
-    if (process.env.ALFRED_CC_DRY_RUN !== '1') openBrowser(url);
-    return sendJson(res, 200, { ok: true, url });
-  } catch (err) { return sendJson(res, 409, { error: String(err.message || err).slice(0, 200) }); }
-}
-
-// GET /oauth2/google: Google's browser redirect. Loopback only, no token (the browser
-// has none); the one-time code is exchanged here and never echoed back.
-async function handleGoogleOAuthCallback(req, res, url) {
-  if (!isLoopbackAddress(req.socket.remoteAddress)) return sendText(res, 403, 'forbidden');
-  const page = (status, title, text) => {
-    res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-    res.end(`<!doctype html><meta charset="utf-8"><title>Alfred — Google Calendar</title><body style="font:15px system-ui;background:#07080d;color:#e8f1ff;padding:40px"><h1 style="font-size:20px">${title}</h1><p>${text}</p></body>`);
-  };
-  const error = url.searchParams.get('error');
-  if (error) return page(400, 'Google declined', `Google said: ${String(error).replace(/[<>&]/g, '')}. Close this tab and try again from Alfred's settings.`);
-  try {
-    const cal = await calendarMod();
-    await cal.finishConnect({ code: url.searchParams.get('code') || '', state: url.searchParams.get('state') || '' });
-    scheduleCalendarSync('connected', 500);
-    return page(200, 'Connected', 'Google Calendar is linked to Alfred. You can close this tab; the dashboard updates on its own.');
+    const { easternNow } = await import(pathToFileURL(LIBRARIAN_MODULE).href);
+    // Grok's waiting calendar notes are drawn as if already written (brain-notes.mjs).
+    const { pendingChanges } = await import(pathToFileURL(NOTES_MODULE).href);
+    const brain = sharedBrainPath();
+    feed.calendar = (await calendarMod()).calendarView(brain, easternNow(), { pending: brain ? pendingChanges(brain).calendar : null });
   } catch (err) {
-    return page(400, 'Could not connect', String(err.message || err).replace(/[<>&]/g, '').slice(0, 300));
+    feed.calendar = { source: 'file', file: 'Calendar/events.md', exists: false, count: 0, days: {}, problems: [],
+      error: String(err.message || err).slice(0, 200) };
   }
-}
-
-async function handleCalendarDisconnect(req, res) {
-  try {
-    const cal = await calendarMod();
-    const status = cal.disconnect();
-    calendarCache = { at: 0, view: null };
-    return sendJson(res, 200, status);
-  } catch (err) { return sendJson(res, 500, { error: String(err.message || err).slice(0, 200) }); }
-}
-
-async function handleCalendarSync(req, res) {
-  try {
-    const result = await runCalendarSync('dashboard');
-    return sendJson(res, 200, { result, feed: await fullFeed() });
-  } catch (err) { return sendJson(res, 500, { error: String(err.message || err).slice(0, 200) }); }
+  return feed;
 }
 
 async function handleBench(req, res, url) {
@@ -2427,10 +2422,6 @@ function handleSettingsGet(req, res) {
       value: storedGithubClientId() || '',
       source: process.env.ALFRED_GITHUB_CLIENT_ID ? 'env' : (loadLocalConfig().githubClientId ? 'config' : null),
     },
-    dailyBriefRepo: {
-      value: storedDailyBriefRepo() || '',
-      source: process.env.ALFRED_DAILY_BRIEF_REPO ? 'env' : (loadLocalConfig().dailyBriefRepo ? 'config' : null),
-    },
     // Where the brain actually is, plus how it got that value and whether the
     // folder exists — an install pointed at a folder that is not there reads
     // as "no notes" and is otherwise indistinguishable from an empty vault.
@@ -2447,8 +2438,7 @@ async function handleSettingsPost(req, res) {
   const hasOllama = Object.prototype.hasOwnProperty.call(body, 'ollamaApiKey');
   const hasClientId = Object.prototype.hasOwnProperty.call(body, 'githubClientId');
   const hasVault = Object.prototype.hasOwnProperty.call(body, 'vaultPath');
-  const hasDailyBriefRepo = Object.prototype.hasOwnProperty.call(body, 'dailyBriefRepo');
-  if (!hasOllama && !hasClientId && !hasVault && !hasDailyBriefRepo) {
+  if (!hasOllama && !hasClientId && !hasVault) {
     return sendJson(res, 400, { error: 'nothing to update' });
   }
   if (hasVault) {
@@ -2471,7 +2461,7 @@ async function handleSettingsPost(req, res) {
     indexCache = null;
     invalidateIndexDerived();
     activityCache = null;
-    if (!hasOllama && !hasClientId && !hasDailyBriefRepo) {
+    if (!hasOllama && !hasClientId) {
       return sendJson(res, 200, { ok: true, vault: vaultState(), reindexRequired: true });
     }
   }
@@ -2484,18 +2474,8 @@ async function handleSettingsPost(req, res) {
       return sendJson(res, 400, { error: 'that does not look like a GitHub Client ID — check for stray spaces or line breaks' });
     }
     saveLocalConfig({ githubClientId: cid });
-    if (!hasOllama && !hasDailyBriefRepo) {
-      return sendJson(res, 200, { ok: true, githubClientId: { value: storedGithubClientId() || '', source: cid ? 'config' : null } });
-    }
-  }
-  if (hasDailyBriefRepo) {
-    const repo = String(body.dailyBriefRepo || '').trim();
-    if (repo && !/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(repo)) {
-      return sendJson(res, 400, { error: 'expected an owner/repo, e.g. dpatel-93/DP_dailybrief' });
-    }
-    saveLocalConfig({ dailyBriefRepo: repo });
     if (!hasOllama) {
-      return sendJson(res, 200, { ok: true, dailyBriefRepo: { value: storedDailyBriefRepo() || '', source: repo ? 'config' : null } });
+      return sendJson(res, 200, { ok: true, githubClientId: { value: storedGithubClientId() || '', source: cid ? 'config' : null } });
     }
   }
   const raw = String(body.ollamaApiKey || '').trim();
@@ -4249,16 +4229,6 @@ function storedGithubToken() {
 }
 function storedGithubClientId() {
   return String(process.env.ALFRED_GITHUB_CLIENT_ID || loadLocalConfig().githubClientId || '').trim() || null;
-}
-
-// `owner/repo` of a project whose GitHub Action commits a daily brief back to
-// itself — e.g. dpatel-93/DP_dailybrief. Not hardcoded: this repo is the
-// portable, installable snapshot of one operator's setup, and baking a
-// personal repo name into shared framework source is exactly the kind of
-// stranger's-identity leak ONBOARDING.md exists to avoid. Unset by default;
-// the morning-brief button says so plainly rather than guessing a repo.
-function storedDailyBriefRepo() {
-  return String(process.env.ALFRED_DAILY_BRIEF_REPO || loadLocalConfig().dailyBriefRepo || '').trim() || null;
 }
 
 // One reader for both paths, so every caller downstream is identical.
@@ -6080,9 +6050,6 @@ async function main() {
     try {
       const url = new URL(req.url, `http://localhost:${PORT}`);
 
-      // Google's OAuth redirect lands here from the user's browser (loopback only).
-      if (url.pathname === '/oauth2/google' && req.method === 'GET') return await handleGoogleOAuthCallback(req, res, url);
-
       if (url.pathname === '/api/ask') {
         if (req.method !== 'POST') return sendJson(res, 405, { error: 'method not allowed' });
         return await handleAsk(req, res);
@@ -6125,10 +6092,8 @@ async function main() {
           || url.pathname === '/api/terminals'
           || url.pathname === '/api/assistant/action'
           || url.pathname === '/api/assistant/librarian'
-          || url.pathname === '/api/calendar/config'
-          || url.pathname === '/api/calendar/connect'
-          || url.pathname === '/api/calendar/disconnect'
-          || url.pathname === '/api/calendar/sync'
+          || url.pathname === '/api/assistant/tell-grok'
+          || url.pathname === '/api/assistant/item'
           || termAction
           || agentAction;
         if (!isBridgePost) return sendJson(res, 404, { error: 'not found' });
@@ -6136,10 +6101,8 @@ async function main() {
 
         if (url.pathname === '/api/assistant/action') return await handleAssistantAction(req, res);
         if (url.pathname === '/api/assistant/librarian') return await handleAssistantLibrarian(req, res);
-        if (url.pathname === '/api/calendar/config') return await handleCalendarConfig(req, res);
-        if (url.pathname === '/api/calendar/connect') return await handleCalendarConnect(req, res);
-        if (url.pathname === '/api/calendar/disconnect') return await handleCalendarDisconnect(req, res);
-        if (url.pathname === '/api/calendar/sync') return await handleCalendarSync(req, res);
+        if (url.pathname === '/api/assistant/tell-grok') return await handleTellGrok(req, res);
+        if (url.pathname === '/api/assistant/item') return await handleAssistantItem(req, res);
         if (url.pathname === '/api/terminals') return await handleTerminalCreate(req, res);
         if (termAction && termAction[2] === 'kill') return handleTerminalKill(req, res, termAction[1]);
         if (termAction && termAction[2] === 'resize') return await handleTerminalResize(req, res, termAction[1]);
@@ -6191,14 +6154,12 @@ async function main() {
           || url.pathname === '/api/command-center/seats' || url.pathname === '/api/council'
           || url.pathname === '/api/terminals' || url.pathname === '/api/assistant'
           || url.pathname === '/api/assistant/note' || url.pathname === '/api/bench'
-          || url.pathname === '/api/calendar/status'
           || councilGet || agentOutput) {
         if (!authorize(req, res)) return;
         if (url.pathname === '/api/terminals') return handleTerminalList(req, res);
         if (url.pathname === '/api/assistant') return await handleAssistant(req, res);
         if (url.pathname === '/api/assistant/note') return await handleAssistantNote(req, res, url);
         if (url.pathname === '/api/bench') return await handleBench(req, res, url);
-        if (url.pathname === '/api/calendar/status') return await handleCalendarStatus(req, res);
         if (url.pathname === '/api/command-center/seats') return await handleCommandCenterSeats(req, res, url);
         if (url.pathname === '/api/council') return handleCouncilList(req, res);
         if (councilGet) return handleCouncilGet(req, res, councilGet[1]);

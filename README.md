@@ -394,10 +394,18 @@ Everything else happens from the search bar:
 ### Day
 
 The page Alfred opens on. It is the desk view of the shared brain (the Google Drive "Second
-Brain" folder that every AI reads): the left column is today — overdue, due today,
-yesterday's errands to carry over, the routines that fall today; the middle is Grok's morning
-brief and the week ahead; the right is open to-dos, what each project is waiting on, signals
-waiting between AIs, and an end-of-day card that lists what got done and tidies up.
+Brain" folder that every AI reads): the left column is everything to act on — overdue, due
+today, yesterday's errands to carry over, the routines that fall today, the week ahead and open
+to-dos; the middle is the month calendar on its own; the right is Grok's morning brief, what
+each project is waiting on, signals waiting between AIs, and an end-of-day card that lists what
+got done and tidies up.
+
+**Tell Grok**, in the Day header, takes what you would say to Grok in the car ("remind me to
+call the plumber Saturday", "dentist Tuesday 3pm"). Grok's CLI turns it into a plan; Alfred
+checks every field and writes the reminder file or calendar line itself, then the page shows it.
+If Grok cannot answer (signed out, timed out), your words go to Grok's `Inbox/` as a handoff so
+nothing is lost. Grok runs in an empty temp folder: only your sentence and today's date leave
+the machine.
 
 Every item has **Done**, **Tomorrow** and **Snooze**. They edit the reminder file in place
 whoever wrote it (MANIFESTO rule 2: any AI edits any file), add a dated `Closed:` or `Moved:`
@@ -409,14 +417,14 @@ every ten minutes while the dashboard is up and the moment a signal lands.
 The view re-reads the brain whenever a watched folder changes on disk (Drive for Desktop
 lands Grok's car-side edits within seconds), every two minutes otherwise, and on Refresh.
 
-**Calendar.** With Google Calendar connected (Settings → Google Calendar, a one-time OAuth
-client from the Google Cloud Console), Alfred keeps a dedicated "Second Brain" calendar on the
-account in step with the brain: every open dated reminder is an all-day event there, closing
-the reminder removes it, and an event anyone creates in that calendar (Grok through its own
-Google Calendar connector, the phone, you) becomes a reminder file; moving or deleting the
-event moves or closes the reminder. The Day view's month grid shows a dot per item per day
-across every calendar the account sees, shared calendars and invitations included, and a
-day's agenda on click. Only a refresh token is stored, in an owner-only file under `~/.alfred`.
+**Calendar.** The shared calendar is one Markdown file in the brain, `Calendar/events.md`, that
+Grok and Claude both add to and read from: one line per event under its month,
+`- YYYY-MM-DD [HH:MM[-HH:MM]] Title [@ place] (added by <ai>)`, cancelled lines struck through
+rather than deleted. The Day view's month grid shows a dot per reminder due and per event, and
+the picked day's agenda; lines it cannot read are flagged under the grid. The Librarian lists
+the next 7 days in `index.md`, and the session-start hook prints them for Claude. Add one from a
+desk session with `node ~/.claude/helpers/brain-calendar.mjs add 2026-10-30 "Dentist" --time 09:30 --at "clinic"`.
+(Google Calendar was tried first and dropped on 2026-10-23 in favour of the file.)
 
 The **bench strip** in the Day header shows each AI seat's state (ready, needs sign-in, not
 installed) with a Sign in button that opens the provider's own login console. At startup, if

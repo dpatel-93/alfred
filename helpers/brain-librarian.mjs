@@ -20,13 +20,17 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CALENDAR_FILE, eventsBetween, formatEvent } from './brain-calendar.mjs';
+import { DAY_MS, addDays, cleanRef, easternNow, firstWord, mdFiles, readFields, setField } from './brain-core.mjs';
+import { applyChangeNotes, overlayReminders, pendingChanges, recentChanges } from './brain-notes.mjs';
+
+export { addDays, easternNow, readFields, setField };
 
 // --- Configuration ---
 const PROFILE_PATH = path.join(os.homedir(), '.claude', 'alfred-profile.md');
 const DONE_DAYS = 30;
 const LOG_DAYS = 90;
 const STALE_SIGNAL_DAYS = 7;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function sharedBrainPath() {
   if (process.env.ALFRED_SHARED_BRAIN) return process.env.ALFRED_SHARED_BRAIN;
@@ -37,41 +41,6 @@ export function sharedBrainPath() {
   } catch { return null; }
 }
 
-// --- Time (the brain keeps Eastern time) ---
-export function easternNow(now = new Date(process.env.ALFRED_NOW || Date.now())) {
-  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-  }).formatToParts(now).map((x) => [x.type, x.value]));
-  const date = `${p.year}-${p.month}-${p.day}`;
-  return { date, stamp: `${date} ${p.hour}:${p.minute} ET`, month: `${p.year}-${p.month}`, ms: now.getTime() };
-}
-export const addDays = (date, n) => new Date(Date.parse(`${date}T12:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
-
-// --- Header fields: "- **Field:** value" lines near the top ---
-export function readFields(text) {
-  const fields = {};
-  for (const line of text.split(/\r?\n/).slice(0, 40)) {
-    const m = line.match(/^- \*\*([A-Za-z ]+):\*\*\s*(.*)$/);
-    if (m) fields[m[1].trim().toLowerCase()] = m[2].trim();
-  }
-  return fields;
-}
-
-export function setField(text, field, value) {
-  const re = new RegExp(`^- \\*\\*${field}:\\*\\*.*$`, 'm');
-  if (re.test(text)) return text.replace(re, `- **${field}:** ${value}`);
-  const lines = text.split('\n');
-  let last = -1;
-  lines.slice(0, 40).forEach((l, i) => { if (/^- \*\*[A-Za-z ]+:\*\*/.test(l)) last = i; });
-  lines.splice(last + 1, 0, `- **${field}:** ${value}`);
-  return lines.join('\n');
-}
-
-const firstWord = (v) => String(v || '').toLowerCase().split(/[\s(·]/)[0];
-const cleanRef = (v) => String(v || '').replace(/[`"]/g, '').split(/\s+\(|;/)[0].trim().replace(/\\/g, '/');
-const mdFiles = (dir) => (fs.existsSync(dir)
-  ? fs.readdirSync(dir).filter((f) => f.endsWith('.md') && f.toLowerCase() !== 'readme.md') : []);
 
 // --- Actions (collected, then applied unless dry-run) ---
 function makeRunner(brain, dryRun) {
@@ -79,9 +48,10 @@ function makeRunner(brain, dryRun) {
   const rel = (p) => path.relative(brain, p).replace(/\\/g, '/');
   return {
     actions,
+    dryRun,
     write(file, text, why) {
       actions.push(`edit  ${rel(file)}  (${why})`);
-      if (!dryRun) fs.writeFileSync(file, text, 'utf8');
+      if (!dryRun) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text, 'utf8'); }
     },
     move(from, toDir, why) {
       const to = path.join(toDir, path.basename(from));
@@ -94,74 +64,7 @@ function makeRunner(brain, dryRun) {
   };
 }
 
-// 1. close signals -> close their reminders
-function applyCloseSignals(brain, run, now) {
-  const inbox = path.join(brain, 'Inbox');
-  for (const f of mdFiles(inbox)) {
-    const file = path.join(inbox, f);
-    const text = fs.readFileSync(file, 'utf8');
-    const h = readFields(text);
-    if (firstWord(h.type) !== 'close' || firstWord(h.status) === 'done') continue;
-    const ref = cleanRef(h.re);
-    const candidates = [path.join(brain, ref), path.join(brain, 'Reminders', path.basename(ref))];
-    const target = candidates.find((c) => ref && fs.existsSync(c) && c.endsWith('.md'));
-    if (!target) { run.note(`close signal ${f}: target "${ref}" not found; left for a person`); continue; }
-    let t = fs.readFileSync(target, 'utf8');
-    if (!['done', 'cancelled'].includes(firstWord(readFields(t).status))) {
-      t = setField(t, 'Status', 'done');
-      t = `${t.trimEnd()}\n- Closed: ${now.stamp} by ${h.from || 'another AI'} (signal ${f})\n`;
-      run.write(target, t, `closed by signal from ${h.from || '?'}`);
-    }
-    if (path.dirname(target) === path.join(brain, 'Reminders')) run.move(target, path.join(brain, 'Reminders', 'Done'), 'closed');
-    run.write(file, setField(text, 'Status', `done (applied by librarian ${now.stamp})`), 'signal applied');
-    run.move(file, path.join(inbox, 'Done'), 'signal applied');
-  }
-}
-
-// 1b. structured amend signals on reminders -> apply the field changes
-// Two shapes are understood, both from MANIFESTO §6: header lines `- **Set:** Due = 2026-10-27`
-// (one per field) and body lines "replace `- **Due:** X` with `- **Due:** Y`". Only reminder
-// fields with a bounded meaning are applied; anything else stays for a person to judge.
-const AMEND_FIELDS = ['due', 'status', 'until', 'scope', 'nudge'];
-export function parseAmend(text) {
-  const changes = [];
-  for (const line of text.split(/\r?\n/)) {
-    const set = line.match(/^- \*\*Set:\*\*\s*([A-Za-z]+)\s*=\s*(.+)$/);
-    if (set) { changes.push({ field: set[1], value: set[2].trim() }); continue; }
-    for (const rep of line.matchAll(/replace\s+`- \*\*([A-Za-z]+):\*\*[^`]*`\s+with\s+`- \*\*([A-Za-z]+):\*\*\s*([^`]*)`/gi)) {
-      if (rep[1].toLowerCase() === rep[2].toLowerCase()) changes.push({ field: rep[1], value: rep[3].trim() });
-    }
-  }
-  return changes.filter((c) => AMEND_FIELDS.includes(c.field.toLowerCase()))
-    .map((c) => ({ field: c.field[0].toUpperCase() + c.field.slice(1).toLowerCase(), value: c.value }));
-}
-
-function applyAmendSignals(brain, run, now) {
-  const inbox = path.join(brain, 'Inbox');
-  const reminders = path.join(brain, 'Reminders');
-  for (const f of mdFiles(inbox)) {
-    const file = path.join(inbox, f);
-    const text = fs.readFileSync(file, 'utf8');
-    const h = readFields(text);
-    if (firstWord(h.type) !== 'amend' || firstWord(h.status) === 'done') continue;
-    const ref = cleanRef(h.re);
-    if (!/^Reminders\//.test(ref)) continue;  // only reminders are mechanical; other amends need judgement
-    const changes = parseAmend(text);
-    if (!changes.length) { run.note(`amend signal ${f}: no structured change found; left for a person`); continue; }
-    const candidates = [path.join(brain, ref), path.join(reminders, path.basename(ref)), path.join(reminders, 'Done', path.basename(ref))];
-    const target = candidates.find((c) => fs.existsSync(c) && c.endsWith('.md'));
-    if (!target) { run.note(`amend signal ${f}: target "${ref}" not found; left for a person`); continue; }
-    let t = fs.readFileSync(target, 'utf8');
-    for (const c of changes) t = setField(t, c.field, c.value);
-    t = t.replace(/^- \*\*Last updated:\*\*.*$/m, `- **Last updated:** ${now.stamp}`);
-    t = `${t.trimEnd()}\n- Amended: ${now.stamp} by ${h.from || 'another AI'} (${changes.map((c) => `${c.field} = ${c.value}`).join(', ')}; signal ${f})\n`;
-    run.write(target, t, `amended by signal from ${h.from || '?'}`);
-    const status = firstWord(readFields(t).status);
-    if (path.dirname(target) === path.join(reminders, 'Done') && ['open', 'snoozed'].includes(status)) run.move(target, reminders, 'reopened by amend');
-    run.write(file, setField(text, 'Status', `done (applied by librarian ${now.stamp})`), 'signal applied');
-    run.move(file, path.join(inbox, 'Done'), 'signal applied');
-  }
-}
+// 1. change notes (close, amend, change, calendar capture): see brain-notes.mjs
 
 // 2. expire errands and lapsed items; file anything already finished
 function expireAndFileReminders(brain, run, now) {
@@ -257,13 +160,16 @@ function retireTemporaryMemory(brain, run, now) {
 // --- Open-items view (shared with brain-open-items.mjs) ---
 export function collectOpenItems(brain, now = easternNow()) {
   const dir = path.join(brain, 'Reminders');
-  const items = mdFiles(dir).map((f) => {
+  const raw = mdFiles(dir).map((f) => {
     const text = fs.readFileSync(path.join(dir, f), 'utf8');
     const h = readFields(text);
     const title = (text.match(/^#\s+(.+)$/m) || [, f])[1].trim();
     return { file: `Reminders/${f}`, title, kind: firstWord(h.kind) || 'reminder', status: firstWord(h.status) || 'open',
-      due: (h.due || '').match(/\d{4}-\d{2}-\d{2}/)?.[0] || null, scope: firstWord(h.scope) || '', author: h.author || '' };
+      due: (h.due || '').match(/\d{4}-\d{2}-\d{2}/)?.[0] || null, time: (h.due || '').match(/\b\d{2}:\d{2}\b/)?.[0] || null,
+      scope: firstWord(h.scope) || '', author: h.author || '' };
   }).filter((i) => ['open', 'snoozed'].includes(i.status));
+  // A change Grok asked for by note but not yet written is shown as already made (brain-notes.mjs).
+  const items = overlayReminders(raw, pendingChanges(brain));
   const yesterday = addDays(now.date, -1);
   const carryOver = mdFiles(path.join(dir, 'Done')).map((f) => {
     const text = fs.readFileSync(path.join(dir, 'Done', f), 'utf8');
@@ -279,7 +185,8 @@ export function collectOpenItems(brain, now = easternNow()) {
     // `re` and `title` let the dashboard mark an item that already has a signal in flight.
     return { file: `Inbox/${f}`, title: (text.match(/^#\s+(.+)$/m) || [, f])[1].trim(),
       from: (h.from || m?.[1] || '').toLowerCase(), to: (h.to || m?.[2] || '').toLowerCase(),
-      type: firstWord(h.type) || m?.[3] || '', status: firstWord(h.status) || 'open', re: cleanRef(h.re),
+      type: firstWord(h.type) || m?.[3] || '', status: firstWord(h.status) || 'open',
+      re: [h.target, h.re].map(cleanRef).find((r) => /\.md$/i.test(r)) || cleanRef(h.re),
       ageDays: Math.floor((now.ms - fs.statSync(p).mtimeMs) / DAY_MS) };
   }).filter((s) => s.status !== 'done');
   return {
@@ -322,8 +229,29 @@ function catalog(brain) {
     return `- \`Routines/${e.name}\` · ${h.schedule || ''} · ${h.status || ''}`;
   });
   out.push('', '### Knowledge', '- `Knowledge/Runbooks/`, `Knowledge/Docs/`, `Knowledge/Decisions/`, `Knowledge/Patterns/`, `Knowledge/Learning/`, `Knowledge/Investigations/`');
+  out.push('', '### Calendar', `- \`${CALENDAR_FILE}\`: dated events (appointments, plans, trips), one line each; any AI adds and reads`);
   out.push('', '### Everything else', '- `Memory/profile.md`, `Memory/timeline/`, `Memory/agents/` · `Research/` · `Health/` · `Outputs/briefs/`, `Outputs/news/`, `Outputs/reports/` · `System/agents/`, `System/ai-stack.md`, `System/CHANGELOG.md`, `System/templates/` · `Archive/`');
   return out;
+}
+
+// The shared calendar's next 7 days, so an AI reading only the top of the index still
+// hears about tomorrow's appointment (the events themselves live in Calendar/events.md).
+export function upcomingEvents(brain, now = easternNow(), days = 7) {
+  return eventsBetween(brain, now.date, addDays(now.date, days), pendingChanges(brain).calendar);
+}
+
+// The other direction: changes made anywhere in the last 48 hours, so Grok can bring its own
+// copies (memory, scheduled pings) up to date with what was done at the desk.
+function recentSection(brain, now) {
+  const rows = recentChanges(brain, now);
+  return ['## Changed in the last 48 hours', '',
+    'Newest first. Grok: update or drop your own copies (memory, scheduled pings) of anything below before reading it out.', '',
+    ...(rows.length ? rows.map((r) => `- ${r.stamp} · ${r.title} · ${r.what} · \`${r.file}\``) : ['- nothing']), ''];
+}
+function calendarSection(brain, now) {
+  const ev = upcomingEvents(brain, now);
+  return [`### On the calendar, next 7 days (${ev.length})`,
+    ...(ev.length ? ev.map((e) => `${formatEvent({ ...e, by: null })} · \`${CALENDAR_FILE}\``) : ['- nothing']), ''];
 }
 
 export function renderIndex(brain, now = easternNow()) {
@@ -339,6 +267,7 @@ export function renderIndex(brain, now = easternNow()) {
     `### Due today (${o.today.length})`, ...(o.today.length ? o.today.map(bullet) : ['- nothing']), '',
     `### Overdue (${o.overdue.length})`, ...(o.overdue.length ? o.overdue.map(bullet) : ['- nothing']), '',
     `### Next 7 days (${o.upcoming.length})`, ...(o.upcoming.length ? o.upcoming.map(bullet) : ['- nothing']), '',
+    ...calendarSection(brain, now),
     `### Yesterday's errands not done: offer to carry over (${o.carryOver.length})`,
     ...(o.carryOver.length ? o.carryOver.map((i) => `- ${i.title} · \`${i.file}\``) : ['- none']), '',
     `### Open, no date (${o.undated.length})`, ...(o.undated.length ? o.undated.map(bullet) : ['- nothing']), '',
@@ -346,6 +275,7 @@ export function renderIndex(brain, now = easternNow()) {
     `### Signals waiting (${o.signals.length})`,
     ...(o.signals.length ? o.signals.map((s) => `- ${s.type} from ${s.from} to ${s.to} · ${s.ageDays}d · \`${s.file}\``) : ['- none']),
     ...(stale.length ? ['', `**${stale.length} signal(s) older than ${STALE_SIGNAL_DAYS} days: the user should decide.**`] : []), '',
+    ...recentSection(brain, now),
     '## Catalog', '', ...catalog(brain), '',
   ];
   return lines.join('\n');
@@ -354,8 +284,7 @@ export function renderIndex(brain, now = easternNow()) {
 // --- Main ---
 export function runLibrarian(brain, { dryRun = false, now = easternNow() } = {}) {
   const run = makeRunner(brain, dryRun);
-  applyCloseSignals(brain, run, now);
-  applyAmendSignals(brain, run, now);
+  applyChangeNotes(brain, run, now);
   expireAndFileReminders(brain, run, now);
   fileHandledSignals(brain, run, now);
   ageOut(brain, run, now);

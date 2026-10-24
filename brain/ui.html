@@ -48,8 +48,8 @@
     --red:    #ff4d6d;   /* critical / error */
     --blue:   #4cc9ff;   /* info / selected */
     --blue-strong: #1fb6ff;
-    --violet: #c77dff;   /* category: Decisions */
-    --orange: #ff8c42;   /* category: Claude-Code */
+    --violet: #c77dff;   /* category: Memory */
+    --orange: #ff8c42;   /* category: System */
     --gray:   #8590a8;   /* idle / disabled / absent — contrast-gated at 5.52:1 on --surface-2, 4.83:1 on its own 10% tint */
 
     /* ---------- Text — warm off-white, never blue-white ---------- */
@@ -427,7 +427,7 @@
   #dock { flex: 1 1 auto; display: flex; align-items: center; gap: 4px; min-width: 0; overflow-x: auto; }
   /* Sheet launcher icons (plan §2.1/P7): Library/Roster/Protocols/Enterprise/
      Workshop. Short glyphs (LIB/ROS/PRO/ENT/WKS), same abbreviation
-     convention as .cat-btn's PRJ/PAT/DEC/LRN/CLD — full names live in
+     convention as .cat-btn's PRJ/MEM/KNW/RES/DAY/SYS — full names live in
      `title`. Plain buttons, same active/hover contract as .view-btn, but
      kept a separate class since they open a sheet rather than switch #views'
      2-tab nav — only .view-btn drives aria-selected on a role="tab". */
@@ -634,6 +634,20 @@
   .day-summary { margin: var(--sp-2) 0 0; color: var(--text-dim); font-size: var(--fs-sm); }
   .day-summary.warn { color: var(--amber); }
   .day-tools { display: flex; align-items: center; gap: var(--sp-4); flex: none; }
+  /* Tell Grok: the desk box. What the user would say to Grok in the car. */
+  .tell-grok { flex: 1 1 420px; min-width: 0; display: flex; align-items: center; gap: var(--sp-3); }
+  .tell-grok-label {
+    flex: none; font-family: var(--font-mono); font-size: var(--fs-micro); font-weight: 600;
+    letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--p-grok);
+  }
+  .tell-grok input {
+    flex: 1 1 auto; min-width: 0; height: 32px; padding: 0 var(--sp-4);
+    border: 1px solid var(--border-focusable); border-radius: var(--r-sm);
+    background: var(--surface-2); color: var(--text); font: inherit; font-size: var(--fs-sm);
+  }
+  .tell-grok input::placeholder { color: var(--text-dim); }
+  .tell-grok input:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; border-color: var(--blue); }
+  .tell-grok.busy input { color: var(--text-dim); }
 
   .bench { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); flex: none; }
   .bench-seat {
@@ -765,6 +779,57 @@
     min-height: 24px; padding: 2px 8px; border: 1px solid var(--border-focusable); border-radius: var(--r-xs);
     background: var(--surface-2); color: var(--text); font-family: var(--font-mono); font-size: var(--fs-xs);
   }
+  .day-item.paused { --accent: var(--gray); color: var(--text-soft); }
+
+  /* --- ITEM EDITOR (Day: add and edit; DESIGN-UI-SYSTEM §9) ---------------------------
+     A .modal/.scrim dialog built on demand by openItemEditor(). Inputs share the Tell Grok
+     input's look; the chosen type is --blue (selected), a problem is --red. */
+  body.ie-open .toast-stack { z-index: 120; } /* above the dialog's scrim (100) and panel (110) */
+  .modal.ie-modal { width: min(540px, calc(100vw - 32px)); max-height: 88vh; }
+  .ie-form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; margin: 0; }
+  .ie-modal .modal-body { display: flex; flex-direction: column; gap: var(--sp-6); }
+  .ie-types { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+  .ie-types .btn.ie-type[aria-pressed="true"] {
+    color: var(--text); border-color: var(--blue); background: color-mix(in srgb, var(--blue) 20%, transparent);
+  }
+  .ie-field { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+  .ie-group { display: flex; flex-direction: column; gap: var(--sp-6); }
+  .ie-field[hidden], .ie-row[hidden], .ie-group[hidden], .ie-hint[hidden], .ie-error[hidden] { display: none; }
+  .day-item.routine .day-when { flex: 0 1 auto; white-space: normal; }
+  .ie-row { display: flex; gap: var(--sp-5); }
+  .ie-row > .ie-field { flex: 1 1 0; }
+  .ie-label {
+    font-family: var(--font-mono); font-size: var(--fs-micro); font-weight: 600;
+    letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text-dim);
+  }
+  .ie-input {
+    width: 100%; min-height: 32px; padding: 4px var(--sp-4);
+    border: 1px solid var(--border-focusable); border-radius: var(--r-sm);
+    background: var(--surface-2); color: var(--text); font: inherit; font-size: var(--fs-sm);
+  }
+  textarea.ie-input { min-height: 64px; resize: vertical; line-height: var(--lh-base); }
+  .ie-input:focus-visible, .ie-day input:focus-visible {
+    outline: 2px solid var(--blue); outline-offset: 1px; border-color: var(--blue);
+  }
+  .ie-days { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+  .ie-day {
+    display: inline-flex; align-items: center; gap: var(--sp-3); cursor: pointer;
+    padding: 3px var(--sp-4); border: 1px solid var(--border-focusable); border-radius: var(--r-sm);
+    background: var(--surface-2); color: var(--text-soft); font-size: var(--fs-sm);
+  }
+  .ie-day:has(input:checked) { border-color: var(--blue); color: var(--text); }
+  .ie-day input { accent-color: var(--blue); margin: 0; }
+  .ie-hint { margin: 0; color: var(--text-dim); font-size: var(--fs-xs); line-height: var(--lh-base); }
+  .ie-error {
+    margin: 0; padding-left: var(--sp-4); border-left: 2px solid var(--red);
+    color: var(--red); font-size: var(--fs-sm); line-height: var(--lh-base);
+  }
+  .ie-foot {
+    display: flex; justify-content: flex-end; gap: var(--sp-4);
+    padding: var(--sp-6) 22px var(--sp-7); border-top: 1px solid var(--hairline);
+  }
+  @media (max-width: 520px) { .ie-row { flex-direction: column; } }
+
   .day-brief-item {
     display: flex; flex-direction: column; gap: var(--sp-1);
     padding: var(--sp-3) var(--sp-5); border-left: 2px solid var(--border-strong);
@@ -2127,47 +2192,11 @@
   #tooltip { border-radius: var(--r-sm); }
 
   /* ==========================================================================
-     SINCE YOU LAST LOOKED (Day card, column 3).
-     ========================================================================== */
-  .day-recent { display: flex; flex-direction: column; gap: var(--sp-2); }
-  .day-recent-row {
-    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--sp-1) var(--sp-4);
-    width: 100%; padding: var(--sp-3) var(--sp-5); border: 0; border-radius: var(--r-sm);
-    background: color-mix(in srgb, var(--surface-2) 78%, transparent);
-    box-shadow: inset 3px 0 0 var(--blue);
-    color: var(--text); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer;
-    transition: background var(--t-fast) var(--ease-out);
-  }
-  .day-recent-row:hover { background: color-mix(in srgb, var(--blue) 7%, var(--surface-2)); }
-  .day-recent-row.is-old { box-shadow: inset 3px 0 0 var(--border-strong); color: var(--text-dim); }
-  .day-recent-row .rc-author {
-    --ac: var(--gray);
-    grid-row: 1 / span 2; align-self: start; margin-top: 2px;
-    padding: 1px 6px; border: 1px solid color-mix(in srgb, var(--ac) 40%, transparent); border-radius: var(--r-xs);
-    background: color-mix(in srgb, var(--ac) 10%, var(--surface-2)); color: var(--ac);
-    font-family: var(--font-mono); font-size: var(--fs-micro); font-weight: 600;
-    letter-spacing: var(--track-kicker); text-transform: uppercase; white-space: nowrap;
-  }
-  .day-recent-row .rc-author[data-a="grok"]   { --ac: var(--p-grok); }
-  .day-recent-row .rc-author[data-a="claude"] { --ac: var(--p-claude); }
-  .day-recent-row .rc-title { min-width: 0; overflow-wrap: anywhere; }
-  .day-recent-row .rc-age {
-    font-family: var(--font-mono); font-size: var(--fs-xs); font-variant-numeric: tabular-nums;
-    color: var(--text-dim); white-space: nowrap;
-  }
-  .day-recent-row .rc-kicker {
-    grid-column: 2 / -1; color: var(--text-dim); font-family: var(--font-mono); font-size: var(--fs-micro);
-    letter-spacing: var(--track-kicker); text-transform: uppercase;
-  }
-  .day-recent-row:focus-visible, .day-recent-more:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
-  .day-recent-more { align-self: flex-start; }
-
-  /* ==========================================================================
-     CALENDAR (Day): the month card at the top of column 2, "Today on the
-     calendar" at the top of column 1, and the Google Calendar block in
-     Settings. Dots: mint = a brain reminder due that day, the calendar's own
-     colour (inline --accent, validated hex only) = a Google event, hollow = an
-     invitation still waiting for an answer. Tokens and color-mix() only.
+     CALENDAR (Day): the month card at the top of column 2 and "Today on the
+     calendar" at the top of column 1. Events come from one Markdown file in the
+     shared brain (Calendar/events.md). Dots: mint = a brain reminder due that
+     day, blue = an event from the file (one fixed colour, no per-calendar
+     colours). Tokens and color-mix() only.
      ========================================================================== */
   .cal { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
   .cal-head { display: flex; align-items: center; gap: var(--sp-3); }
@@ -2210,7 +2239,6 @@
   }
   .cal-dot { --accent: var(--blue); flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
   .cal-dot.rem { --accent: var(--mint); }
-  .cal-dot.hollow { background: transparent; box-shadow: inset 0 0 0 1.5px var(--accent); }
   .cal-more { flex: none; color: var(--text-dim); font-size: var(--fs-micro); line-height: 6px; letter-spacing: 0; }
   .cal-note { display: block; }
   .cal-note.warn { color: var(--amber); }
@@ -2235,8 +2263,10 @@
     color: var(--text); font-size: 12.5px; text-decoration: none;
     transition: background var(--t-fast) var(--ease-out);
   }
-  a.cal-event { cursor: pointer; }
-  a.cal-event:hover { background: color-mix(in srgb, var(--blue) 7%, var(--surface-2)); }
+  button.cal-event {
+    width: 100%; margin: 0; border: 0; font: inherit; font-size: 12.5px; text-align: left; cursor: pointer;
+  }
+  button.cal-event:hover { background: color-mix(in srgb, var(--blue) 7%, var(--surface-2)); }
   .cal-event .ce-time {
     color: var(--text-dim); font-family: var(--font-mono); font-size: var(--fs-xs);
     font-variant-numeric: tabular-nums; white-space: nowrap;
@@ -2244,52 +2274,16 @@
   .cal-event .ce-title { min-width: 0; overflow-wrap: anywhere; }
   .cal-event .ce-meta { grid-column: 2; display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); min-width: 0; }
   .cal-event .ce-where { color: var(--text-dim); font-size: var(--fs-xs); min-width: 0; overflow-wrap: anywhere; }
-  .cal-chip {
-    --accent: var(--blue);
-    display: inline-flex; align-items: center; gap: var(--sp-2); max-width: 100%; min-width: 0;
-    padding: 0 var(--sp-3); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); border-radius: var(--r-xs);
-    background: color-mix(in srgb, var(--accent) 10%, var(--surface-2)); color: var(--text-soft);
-    font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--track-kicker);
-    text-transform: uppercase; white-space: nowrap;
+  .cal-event .ce-by {
+    color: var(--text-dim); font-family: var(--font-mono); font-size: var(--fs-micro);
+    letter-spacing: var(--track-kicker); text-transform: uppercase; white-space: nowrap;
   }
-  .cal-chip::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
-  .cal-chip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
-  .cal-day:focus-visible, .cal-link:focus-visible, a.cal-event:focus-visible, .btn.cal-nav:focus-visible,
-  .btn.cal-today:focus-visible, .cal-set-toggle:focus-visible {
+  .cal-day:focus-visible, .cal-link:focus-visible, button.cal-event:focus-visible, .btn.cal-nav:focus-visible,
+  .btn.cal-today:focus-visible {
     outline: 2px solid var(--blue); outline-offset: 2px;
   }
   .cal-day:focus-visible { z-index: 1; }
-
-  /* Settings -> Google Calendar (inside the shared modal; reuses .settings-*). */
-  .cal-set { margin: var(--sp-9) 0; }
-  .cal-set, .cal-set-body { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
-  .cal-set-status {
-    display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--sp-2) var(--sp-6);
-    margin: 0; padding: var(--sp-4) var(--sp-5); border-radius: var(--r-sm);
-    background: color-mix(in srgb, var(--surface-2) 78%, transparent); box-shadow: inset 3px 0 0 var(--gray);
-    font-size: var(--fs-sm);
-  }
-  .cal-set-status.on { box-shadow: inset 3px 0 0 var(--mint); }
-  .cal-set-status dt { color: var(--text-dim); font-family: var(--font-mono); font-size: var(--fs-xs); letter-spacing: var(--track-ui); text-transform: uppercase; }
-  .cal-set-status dd { margin: 0; min-width: 0; overflow-wrap: anywhere; color: var(--text); }
-  .cal-set-status dd.bad { color: var(--red); }
-  .cal-set-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); }
-  .cal-set-field { display: flex; flex-direction: column; gap: var(--sp-2); }
-  .cal-set-field label { color: var(--text-dim); font-family: var(--font-mono); font-size: var(--fs-xs); letter-spacing: var(--track-ui); text-transform: uppercase; }
-  .cal-set-saved { margin: 0; color: var(--mint); font-size: var(--fs-sm); }
-  .cal-set-toggle {
-    align-self: flex-start; margin: 0; padding: var(--sp-2) 0; border: 0; background: none; cursor: pointer;
-    color: var(--blue); font: inherit; font-size: var(--fs-xs); text-decoration: underline; text-underline-offset: 3px;
-  }
-  .cal-set-help { margin: 0; padding: var(--sp-4) var(--sp-5) var(--sp-4) var(--sp-9); border-left: 2px solid var(--border-strong); color: var(--text-soft); font-size: var(--fs-xs); line-height: var(--lh-base); }
-  .cal-set-help[hidden] { display: none; }
-  .cal-set-help li + li { margin-top: var(--sp-2); }
-  .cal-set input:focus-visible, .cal-set .settings-save:focus-visible, .cal-set .settings-clear:focus-visible {
-    outline: 2px solid var(--blue); outline-offset: 2px;
-  }
-  .cal-set .settings-clear { margin-top: 0; }
-  .cal-set .settings-note, .cal-set .settings-state, .cal-set .settings-warn { margin: 0; }
 
   @media (prefers-reduced-motion: reduce) {
     .cal-day, .cal-event { transition-duration: .01ms !important; }
@@ -2381,7 +2375,7 @@
   }
   @media (prefers-reduced-motion: reduce) {
     #gate { transition-duration: .01ms !important; }
-    .day-card, .day-card::before, .day-recent-row, .view-btn, .btn, #utils button, .composer-input,
+    .day-card, .day-card::before, .view-btn, .btn, #utils button, .composer-input,
     .bench-seat { transition-duration: .01ms !important; }
   }
 
@@ -2475,7 +2469,15 @@
           <h1 id="day-date" class="day-date">Today</h1>
           <p id="day-summary" class="day-summary" aria-live="polite">Loading&hellip;</p>
         </div>
+        <form id="tell-grok" class="tell-grok" autocomplete="off" aria-label="Tell Grok">
+          <label for="tell-grok-input" class="tell-grok-label">Tell Grok</label>
+          <input id="tell-grok-input" type="text" maxlength="500" enterkeyhint="send"
+                 placeholder="remind me to… · dentist Tuesday 3pm · add milk to my errands">
+          <button id="tell-grok-send" class="btn" type="submit">Send</button>
+        </form>
         <div class="day-tools">
+          <button id="day-add" class="btn primary" type="button" aria-haspopup="dialog"
+                  title="Add a to-do, reminder, errand, routine or event">+ Add</button>
           <button id="day-refresh" class="btn" type="button" title="Re-read the shared brain now">Refresh</button>
         </div>
         <div id="bench" class="bench" role="group" aria-label="AI seats"></div>
@@ -2490,11 +2492,12 @@
          swapped dataset — with .brain-head hidden for that view (CSS). -->
     <section id="pane-brain" class="pane">
       <div id="radial-menu" class="brain-head">
-        <div class="cat-btn" data-folder="Projects" style="--accent:#5ca8ff;">PRJ</div>
-        <div class="cat-btn" data-folder="Patterns" style="--accent:#f0b35a;">PAT</div>
-        <div class="cat-btn" data-folder="Decisions" style="--accent:#ad8cff;">DEC</div>
-        <div class="cat-btn" data-folder="Learning" style="--accent:#63e6b5;">LRN</div>
-        <div class="cat-btn" data-folder="Claude-Code" style="--accent:#f18b5b;">CLD</div>
+        <div class="cat-btn" data-folder="Projects" title="Projects" style="--accent:#5ca8ff;">PRJ</div>
+        <div class="cat-btn" data-folder="Memory" title="Memory" style="--accent:#ad8cff;">MEM</div>
+        <div class="cat-btn" data-folder="Knowledge" title="Knowledge" style="--accent:#f0b35a;">KNW</div>
+        <div class="cat-btn" data-folder="Research" title="Research and Outputs" style="--accent:#63e6b5;">RES</div>
+        <div class="cat-btn" data-folder="Day" title="Reminders, Routines, Inbox and Calendar" style="--accent:#ff7ab8;">DAY</div>
+        <div class="cat-btn" data-folder="System" title="System and the brain's root files" style="--accent:#f18b5b;">SYS</div>
       </div>
       <div class="brain-split">
         <div class="brain-canvas">
@@ -2830,15 +2833,18 @@
   // Saturated deliberately: at 7px against a near-black field the desaturated
   // originals read as uniformly grey-blue and the folder colour stopped
   // carrying information.
+  // Keyed by brain REGION (see BRAIN_LOBES), not by raw folder: several
+  // Second Brain folders share a region, and they must share its colour too.
   var FOLDER_COLORS = {
     'Projects': '#3d9bff',
-    'Patterns': '#ffb02e',
-    'Decisions': '#b478ff',
-    'Learning': '#2ff5a8',
-    'Claude-Code': '#ff7a3d',
+    'Memory': '#b478ff',
+    'Knowledge': '#ffb02e',
+    'Research': '#2ff5a8',
+    'Day': '#ff5fa2',
+    'System': '#ff7a3d',
   };
   var DEFAULT_COLOR = '#8d9dad';
-  function colorFor(folder) { return FOLDER_COLORS[folder] || DEFAULT_COLOR; }
+  function colorFor(folder) { return FOLDER_COLORS[lobeFor(folder).folder] || DEFAULT_COLOR; }
 
   // Wireframe, sulci, links and org lanes: a cyan at low alpha derived from --focus-rgb
   // (pulled 65% of the way toward the skin's cyan, #4cc9ff) so the brain follows the skin.
@@ -3716,8 +3722,8 @@
 
   function daySummaryText(d) {
     var parts = [arr(d.today).length + ' due today'];
-    var cx = calIndex(d);   // "N events" only once Google's days have loaded, so it is never a false 0
-    if (cx.loaded) {
+    var cx = calIndex(d);   // "N events" only when there is an events file, so a missing file is never a false 0
+    if (cx.exists) {
       var evToday = arr(cx.ev[calTodayIso(d)]).length;
       parts.push(evToday + (evToday === 1 ? ' event' : ' events'));
     }
@@ -3783,6 +3789,532 @@
     });
   }
 
+  // --- Tell Grok: the desk box ------------------------------------------------------------
+  // What the user would say to Grok in the car. The server asks Grok for a plan and saves it
+  // itself (Reminders/, Calendar/events.md, or Grok's Inbox when Grok cannot answer); the
+  // reply carries the fresh feed, so the new item is on the page when the toast appears.
+  (function () {
+    var form = document.getElementById('tell-grok');
+    if (!form) return;
+    var input = document.getElementById('tell-grok-input');
+    var send = document.getElementById('tell-grok-send');
+    function savedLine(s) {
+      if (s.type === 'event') return 'Calendar: ' + s.title + ' (' + dayLabel(s.date) + ')';
+      if (s.type === 'reminder') {
+        var k = s.kind === 'todo' ? 'To-do' : s.kind.charAt(0).toUpperCase() + s.kind.slice(1);
+        return k + ': ' + s.title + (s.due && s.due !== 'none' ? ' (' + dayLabel(s.due) + ')' : '');
+      }
+      return "Grok's inbox: " + s.title;
+    }
+    function setBusy(on) {
+      form.classList.toggle('busy', on);
+      input.disabled = on;
+      send.disabled = on;
+      send.textContent = on ? 'Grok is on it…' : 'Send';
+    }
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var text = input.value.trim();
+      if (!text || form.classList.contains('busy')) return;
+      setBusy(true);
+      bridgePost('/api/assistant/tell-grok', { text: text }).then(function (r) {
+        var d = r.data || {};
+        if (!r.ok) { toast(d.error || 'Grok could not take that.', 'critical', { title: 'Tell Grok' }); return; }
+        input.value = '';
+        if (d.via === 'inbox') {
+          toast("Grok didn't answer (" + (d.why || 'no reason given') + "). It's waiting in Grok's inbox for its next sync.",
+            'warn', { title: 'Tell Grok' });
+        } else {
+          var lines = (d.saved || []).map(savedLine);
+          if (d.skipped && d.skipped.length) lines.push(d.skipped.length + ' not saved: ' + d.skipped.map(function (s) { return s.error; }).join('; '));
+          toast((d.reply ? d.reply + ' ' : '') + lines.join(' · '), d.skipped && d.skipped.length ? 'warn' : 'success', { title: 'Grok' });
+        }
+        if (d.feed) applyDayFeed(d.feed); else pollAssistant();
+      }).catch(function () {
+        toast('Could not reach Alfred.', 'critical', { title: 'Tell Grok' });
+      }).then(function () {
+        setBusy(false);
+        input.focus();
+      });
+    });
+  })();
+
+  // --- Add and edit: the item editor -------------------------------------------------------
+  // One dialog for everything the Day view can write: to-dos, reminders, errands and watches
+  // (Reminders/), routines (Routines/) and events (Calendar/events.md). "+ Add" opens it on a
+  // type; an Edit button on a row opens it prefilled. A save is POST /api/assistant/item; the
+  // reply carries the fresh feed. Built on demand with el()/textContent; one editor at a time.
+  var IE_TYPES = [['todo', 'To-do'], ['reminder', 'Reminder'], ['errand', 'Errand'], ['routine', 'Routine'], ['event', 'Event']];
+  var IE_KINDS = [['todo', 'To-do'], ['reminder', 'Reminder'], ['errand', 'Errand'], ['watch', 'Watch']];
+  var IE_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  var IE_FREQS = [['daily', 'Daily'], ['weekdays', 'Weekdays'], ['weekends', 'Weekends'],
+    ['weekly', 'Weekly on…'], ['monthly', 'Monthly on…'], ['custom', 'Other (type it)']];
+  var IE_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+  var itemEditor = null;    // the open editor's state, or null
+
+  function ordinal(n) {
+    var v = n % 100;
+    if (v >= 11 && v <= 13) return n + 'th';
+    return n + ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th');
+  }
+
+  // 'daily' | 'weekdays' | 'weekends' | 'Mondays' | 'Mondays and Thursdays' | 'monthly on the 15th'
+  function composeSchedule(freq, days, monthDay) {
+    if (freq === 'monthly') return 'monthly on the ' + ordinal(monthDay);
+    if (freq !== 'weekly') return freq;
+    var names = days.slice().sort(function (a, b) { return a - b; }).map(function (i) { return IE_DAYS[i] + 's'; });
+    if (names.length < 2) return names[0] || '';
+    return names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+  }
+
+  // The reverse, for editing: { freq, days: [0..6, Monday first], monthDay }, or null when the
+  // text is not one of the shapes composeSchedule writes (it is then shown as free text).
+  function parseSchedule(text) {
+    var s = String(text || '').trim().replace(/\.$/, '').toLowerCase();
+    if (s === 'daily' || s === 'weekdays' || s === 'weekends') return { freq: s };
+    var m = /^monthly on the (\d{1,2})(?:st|nd|rd|th)$/.exec(s);
+    if (m) {
+      var day = parseInt(m[1], 10);
+      return day >= 1 && day <= 31 ? { freq: 'monthly', monthDay: day } : null;
+    }
+    var days = [];
+    var parts = s.split(/\s*,\s*(?:and\s+)?|\s+and\s+/);
+    for (var i = 0; i < parts.length; i++) {
+      var idx = IE_DAYS.map(function (d) { return d.toLowerCase(); }).indexOf(parts[i].replace(/s$/, ''));
+      if (idx < 0) return null;
+      if (days.indexOf(idx) < 0) days.push(idx);
+    }
+    return days.length ? { freq: 'weekly', days: days } : null;
+  }
+
+  function scheduleKey(s) { return String(s || '').trim().replace(/\.$/, '').toLowerCase(); }
+  // The brain stores a routine's time inside its schedule ("Mondays 08:00"); the feed sends that whole
+  // string plus the time on its own, and the editor has a separate time field, so compare without it.
+  function scheduleBase(s) { return String(s || '').replace(/\s*\b\d{2}:\d{2}\b/, '').trim(); }
+  function ieTimeOf(v) { return IE_TIME.test(String(v || '')) ? v : ''; }
+  function ieDateOf(v) { return ISO_DATE.test(String(v || '')) ? v : ''; }
+  function ieKindOf(item) { return String((item && item.kind) || 'reminder').toLowerCase(); }
+
+  function ieDomain(st) { // which family of fields is on screen: reminder | routine | event
+    if (st.edit) return st.edit;
+    return st.type === 'routine' || st.type === 'event' ? st.type : 'reminder';
+  }
+
+  function ieKind(st) { return st.edit ? st.nodes.kind.value : st.type; } // the reminder kind being written
+
+  function ieOpener(btn) {
+    if (!btn) return null;
+    return { el: btn, id: btn.id || '', act: btn.getAttribute('data-act') || '', file: btn.getAttribute('data-file') || '' };
+  }
+
+  // Focus goes back to what opened the editor. A save repaints Day, which replaces the row's
+  // buttons, so fall back to the same kind of button for the same file, then to "+ Add".
+  function ieRestoreFocus(op) {
+    var t = null;
+    if (op && op.el && op.el.isConnected) t = op.el;
+    if (!t && op && op.id) t = document.getElementById(op.id);
+    if (!t && op && op.act) {
+      Array.prototype.some.call(document.querySelectorAll('[data-act="' + op.act + '"]'), function (c) {
+        if (op.file && c.getAttribute('data-file') !== op.file) return false;
+        t = c;
+        return true;
+      });
+    }
+    if (!t || t.disabled) t = document.getElementById('day-add');
+    if (t && t.focus) t.focus({ preventScroll: true });
+  }
+
+  function ieShowError(st, msg) {
+    st.nodes.error.textContent = msg || '';
+    st.nodes.error.hidden = !msg;
+  }
+
+  function ieSetBusy(st, on) {
+    st.busy = on;
+    st.nodes.save.disabled = on;
+    st.nodes.save.textContent = on ? 'Saving…' : 'Save';
+  }
+
+  // Show only the fields the chosen type or kind uses, and keep the labels and the schedule preview true.
+  function ieSync(st) {
+    var n = st.nodes, dom = ieDomain(st);
+    var rem = dom === 'reminder', rou = dom === 'routine', evt = dom === 'event';
+    var kind = rem ? ieKind(st) : '';
+    var showDate = evt || (rem && (kind === 'reminder' || kind === 'watch' || (!!st.edit && kind === 'todo')));
+    var showTime = evt || rou || (rem && (kind === 'reminder' || kind === 'watch'));
+    if (n.typeBtns) {
+      n.typeBtns.forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-type') === st.type ? 'true' : 'false'); });
+    }
+    n.kindField.hidden = !(rem && st.edit);
+    n.scopeField.hidden = !rem;
+    n.dateField.hidden = !showDate;
+    n.timeField.hidden = !showTime;
+    n.dateRow.hidden = !showDate && !showTime;
+    n.endRow.hidden = !evt;
+    n.placeField.hidden = !evt;
+    n.noteField.hidden = evt;
+    n.routineBox.hidden = !rou;
+    n.dateLabel.textContent = evt || kind === 'reminder' ? 'Date' : 'Date (optional)';
+    n.timeLabel.textContent = evt ? 'Starts at (optional)' : 'Time (optional)';
+    n.noteLabel.textContent = st.edit ? 'Add a note (optional)' : 'Note (optional)';
+    var freq = n.freq.value;
+    n.daysField.hidden = freq !== 'weekly';
+    n.monthDayField.hidden = freq !== 'monthly';
+    n.customField.hidden = freq !== 'custom';
+    n.preview.hidden = freq === 'custom';
+    var s = freq === 'custom' ? null : ieSchedule(st, true);
+    n.preview.textContent = s && s.text ? 'Saved as: ' + s.text : '';
+  }
+
+  // The schedule the builder describes: { text } or { error, focus }. quiet = for the preview only.
+  function ieSchedule(st, quiet) {
+    var n = st.nodes, freq = n.freq.value;
+    if (freq === 'custom') {
+      var typed = n.custom.value.trim();
+      return typed ? { text: typed } : { error: 'Write when it repeats.', focus: n.custom };
+    }
+    if (freq === 'weekly') {
+      var days = [];
+      n.dayBoxes.forEach(function (cb, i) { if (cb.checked) days.push(i); });
+      if (!days.length) return { error: 'Pick at least one day.', focus: n.dayBoxes[0] };
+      return { text: composeSchedule('weekly', days, 0) };
+    }
+    if (freq === 'monthly') {
+      var raw = n.monthDay.value.trim();
+      var day = /^\d+$/.test(raw) ? parseInt(raw, 10) : 0;
+      if (day < 1 || day > 31) return { error: 'Pick a day of the month from 1 to 31.', focus: n.monthDay };
+      return { text: composeSchedule('monthly', [], day) };
+    }
+    return { text: freq };
+  }
+
+  function ieBuildReminder(st, title, note) {
+    var n = st.nodes, item = st.item, kind = ieKind(st);
+    var date = n.dateField.hidden ? '' : n.date.value;
+    var time = n.timeField.hidden ? '' : n.time.value;
+    if (kind === 'reminder' && !date) return { error: 'A reminder needs a date.', focus: n.date };
+    var scope = n.scope.value;
+    if (!st.edit) {
+      return { body: { op: 'create', type: 'reminder', fields: {
+        kind: kind, title: title, due: kind === 'errand' ? calTodayIso(dayFeed) : (date || 'none'),
+        time: time || null, scope: scope, note: note,
+      } } };
+    }
+    var f = {};   // only what changed; the server appends a note rather than replacing one
+    if (title !== String(item.title || '')) f.title = title;
+    if (kind !== ieKindOf(item)) f.kind = kind;
+    if (!n.dateField.hidden && date !== ieDateOf(item.due)) f.due = date || 'none';
+    if (!n.timeField.hidden && time !== ieTimeOf(item.time)) f.time = time || null;
+    if (scope !== (item.scope === 'work' ? 'work' : 'personal')) f.scope = scope;
+    if (note) f.note = note;
+    if (!Object.keys(f).length) return { error: 'Nothing has changed yet.', focus: n.title };
+    return { body: { op: 'update', type: 'reminder', file: item.file, fields: f } };
+  }
+
+  function ieBuildRoutine(st, title, note) {
+    var n = st.nodes, item = st.item;
+    var sched = ieSchedule(st, false);
+    if (sched.error) return sched;
+    var time = n.time.value;
+    if (!st.edit) {
+      return { body: { op: 'create', type: 'routine', fields: { title: title, schedule: sched.text, time: time || null, note: note } } };
+    }
+    var f = {};
+    if (title !== String(item.title || '')) f.title = title;
+    if (scheduleKey(sched.text) !== scheduleKey(scheduleBase(item.schedule))) f.schedule = sched.text;
+    if (time !== ieTimeOf(item.time)) f.time = time || null;
+    if (note) f.note = note;
+    if (!Object.keys(f).length) return { error: 'Nothing has changed yet.', focus: n.title };
+    return { body: { op: 'update', type: 'routine', file: item.file, fields: f } };
+  }
+
+  function ieBuildEvent(st, title) {
+    var n = st.nodes;
+    var date = n.date.value, end = n.end.value, time = n.time.value, endTime = n.endTime.value;
+    if (!date) return { error: 'An event needs a date.', focus: n.date };
+    if (end && end < date) return { error: 'The end date cannot be before the start date.', focus: n.end };
+    if ((!end || end === date) && time && endTime && endTime < time) {
+      return { error: 'The end time is before the start time.', focus: n.endTime };
+    }
+    return { body: { op: 'create', type: 'event', fields: {
+      title: title, date: date, end: end || null, time: time || null, endTime: endTime || null,
+      location: n.place.value.trim() || null,
+    } } };
+  }
+
+  function ieBuild(st) {
+    var n = st.nodes, dom = ieDomain(st);
+    var title = n.title.value.trim();
+    if (!title) return { error: 'Give it a title.', focus: n.title };
+    if (dom === 'routine') return ieBuildRoutine(st, title, n.note.value.trim());
+    if (dom === 'event') return ieBuildEvent(st, title);
+    return ieBuildReminder(st, title, n.note.value.trim());
+  }
+
+  function ieSave(st) {
+    if (st.busy || st.closed) return;
+    var built = ieBuild(st);
+    if (built.error) {
+      ieShowError(st, built.error);
+      if (built.focus) built.focus.focus();
+      return;
+    }
+    ieShowError(st, '');
+    ieSetBusy(st, true);
+    bridgePost('/api/assistant/item', built.body).then(function (r) {
+      var d = r.data || {};
+      ieSetBusy(st, false);
+      if (!r.ok || d.ok === false) {
+        var msg = d.error || 'Could not save that.';
+        if (!st.closed) ieShowError(st, msg);
+        toast(msg, 'critical', { title: 'Day' });
+        return;
+      }
+      var f = built.body.fields;
+      toast('Saved: ' + ((d.saved && d.saved.title) || f.title || (st.item && st.item.title) || 'item'), 'success');
+      if (d.feed) {
+        applyDayFeed(d.feed);
+        closeItemEditor(st);
+      } else {  // no feed in the reply: close now, re-read, and put focus back if the repaint dropped it
+        closeItemEditor(st);
+        pollAssistant().then(function () { if (document.activeElement === document.body) ieRestoreFocus(st.opener); });
+      }
+    }, function () {
+      ieSetBusy(st, false);
+      if (!st.closed) ieShowError(st, 'Could not reach Alfred.');
+      toast('Could not reach Alfred.', 'critical', { title: 'Day' });
+    });
+  }
+
+  function closeItemEditor(st) {
+    if (!st || st.closed) return;
+    st.closed = true;
+    if (itemEditor === st) itemEditor = null;
+    document.removeEventListener('keydown', ieKeydown, true);
+    document.removeEventListener('focusin', ieFocusIn);
+    document.body.classList.remove('ie-open');
+    [st.modal, st.scrim].forEach(function (n) { if (n.parentNode) n.parentNode.removeChild(n); });
+    ieRestoreFocus(st.opener);
+  }
+
+  function ieFocusables(st) {
+    return Array.prototype.filter.call(st.modal.querySelectorAll('button, input, select, textarea'), function (c) {
+      return !c.disabled && c.getClientRects().length > 0;
+    });
+  }
+
+  // Esc closes; Tab and Shift+Tab cycle inside the dialog. In the capture phase on the document, so
+  // the page's own Esc ladder and number-key shortcuts never see these keys.
+  function ieKeydown(e) {
+    var st = itemEditor;
+    if (!st) return;
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeItemEditor(st); return; }
+    if (e.key !== 'Tab') return;
+    var list = ieFocusables(st);
+    if (!list.length) return;
+    var first = list[0], last = list[list.length - 1], a = document.activeElement;
+    if (!st.modal.contains(a)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+    else if (e.shiftKey && a === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && a === last) { e.preventDefault(); first.focus(); }
+  }
+
+  function ieFocusIn(e) {
+    var st = itemEditor;
+    if (!st || st.modal.contains(e.target)) return;
+    if (e.target.closest && e.target.closest('#toast-stack')) return; // a toast's own buttons stay usable
+    var list = ieFocusables(st);
+    if (list.length) list[0].focus({ preventScroll: true });
+  }
+
+  // o: { type } to add (todo | reminder | errand | routine | event), or { edit: 'reminder' | 'routine', item }
+  // to change one; o.opener is the button that was pressed.
+  function openItemEditor(o) {
+    if (itemEditor) return;
+    o = o || {};
+    var edit = o.edit || null, item = o.item || null;
+    var st = { edit: edit, item: item, type: o.type || 'todo', busy: false, closed: false, nodes: {}, opener: ieOpener(o.opener) };
+    if (edit) st.type = edit;
+    var n = st.nodes;
+
+    function control(tag, type) { var c = el(tag, 'ie-input', []); if (type) c.type = type; return c; }
+    function select(options) {
+      var c = el('select', 'ie-input', []);
+      options.forEach(function (p) { var op = el('option', null, [p[1]]); op.value = p[0]; c.appendChild(op); });
+      return c;
+    }
+    // A labelled field. Keeps the control as n[name], the wrapper as n[name + 'Field'], the label as n[name + 'Label'].
+    function field(name, label, c, hint) {
+      c.id = 'ie-f-' + name;
+      var lab = el('label', 'ie-label', [label]);
+      lab.htmlFor = c.id;
+      var f = el('div', 'ie-field', [lab, c, hint ? el('span', 'ie-hint', [hint]) : null]);
+      n[name] = c; n[name + 'Field'] = f; n[name + 'Label'] = lab;
+      return f;
+    }
+
+    // Type choice (adding only)
+    var typeRow = null;
+    if (!edit) {
+      typeRow = el('div', 'ie-types', []);
+      typeRow.setAttribute('role', 'group');
+      typeRow.setAttribute('aria-label', 'Type of item');
+      n.typeBtns = IE_TYPES.map(function (t) {
+        var b = el('button', 'btn ie-type', [t[1]]);
+        b.type = 'button';
+        b.setAttribute('data-type', t[0]);
+        b.addEventListener('click', function () { st.type = t[0]; ieShowError(st, ''); ieSync(st); });
+        typeRow.appendChild(b);
+        return b;
+      });
+    }
+
+    // Shared fields
+    var kindOptions = IE_KINDS.slice();
+    if (edit === 'reminder' && !kindOptions.some(function (k) { return k[0] === ieKindOf(item); })) {
+      kindOptions.push([ieKindOf(item), ieKindOf(item)]);
+    }
+    var kindField = field('kind', 'Kind', select(kindOptions));
+    var titleField = field('title', 'Title', control('input', 'text'));
+    n.title.maxLength = 200;
+    n.title.autocomplete = 'off';
+    var dateField = field('date', 'Date', control('input', 'date'));
+    var timeField = field('time', 'Time (optional)', control('input', 'time'));
+    n.dateRow = el('div', 'ie-row', [dateField, timeField]);
+    var endField = field('end', 'Ends on (optional)', control('input', 'date'));
+    var endTimeField = field('endTime', 'Ends at (optional)', control('input', 'time'));
+    n.endRow = el('div', 'ie-row', [endField, endTimeField]);
+    var placeField = field('place', 'Place (optional)', control('input', 'text'));
+    n.place.maxLength = 200;
+    var scopeField = field('scope', 'Scope', select([['personal', 'Personal'], ['work', 'Work']]));
+    var noteField = field('note', 'Note (optional)', control('textarea'));
+    n.note.rows = 3;
+    n.note.maxLength = 2000;
+
+    // Routine schedule builder
+    var freqField = field('freq', 'Repeats', select(IE_FREQS));
+    freqField.querySelector('select').addEventListener('change', function () { ieSync(st); });
+    var daysWrap = el('div', 'ie-days', []);
+    daysWrap.setAttribute('role', 'group');
+    daysWrap.setAttribute('aria-labelledby', 'ie-days-label');
+    n.dayBoxes = IE_DAYS.map(function (name, i) {
+      var cb = el('input', null, []);
+      cb.type = 'checkbox';
+      cb.value = String(i);
+      cb.setAttribute('aria-label', name);
+      cb.addEventListener('change', function () { ieSync(st); });
+      daysWrap.appendChild(el('label', 'ie-day', [cb, el('span', null, [name.slice(0, 3)])]));
+      return cb;
+    });
+    var daysLabel = el('span', 'ie-label', ['On these days']);
+    daysLabel.id = 'ie-days-label';
+    n.daysField = el('div', 'ie-field', [daysLabel, daysWrap]);
+    n.monthDayField = field('monthDay', 'Day of the month (1 to 31)', control('input', 'number'));
+    n.monthDay.min = '1'; n.monthDay.max = '31'; n.monthDay.step = '1'; n.monthDay.value = '1';
+    n.monthDay.addEventListener('input', function () { ieSync(st); });
+    n.customField = field('custom', 'Schedule', control('input', 'text'),
+      'Write it the way you would say it, such as "Mondays and Thursdays" or "monthly on the 15th".');
+    n.custom.addEventListener('input', function () { ieSync(st); });
+    n.preview = el('p', 'ie-hint', []);
+    n.routineBox = el('div', 'ie-group', [freqField, n.daysField, n.monthDayField, n.customField, n.preview]);
+
+    n.error = el('p', 'ie-error', []);
+    n.error.setAttribute('role', 'alert');
+    n.error.hidden = true;
+
+    // Prefill when editing
+    if (edit === 'reminder') {
+      n.kind.value = ieKindOf(item);
+      n.title.value = String(item.title || '');
+      n.date.value = ieDateOf(item.due);
+      n.time.value = ieTimeOf(item.time);
+      n.scope.value = item.scope === 'work' ? 'work' : 'personal';
+      n.kind.addEventListener('change', function () { ieShowError(st, ''); ieSync(st); });
+    } else if (edit === 'routine') {
+      n.title.value = String(item.title || '');
+      n.time.value = ieTimeOf(item.time);
+      var parsed = parseSchedule(scheduleBase(item.schedule));
+      if (parsed) {
+        n.freq.value = parsed.freq;
+        (parsed.days || []).forEach(function (i) { n.dayBoxes[i].checked = true; });
+        if (parsed.monthDay) n.monthDay.value = String(parsed.monthDay);
+      } else {
+        n.freq.value = 'custom';
+        n.custom.value = scheduleBase(item.schedule);
+      }
+    }
+
+    // Chrome
+    var heading = el('h2', null, [edit === 'routine' ? 'Edit routine' : edit ? 'Edit item' : 'Add to your day']);
+    heading.id = 'ie-title';
+    var closeX = el('button', 'icon-btn', ['✕']);
+    closeX.type = 'button';
+    closeX.setAttribute('aria-label', 'Close');
+    closeX.addEventListener('click', function () { closeItemEditor(st); });
+    var head = el('div', 'modal-head', [heading, closeX]);
+    var body = el('div', 'modal-body', [typeRow, kindField, titleField, n.dateRow, n.endRow, placeField,
+      scopeField, n.routineBox, noteField, n.error]);
+    var cancel = el('button', 'btn', ['Cancel']);
+    cancel.type = 'button';
+    cancel.addEventListener('click', function () { closeItemEditor(st); });
+    n.save = el('button', 'btn primary', ['Save']);
+    n.save.type = 'submit';
+    var form = el('form', 'ie-form', [head, body, el('div', 'ie-foot', [cancel, n.save])]);
+    form.noValidate = true;
+    form.addEventListener('submit', function (e) { e.preventDefault(); ieSave(st); });
+    st.modal = el('div', 'modal ie-modal', [form]);
+    st.modal.setAttribute('role', 'dialog');
+    st.modal.setAttribute('aria-modal', 'true');
+    st.modal.setAttribute('aria-labelledby', 'ie-title');
+    // Keys typed in the dialog are for the dialog; the page's one-key shortcuts must not fire.
+    st.modal.addEventListener('keydown', function (e) { if (e.key !== 'Escape') e.stopPropagation(); });
+    st.scrim = el('div', 'scrim', []);
+
+    ieSync(st);
+    itemEditor = st;
+    document.body.classList.add('ie-open');
+    document.body.appendChild(st.scrim);
+    document.body.appendChild(st.modal);
+    void st.modal.offsetWidth; // so the fade-in runs
+    st.scrim.classList.add('open');
+    st.modal.classList.add('open');
+    document.addEventListener('keydown', ieKeydown, true);
+    document.addEventListener('focusin', ieFocusIn);
+    n.title.focus({ preventScroll: true });
+  }
+
+  (function wireDayAdd() {
+    var btn = document.getElementById('day-add');
+    if (!btn) return;
+    btn.addEventListener('click', function () { openItemEditor({ type: 'todo', opener: btn }); });
+  })();
+
+  // Pause / Resume a routine: the same endpoint, just { status }.
+  function routineSetStatus(item, status, row) {
+    if (dayBusy[item.file]) return;
+    dayBusy[item.file] = true;
+    setRowBusy(row, true);
+    bridgePost('/api/assistant/item', { op: 'update', type: 'routine', file: item.file, fields: { status: status } }).then(function (r) {
+      delete dayBusy[item.file];
+      var d = r.data || {};
+      if (!r.ok || d.ok === false) {
+        setRowBusy(row, false);
+        toast(d.error || 'Could not change that routine.', 'critical', { title: 'Day' });
+        return;
+      }
+      toast((status === 'paused' ? 'Paused: ' : 'Resumed: ') + ((d.saved && d.saved.title) || item.title), 'success');
+      var back = { act: 'status', file: item.file };
+      if (d.feed) { applyDayFeed(d.feed); ieRestoreFocus(back); }
+      else {  // no feed in the reply: re-arm the row (a poll that finds nothing new repaints nothing), then re-read
+        setRowBusy(row, false);
+        pollAssistant().then(function () { if (document.activeElement === document.body) ieRestoreFocus(back); });
+      }
+    }, function () {
+      delete dayBusy[item.file];
+      setRowBusy(row, false);
+      toast('Could not reach Alfred.', 'critical', { title: 'Day' });
+    });
+  }
+
   function dayButton(label, cls, tip, item, onClick) {
     var b = el('button', 'btn day-act' + (cls ? ' ' + cls : ''), [label]);
     b.type = 'button';
@@ -3792,13 +4324,38 @@
     return b;
   }
 
-  // mode: 'full' = Done / Tomorrow / Snooze, 'lite' = Done / Snooze, 'carry' = Carry over.
-  // Appends the button group (and, when snoozing is offered, its date line) to the row.
+  // Edit opens the item editor on this row's item. what: 'reminder' | 'routine'.
+  function dayEditButton(item, what) {
+    var b = dayButton('Edit', '', what === 'routine' ? 'Edit routine' : 'Edit', item, function () {
+      openItemEditor({ edit: what, item: item, opener: b });
+    });
+    b.setAttribute('data-act', 'edit');
+    b.setAttribute('data-file', item.file);
+    return b;
+  }
+
+  // mode: 'full' = Done / Tomorrow / Edit / Snooze, 'lite' = Done / Edit / Snooze, 'carry' = Carry over / Edit,
+  // 'routine' = Edit, 'routine-manage' = Edit / Pause (or Resume). Appends the button group (and, when
+  // snoozing is offered, its date line) to the row.
   function dayActions(item, row, mode) {
     var wrap = el('div', 'day-actions', []);
+    if (mode === 'routine' || mode === 'routine-manage') {
+      wrap.appendChild(dayEditButton(item, 'routine'));
+      if (mode === 'routine-manage') {
+        var paused = item.status === 'paused';
+        var flip = dayButton(paused ? 'Resume' : 'Pause', '', paused ? 'Resume routine' : 'Pause routine', item,
+          function () { routineSetStatus(item, paused ? 'active' : 'paused', row); });
+        flip.setAttribute('data-act', 'status');
+        flip.setAttribute('data-file', item.file);
+        wrap.appendChild(flip);
+      }
+      row.appendChild(wrap);
+      return;
+    }
     if (mode === 'carry') {
       wrap.appendChild(dayButton('Carry over', '', 'Carry over into today', item,
         function () { dayAct(item, 'carryover', null, row); }));
+      wrap.appendChild(dayEditButton(item, 'reminder'));
       row.appendChild(wrap);
       return;
     }
@@ -3808,6 +4365,7 @@
       wrap.appendChild(dayButton('→ Tomorrow', '', 'Move to tomorrow', item,
         function () { dayAct(item, 'tomorrow', null, row); }));
     }
+    wrap.appendChild(dayEditButton(item, 'reminder'));
     var more = dayButton('⋯', '', 'Snooze to a date', item, function () {
       snooze.hidden = !snooze.hidden;
       more.setAttribute('aria-expanded', snooze.hidden ? 'false' : 'true');
@@ -3859,6 +4417,7 @@
     row.appendChild(title);
     if (item.scope === 'work') row.appendChild(el('span', 'badge info', ['work']));
     if (o.when) row.appendChild(el('span', 'day-when', [o.when]));
+    if (o.tag) row.appendChild(el('span', 'badge idle', [o.tag]));
     if (item.pending) {
       var tag = el('span', 'badge warn day-pending', ['pending']);
       tag.title = 'A change is waiting for ' + (item.author || 'its owner') + ' to apply';
@@ -3920,18 +4479,29 @@
     }
     cards.push(dayCard('Routines today', { count: routines.length,
       body: [routines.length ? dayRows(routines, function (r) {
-        return { cls: 'routine', when: String(r.schedule || '').split(/[;(]/)[0].trim(), actions: 'none' };
+        return { cls: 'routine', when: String(r.schedule || '').split(/[;(]/)[0].trim(), actions: 'routine' };
       }) : dayEmpty('No routines today.')] }));
-    return dayColumn('Today', cards);
+    // Everything to act on lives in this one column: today, then the week, then the open to-dos.
+    var todos = arr(d.todos), later = arr(d.later);
+    cards.push(dayWeekCard(d));
+    cards.push(dayCard('To-dos', { count: todos.length,
+      body: [todos.length ? dayRows(todos, { actions: 'lite' }) : dayEmpty('No open to-dos.')] }));
+    cards.push(dayCard('Later', { collapsed: true, count: later.length,
+      body: [later.length ? dayRows(later, function (i) {
+        return { when: dayLabel(i.due), actions: 'lite' };
+      }) : dayEmpty('Nothing scheduled further out.')] }));
+    return dayColumn('Today, this week and to-dos', cards);
   }
 
   // --- Calendar: dots on the days, an agenda for the picked day --------------------------
   // Two sources share one grid. The brain's dated reminders (feed.overdue / today /
   // upcoming / later, by `due`) are the truth and carry the Done / Tomorrow / Snooze
-  // actions; feed.calendar.days (Google, every calendar the account sees) is the
-  // second source. Events that merely mirror a reminder (brain && brainFile) are left
-  // out so nothing shows twice. Everything is built with el()/textContent; the only
-  // data that reaches a style is a Google colour, and only after it passes calColor().
+  // actions; feed.calendar.days (parsed server-side from Calendar/events.md in the
+  // shared brain, which Grok and Claude both add to) is the second source. Events are
+  // plain data with one fixed dot colour, so nothing from the file ever reaches a style.
+  // Everything is built with el()/textContent. A click on an event opens the events file
+  // in the reader.
+  var CAL_FILE = 'Calendar/events.md';
   var calSel = null;        // the picked day (ISO); null = follow today
   var calEl = null;         // the .cal node on screen, so a click repaints just the calendar
   var CAL_DOTS_MAX = 4;     // five or more collapse to three dots and "+N"
@@ -3941,13 +4511,19 @@
     return d && ISO_DATE.test(String(d.date || '')) ? d.date : new Date().toISOString().slice(0, 10);
   }
 
-  function calColor(c) { return typeof c === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(c) ? c : null; }
+  // 'all day', '09:30' or '09:30–10:00' (the server sends 24h Eastern times).
+  function calTimeText(ev) {
+    if (ev.allDay || !ev.time) return 'all day';
+    return ev.endTime ? ev.time + '–' + ev.endTime : ev.time;
+  }
 
-  function calTimeText(hhmm) { // '14:05' -> '2:05 PM'
-    var m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || ''));
-    if (!m) return '';
-    var h = parseInt(m[1], 10);
-    return ((h % 12) || 12) + ':' + m[2] + ' ' + (h >= 12 ? 'PM' : 'AM');
+  // Who added the event: 'grok' -> 'Grok', 'claude-code' -> 'Claude', 'user' -> 'You'.
+  function calByLabel(by) {
+    var s = String(by || '').trim().toLowerCase();
+    if (!s) return '';
+    if (s.indexOf('claude') === 0) return 'Claude';
+    if (s === 'user') return 'You';
+    return s.charAt(0).toUpperCase() + s.slice(1);
   }
 
   function calMonthLabel(ym) {
@@ -3966,7 +4542,7 @@
     return ym + '-' + (day < 10 ? '0' : '') + day;
   }
 
-  // reminders: iso -> [{ item, list }]; events: iso -> [Google event] with the mirrors dropped.
+  // reminders: iso -> [{ item, list }]; events: iso -> [event from the events file].
   function calIndex(d) {
     var rem = {}, listOf = {}, seen = {};
     [['overdue', d.overdue], ['today', d.today], ['upcoming', d.upcoming], ['later', d.later]].forEach(function (p) {
@@ -3980,56 +4556,41 @@
     });
     var cal = d.calendar || {};
     var ev = {};
-    if (cal.connected && cal.days) {
-      Object.keys(cal.days).forEach(function (k) {
-        var list = arr(cal.days[k]).filter(function (e) { return e && !(e.brain && e.brainFile); });
-        if (list.length) ev[k] = list;
-      });
-    }
-    return { rem: rem, listOf: listOf, ev: ev, cal: cal, connected: !!cal.connected, loaded: !!(cal.connected && cal.days) };
+    Object.keys(cal.days || {}).forEach(function (k) {
+      var list = arr(cal.days[k]).filter(Boolean);
+      if (list.length) ev[k] = list;
+    });
+    return { rem: rem, listOf: listOf, ev: ev, cal: cal, has: !!d.calendar, exists: cal.exists === true,
+      problems: arr(cal.problems) };
   }
 
-  function calIsPending(e) { return !!(e && e.invite && e.response === 'needsAction'); }
-
-  // Google's own deep link for an event: eid = base64("<eventId> <calendarId>") without padding.
-  function calEventLink(ev) {
-    var given = String(ev.htmlLink || ev.link || '');
-    if (/^https:\/\/(www|calendar)\.google\.com\//.test(given)) return given;
-    if (!ev.id || !ev.calendarId) return null;
-    try {
-      return 'https://www.google.com/calendar/event?eid=' + encodeURIComponent(btoa(ev.id + ' ' + ev.calendarId).replace(/=+$/, ''));
-    } catch (e) { return null; }
-  }
+  // Opens the events file in the reader: the place to add or fix an event.
+  function calOpenFile() { dayOpenFile(CAL_FILE, 'Calendar'); }
 
   // o: { compact } (compact drops the location line, for the small "today" card)
   function calEventRow(ev, o) {
     o = o || {};
-    var href = calEventLink(ev);
-    var color = calColor(ev.color);
-    var row = el(href ? 'a' : 'div', 'cal-event', []);
-    if (color) row.style.setProperty('--accent', color);
-    if (href) {
-      row.href = href;
-      row.target = '_blank';
-      row.rel = 'noopener noreferrer';
-      row.title = 'Open in Google Calendar';
-    }
-    row.appendChild(el('span', 'ce-time', [ev.allDay ? 'All day' : (calTimeText(ev.time) || '')]));
+    var row = el('button', 'cal-event', []);
+    row.type = 'button';
+    row.title = 'Open ' + CAL_FILE;
+    row.addEventListener('click', calOpenFile);
+    row.appendChild(el('span', 'ce-time', [calTimeText(ev)]));
     row.appendChild(el('span', 'ce-title', [ev.title || '(no title)']));
-    var meta = el('div', 'ce-meta', []);
-    var chip = el('span', 'cal-chip', [el('span', null, [ev.calendar || 'Calendar'])]);
-    if (color) chip.style.setProperty('--accent', color);
-    meta.appendChild(chip);
-    if (calIsPending(ev)) meta.appendChild(el('span', 'badge warn', ['invite · needs answer']));
-    else if (ev.invite && ev.response === 'tentative') meta.appendChild(el('span', 'badge info', ['tentative']));
+    var meta = el('span', 'ce-meta', []);
+    if (ev.end && ev.spanEnd !== true) meta.appendChild(el('span', 'ce-where', ['through ' + dayLabel(ev.end)]));
     if (ev.location && !o.compact) meta.appendChild(el('span', 'ce-where', [ev.location]));
-    row.appendChild(meta);
+    var by = calByLabel(ev.by);
+    if (by) {
+      var tag = el('span', 'ce-by', [by]);
+      tag.title = 'Added by ' + by;
+      meta.appendChild(tag);
+    }
+    if (meta.childNodes.length) row.appendChild(meta);
     return row;
   }
 
   function calCell(ix, iso, today, sel, ym) {
     var rem = ix.rem[iso] || [], evs = ix.ev[iso] || [];
-    var pending = evs.filter(calIsPending).length;
     var cell = el('button', 'cal-day' + (iso === today ? ' today' : '') + (iso === sel ? ' selected' : '')
       + (iso.slice(0, 7) !== ym ? ' other' : ''), []);
     cell.type = 'button';
@@ -4040,23 +4601,16 @@
     var parts = [];
     if (rem.length) parts.push(rem.length + (rem.length === 1 ? ' reminder' : ' reminders'));
     if (evs.length) parts.push(evs.length + (evs.length === 1 ? ' event' : ' events'));
-    if (pending) parts.push(pending + (pending === 1 ? ' invitation' : ' invitations') + ' to answer');
     cell.setAttribute('aria-label', dayLabel(iso, true) + (iso === today ? ', today' : '') + ': '
       + (parts.length ? parts.join(', ') : 'nothing scheduled'));
     cell.addEventListener('click', function () { calSelect(iso, true); });
     cell.appendChild(el('span', 'cal-num', [String(parseInt(iso.slice(8, 10), 10))]));
-    // Reminders first, then invitations waiting on an answer, then the rest of the events.
-    var dots = rem.map(function () { return { cls: 'cal-dot rem' }; });
-    evs.filter(calIsPending).forEach(function (e) { dots.push({ cls: 'cal-dot hollow', color: calColor(e.color) }); });
-    evs.filter(function (e) { return !calIsPending(e); }).forEach(function (e) { dots.push({ cls: 'cal-dot', color: calColor(e.color) }); });
+    // Reminders first (mint), then one blue dot per event.
+    var dots = rem.map(function () { return 'cal-dot rem'; }).concat(evs.map(function () { return 'cal-dot ev'; }));
     var shown = dots.length > CAL_DOTS_MAX ? CAL_DOTS_MAX - 1 : dots.length;
     var row = el('span', 'cal-dots', []);
     row.setAttribute('aria-hidden', 'true');
-    dots.slice(0, shown).forEach(function (dot) {
-      var n = el('span', dot.cls, []);
-      if (dot.color) n.style.setProperty('--accent', dot.color);
-      row.appendChild(n);
-    });
+    dots.slice(0, shown).forEach(function (cls) { row.appendChild(el('span', cls, [])); });
     if (dots.length > shown) row.appendChild(el('span', 'cal-more', ['+' + (dots.length - shown)]));
     cell.appendChild(row);
     return cell;
@@ -4084,11 +4638,26 @@
     return el('p', 'day-sub cal-note' + (warn ? ' warn' : ''), children);
   }
 
-  function calSettingsLink(label) {
-    var b = el('button', 'cal-link', [label || 'Settings → Calendar']);
+  // The events file's name as a link that opens it in the reader.
+  function calFileLink() {
+    var b = el('button', 'cal-link', [CAL_FILE]);
     b.type = 'button';
-    b.addEventListener('click', function () { openSettings({ section: 'calendar' }); });
+    b.title = 'Open ' + CAL_FILE;
+    b.addEventListener('click', calOpenFile);
     return b;
+  }
+
+  // Events in the viewed month, counted once each (a multi-day event sits under every day it covers).
+  function calMonthCount(ix, ym) {
+    var seen = {}, n = 0;
+    Object.keys(ix.ev).forEach(function (k) {
+      if (k.slice(0, 7) !== ym) return;
+      ix.ev[k].forEach(function (e) {
+        var key = e.id != null ? String(e.id) : e.line + ':' + e.title + ':' + e.date;
+        if (!seen[key]) { seen[key] = true; n++; }
+      });
+    });
+    return n;
   }
 
   // Rebuilds only the calendar node. focusSel (a selector) is what gets focus afterwards,
@@ -4174,17 +4743,24 @@
     grid.addEventListener('keydown', calKey);
     root.appendChild(grid);
 
-    if (!ix.connected) {
-      root.appendChild(calNote(['Google Calendar not connected — ', calSettingsLink()]));
-    } else if (ix.cal.lastError) {
-      root.appendChild(calNote(['Calendar sync problem — ', calSettingsLink('see Settings → Calendar')], true));
-    } else if (!ix.loaded) {
-      root.appendChild(calNote(['Loading Google events…']));
-    } else if (ISO_DATE.test(String(ix.cal.from || '')) && ISO_DATE.test(String(ix.cal.to || ''))
-      && (first < ix.cal.from || addDaysIso(calShiftMonth(ym, 1) + '-01', -1) > ix.cal.to)) {
-      // The server reads a window around today; days outside it show reminders only, so say so.
-      root.appendChild(calNote(['Google events cover ' + dayLabel(ix.cal.from) + ' to ' + dayLabel(ix.cal.to)
-        + '; other days show reminders only.']));
+    if (ix.has && !ix.exists) {
+      root.appendChild(calNote(['No calendar file yet: ' + CAL_FILE]));
+    } else if (ix.exists) {
+      if (ISO_DATE.test(String(ix.cal.from || '')) && ISO_DATE.test(String(ix.cal.to || ''))
+        && (first < ix.cal.from || addDaysIso(calShiftMonth(ym, 1) + '-01', -1) > ix.cal.to)) {
+        // The server reads a window around today; days outside it show reminders only, so say so.
+        root.appendChild(calNote(['Events cover ' + dayLabel(ix.cal.from) + ' to ' + dayLabel(ix.cal.to)
+          + '; other days show reminders only · ', calFileLink()]));
+      } else {
+        var n = calMonthCount(ix, ym);
+        root.appendChild(calNote([n + (n === 1 ? ' event' : ' events') + ' this month · ', calFileLink()]));
+      }
+      if (ix.problems.length) {
+        var bad = calNote([ix.problems.length + (ix.problems.length === 1 ? ' line' : ' lines') + ' in ' + CAL_FILE
+          + ' could not be read'], true);
+        bad.title = 'Line ' + ix.problems.map(function (p) { return p && p.line; }).filter(Boolean).join(', ');
+        root.appendChild(bad);
+      }
     }
 
     root.appendChild(calAgenda(ix, sel, today));
@@ -4199,7 +4775,7 @@
   function dayCalendarTodayCard(d) {
     var ix = calIndex(d);
     var list = ix.ev[calTodayIso(d)] || [];
-    if (!ix.connected || !list.length) return null;
+    if (!list.length) return null;
     return dayCard('Today on the calendar', { count: list.length,
       body: [el('div', 'cal-events', list.map(function (e) { return calEventRow(e, { compact: true }); }))] });
   }
@@ -4251,17 +4827,9 @@
     return dayCard('This week', { count: upcoming.length, body: body });
   }
 
-  function dayBriefColumn(d) {
-    var later = arr(d.later);
-    return dayColumn("Calendar, brief and week", [
-      dayCalendarCard(d),
-      dayBriefCard(d),
-      dayWeekCard(d),
-      dayCard('Later', { collapsed: true, count: later.length,
-        body: [later.length ? dayRows(later, function (i) {
-          return { when: dayLabel(i.due), actions: 'lite' };
-        }) : dayEmpty('Nothing scheduled further out.')] }),
-    ]);
+  // The calendar is the centrepiece and gets the middle column to itself.
+  function dayCalendarColumn(d) {
+    return dayColumn('Calendar', [dayCalendarCard(d)]);
   }
 
   function dayProjectRow(p) {
@@ -4314,121 +4882,53 @@
     return dayCard('End of day', { body: body });
   }
 
-  // --- Since you last looked: the last 24h of edits across the shared brain ---
-  // /api/assistant carries `recent` (newest first, max 20). A row is "new" when it was
-  // modified after the last time this page was looked at: alfred-last-seen is written
-  // when the tab is hidden or closed, and read again when it comes back. Never written
-  // yet? Treat the last 6 hours as new.
-  var LAST_SEEN_KEY = 'alfred-last-seen';
-  var RECENT_FALLBACK_MS = 6 * 60 * 60 * 1000;
-  var RECENT_FOLD = 8;
-  var recentShowAll = false;
-
-  function readLastSeen() {
-    var t = NaN;
-    try { t = parseInt(localStorage.getItem(LAST_SEEN_KEY), 10); } catch (e) { /* no storage */ }
-    return isFinite(t) && t > 0 ? t : Date.now() - RECENT_FALLBACK_MS;
-  }
-  function writeLastSeen() {
-    try { localStorage.setItem(LAST_SEEN_KEY, String(Date.now())); } catch (e) { /* no storage */ }
-  }
-  var recentBaseline = readLastSeen();
-
-  document.addEventListener('visibilitychange', function () {
-    if (document.hidden) { writeLastSeen(); return; }
-    recentBaseline = readLastSeen();       // what changed while away is what is new now
-    if (dayFeed) renderDay(dayFeed, true);
-  });
-  window.addEventListener('pagehide', writeLastSeen);
-
-  function recentAgeMinutes(r) {
-    var t = Date.parse(r.modified);
-    if (isFinite(t)) return Math.max(0, Math.floor((Date.now() - t) / 60000));
-    return typeof r.ageMinutes === 'number' ? Math.max(0, Math.floor(r.ageMinutes)) : 0;
-  }
-
-  function recentAgeText(mins) {
-    if (mins < 1) return 'just now';
-    if (mins < 60) return mins + ' min ago';
-    var h = Math.floor(mins / 60);
-    if (h < 24) return h + ' h ago';
-    return Math.floor(h / 24) + ' d ago';
-  }
-
-  function recentIsNew(r) {
-    var t = Date.parse(r.modified);
-    return isFinite(t) && t > recentBaseline;
-  }
-
-  // The leading word of the author decides ("Claude Code (migrated; originally captured by Grok)" is
-  // Claude's). A signal has no author field, but its file name says who sent it:
-  // Inbox/2026-10-23-1900--claude-code--grok--fyi--slug.md is from claude-code.
-  function recentAuthor(r) {
-    var a = String(r.author || '').trim().toLowerCase();
-    if (!a) {
-      var m = /^Inbox\/(?:Done\/)?\d{4}-\d{2}-\d{2}-\d{4}--([a-z0-9-]+)--/.exec(String(r.file || ''));
-      if (m) a = m[1];
+  // Every routine, whether or not it runs today: active ones (today's first), then paused ones.
+  // Each can be edited and paused or resumed; "+ Add routine" opens the editor on a new one.
+  function dayMyRoutinesCard(d) {
+    var rt = d.routines || {};
+    var seen = {}, list = [];
+    function take(items, paused) {
+      arr(items).forEach(function (r) {
+        if (!r || !r.file || seen[r.file]) return;
+        seen[r.file] = true;
+        var c = {};
+        Object.keys(r).forEach(function (k) { c[k] = r[k]; });
+        c.status = paused || r.status === 'paused' ? 'paused' : 'active';
+        list.push(c);
+      });
     }
-    var lead = a.split(/[^a-z]+/)[0];
-    if (lead === 'grok') return { key: 'grok', label: 'Grok' };
-    if (lead === 'claude') return { key: 'claude', label: 'Claude' };
-    if (lead === 'alfred' || (!lead && r.ours)) return { key: 'claude', label: 'Alfred' };
-    return { key: 'other', label: lead ? capFirst(lead.slice(0, 10)) : 'Other' };
+    take(rt.today, false);
+    take(rt.other, false);
+    take(rt.paused, true);
+    var add = el('button', 'btn', ['+ Add routine']);
+    add.type = 'button';
+    add.setAttribute('data-act', 'add-routine');
+    add.addEventListener('click', function () { openItemEditor({ type: 'routine', opener: add }); });
+    return dayCard('My routines', { collapsed: true, count: list.length, body: [
+      list.length ? dayRows(list, function (r) {
+        var paused = r.status === 'paused';
+        return { cls: 'routine' + (paused ? ' paused' : ''), when: String(r.schedule || ''),
+          tag: paused ? 'paused' : null, actions: 'routine-manage' };
+      }) : dayEmpty('No routines yet.'),
+      el('div', 'day-card-actions', [add]),
+    ] });
   }
 
-  function dayRecentRow(r) {
-    var isNew = recentIsNew(r);
-    var au = recentAuthor(r);
-    var b = el('button', 'day-recent-row ' + (isNew ? 'is-new' : 'is-old'), []);
-    b.type = 'button';
-    var chip = el('span', 'rc-author', [au.label]);
-    chip.setAttribute('data-a', au.key);
-    b.appendChild(chip);
-    b.appendChild(el('span', 'rc-title', [r.title || r.file]));
-    b.appendChild(el('span', 'rc-age', [recentAgeText(recentAgeMinutes(r))]));
-    var kicker = [r.folder, r.kind && String(r.kind).toLowerCase() !== String(r.folder || '').toLowerCase() ? r.kind : '']
-      .filter(Boolean).join(' · ');
-    if (kicker) b.appendChild(el('span', 'rc-kicker', [kicker]));
-    if (isNew) b.appendChild(el('span', 'day-sr', ['new']));
-    b.title = 'Open ' + r.file;
-    b.addEventListener('click', function () { dayOpenFile(r.file, r.title); });
-    return b;
-  }
-
-  function dayRecentCard(d) {
-    if (!Array.isArray(d.recent)) return null;     // an older server: no strip rather than a false "nothing changed"
-    var rows = d.recent;
-    var fresh = rows.filter(recentIsNew).length;
-    var body = [];
-    if (!rows.length) {
-      body.push(dayEmpty('Nothing changed in the last day.'));
-    } else {
-      body.push(el('div', 'day-recent', (recentShowAll ? rows : rows.slice(0, RECENT_FOLD)).map(dayRecentRow)));
-      if (rows.length > RECENT_FOLD) {
-        var more = el('button', 'btn day-recent-more', [recentShowAll ? 'Show fewer' : 'Show all ' + rows.length]);
-        more.type = 'button';
-        more.addEventListener('click', function () { recentShowAll = !recentShowAll; renderDay(dayFeed, true); });
-        body.push(more);
-      }
-    }
-    return dayCard('Since you last looked (' + fresh + ')', { body: body });
-  }
-
+  // Right column: what to read, not what to do. Grok's brief leads; the things to
+  // act on (due, week, to-dos) all live in the left column.
   function dayOpenColumn(d) {
-    var todos = arr(d.todos), watching = arr(d.watching), projects = arr(d.projects), signals = arr(d.signals);
+    var watching = arr(d.watching), projects = arr(d.projects), signals = arr(d.signals);
     var cards = [
-      dayCard('To-dos', { count: todos.length,
-        body: [todos.length ? dayRows(todos, { actions: 'lite' }) : dayEmpty('No open to-dos.')] }),
+      dayBriefCard(d),
       dayCard('Watching', { collapsed: true, count: watching.length,
         body: [watching.length ? dayRows(watching, { actions: 'lite' }) : dayEmpty('Nothing being watched.')] }),
+      dayMyRoutinesCard(d),
       dayCard('Projects', { count: projects.length,
         body: projects.length ? projects.map(dayProjectRow) : [dayEmpty('No active projects.')] }),
     ];
     if (signals.length) cards.push(dayCard('Signals waiting', { count: signals.length, body: signals.map(daySignalRow) }));
     cards.push(dayEndOfDayCard(d));
-    var recent = dayRecentCard(d);
-    if (recent) cards.unshift(recent);
-    return dayColumn('Open and wrap-up', cards);
+    return dayColumn('Brief and wrap-up', cards);
   }
 
   function renderDay(d, force) {
@@ -4441,7 +4941,7 @@
     daySummaryEl.title = d.generatedAt ? 'Read ' + d.generatedAt : '';
 
     var sig = JSON.stringify(d, function (k, v) { return k === 'generatedAt' || k === 'ageMinutes' ? undefined : v; })
-      + '|' + Math.floor(Date.now() / 300000) + '|' + recentBaseline + '|' + recentShowAll;
+      + '|' + Math.floor(Date.now() / 300000);
     if (!force && sig === daySig) return;
     daySig = sig;
 
@@ -4456,7 +4956,7 @@
         'Set "Shared brain path" in alfred-profile.md to the Google Drive "Second Brain" folder.'));
       return;
     }
-    var grid = el('div', 'day-grid', [dayTodayColumn(d), dayBriefColumn(d), dayOpenColumn(d)]);
+    var grid = el('div', 'day-grid', [dayTodayColumn(d), dayCalendarColumn(d), dayOpenColumn(d)]);
     if (!dayEntered) { // one entrance stagger, on first mount only (never on a data poll)
       dayEntered = true;
       grid.classList.add('enter');
@@ -6323,266 +6823,11 @@
     kbScrim.classList.add('open'); kbModal.classList.add('open');
   }
 
-  // --- settings: Google Calendar -----------------------------------------
-  // The client secret is write-only, like the Ollama key: it goes to the server in
-  // one POST and the input is cleared; the server only ever says "configured". The
-  // sign-in itself happens in Google's own browser tab (the server opens it), so the
-  // modal just watches /api/calendar/status for up to five minutes until it flips.
-  var CAL_WATCH_MS = 5 * 60 * 1000;
-  var CAL_WATCH_EVERY_MS = 5000;
-  var calSetWatch = null;   // { timer } while a Google sign-in is being waited on
-
-  function calStopWatch() {
-    if (calSetWatch) { clearInterval(calSetWatch.timer); calSetWatch = null; }
-  }
-
-  function calSyncText(iso) {
-    var t = Date.parse(iso);
-    if (!isFinite(t)) return String(iso);
-    return recentAgeText(Math.max(0, Math.floor((Date.now() - t) / 60000))) + ' (' + new Date(t).toLocaleString() + ')';
-  }
-
-  var CAL_HELP_STEPS = [
-    'Open the Google Cloud Console (console.cloud.google.com) and create a New project named "Alfred".',
-    'APIs & Services → Library → enable "Google Calendar API".',
-    'APIs & Services → OAuth consent screen: choose External, add dpatel.gc@gmail.com as a test user, and add the calendar scope.',
-    'Credentials → Create credentials → OAuth client ID → Application type "Desktop app".',
-    'Copy the Client ID and Client secret into the fields here, press Save, then Connect.',
-  ];
-
-  // Builds the section into `parent` and returns it. It draws from /api/calendar/status,
-  // so it needs nothing from the Settings payload.
-  function renderCalendarSettings(parent) {
-    var sec = el('div', 'cal-set', []);
-    sec.id = 'settings-gcal';
-    sec.setAttribute('role', 'group');
-    sec.setAttribute('aria-label', 'Google Calendar');
-    sec.appendChild(el('h3', 'settings-h', ['Google Calendar']));
-    sec.appendChild(el('p', 'settings-note', [
-      'Alfred mirrors your dated reminders to a "Second Brain" calendar on your Google account '
-      + 'and reads the account\'s other calendars, shared ones and invitations included.',
-    ]));
-    var body = el('div', 'cal-set-body', [el('p', 'settings-note', ['Loading…'])]);
-    sec.appendChild(body);
-    parent.appendChild(sec);
-
-    var lastSt = null;
-    var replacing = false;   // the "Replace" button has revealed the credential inputs
-    var waiting = false;     // Connect was pressed and the browser tab is open
-    var helpOpen = false;
-
-    function failToast(r, fallback) {
-      toast((r && r.data && r.data.error) || fallback, 'critical', { title: 'Google Calendar' });
-    }
-
-    function afterChange() {   // the Day view reads the calendar from the feed
-      pollAssistant();
-      setTimeout(pollAssistant, 4000);   // the server warms Google's view in the background
-    }
-
-    function startWatch() {
-      calStopWatch();
-      var until = Date.now() + CAL_WATCH_MS;
-      var timer = setInterval(function () {
-        if (Date.now() > until) {
-          calStopWatch();
-          waiting = false;
-          if (sec.isConnected && lastSt) paint(lastSt);
-          return;
-        }
-        bridgeFetch('/api/calendar/status').then(function (r) { return r.ok ? r.json() : null; }).then(function (st) {
-          if (!st) return;
-          var errChanged = !lastSt || st.lastError !== lastSt.lastError;
-          lastSt = st;
-          if (st.connected) {
-            calStopWatch();
-            waiting = false;
-            toast('Google Calendar connected.', 'success', { title: 'Google Calendar' });
-            if (sec.isConnected) paint(st);
-            afterChange();
-          } else if (errChanged && sec.isConnected) {
-            paint(st);
-          }
-        }).catch(function () { /* try again on the next tick */ });
-      }, CAL_WATCH_EVERY_MS);
-      calSetWatch = { timer: timer };
-    }
-
-    function statusBlock(st) {
-      var dl = el('dl', 'cal-set-status' + (st.connected ? ' on' : ''), []);
-      function row(k, v, bad) { dl.appendChild(el('dt', null, [k])); dl.appendChild(el('dd', bad ? 'bad' : null, [v])); }
-      row('Status', st.connected ? 'Connected' : st.configured ? 'Saved, not signed in' : 'Not set up');
-      if (st.account) row('Account', st.account);
-      row('Second Brain calendar', st.brainCalendarId ? 'found' : 'not created yet');
-      row('Last sync', st.lastSync ? calSyncText(st.lastSync) : 'never');
-      if (st.lastError) row('Last error', String(st.lastError), true);
-      return dl;
-    }
-
-    function field(id, label, type, placeholder) {
-      var input = el('input', 'settings-input', []);
-      input.id = id;
-      input.type = type;
-      input.placeholder = placeholder;
-      input.autocomplete = 'off';
-      input.spellcheck = false;
-      input.addEventListener('keydown', function (e) { e.stopPropagation(); });
-      var lab = el('label', null, [label]);
-      lab.htmlFor = id;
-      return { input: input, node: el('div', 'cal-set-field', [lab, input]) };
-    }
-
-    function credentials(st) {
-      var wrap = el('div', 'cal-set-body', []);
-      if (st.configured && !replacing) {
-        wrap.appendChild(el('p', 'cal-set-saved', ['Client ID and Client secret: saved']));
-        var rep = el('button', 'settings-save', ['Replace']);
-        rep.type = 'button';
-        rep.addEventListener('click', function () { replacing = true; paint(st); });
-        wrap.appendChild(el('div', 'cal-set-actions', [rep]));
-        return wrap;
-      }
-      var idF = field('cal-client-id', 'Client ID', 'text', '1234567890-abc….apps.googleusercontent.com');
-      var secF = field('cal-client-secret', 'Client secret', 'password', 'paste the secret…');
-      var save = el('button', 'settings-save', ['Save']);
-      save.type = 'button';
-      var actions = el('div', 'cal-set-actions', [save]);
-      if (st.configured) {
-        var cancel = el('button', 'settings-clear', ['Cancel']);
-        cancel.type = 'button';
-        cancel.addEventListener('click', function () { replacing = false; paint(st); });
-        actions.appendChild(cancel);
-      }
-      save.addEventListener('click', function () {
-        var cid = idF.input.value.trim(), secret = secF.input.value.trim();
-        if (!cid || !secret) return toast('Paste both the Client ID and the Client secret.', 'warn', { title: 'Google Calendar' });
-        save.disabled = true;
-        bridgePost('/api/calendar/config', { clientId: cid, clientSecret: secret }).then(function (r) {
-          save.disabled = false;
-          if (!r.ok) return failToast(r, 'Could not save.');
-          secF.input.value = '';
-          idF.input.value = '';
-          replacing = false;
-          toast('Saved. Now press Connect.', 'success', { title: 'Google Calendar' });
-          lastSt = r.data;
-          paint(r.data);
-        }).catch(function () { save.disabled = false; toast('Could not reach Alfred.', 'critical', { title: 'Google Calendar' }); });
-      });
-      [idF.node, secF.node, actions].forEach(function (n) { wrap.appendChild(n); });
-      return wrap;
-    }
-
-    function connectedActions(st) {
-      var sync = el('button', 'settings-save', ['Sync now']);
-      sync.type = 'button';
-      sync.addEventListener('click', function () {
-        sync.disabled = true;
-        bridgePost('/api/calendar/sync', {}).then(function (r) {
-          sync.disabled = false;
-          if (!r.ok) return failToast(r, 'Could not sync.');
-          var res = r.data && r.data.result;
-          if (!res) toast('A sync is already running, or the calendar is not connected.', 'warn', { title: 'Google Calendar' });
-          else if (res.ok === false) toast('Calendar: ' + (res.error || 'the sync failed'), 'critical', { title: 'Google Calendar' });
-          else {
-            var n = arr(res.actions).length;
-            toast('Calendar: ' + n + (n === 1 ? ' change' : ' changes'), 'success');
-          }
-          if (r.data && r.data.feed) {
-            applyDayFeed(r.data.feed);
-            if (r.data.feed.calendar) { lastSt = r.data.feed.calendar; if (sec.isConnected) paint(lastSt); }
-          }
-        }).catch(function () { sync.disabled = false; toast('Could not reach Alfred.', 'critical', { title: 'Google Calendar' }); });
-      });
-      var dis = el('button', 'settings-clear', ['Disconnect']);
-      dis.type = 'button';
-      dis.addEventListener('click', function () {
-        if (!window.confirm('Disconnect Google Calendar?\n\nAlfred stops syncing. The "Second Brain" calendar and its events stay in your Google account.')) return;
-        dis.disabled = true;
-        bridgePost('/api/calendar/disconnect', {}).then(function (r) {
-          dis.disabled = false;
-          if (!r.ok) return failToast(r, 'Could not disconnect.');
-          calStopWatch();
-          waiting = false;
-          toast('Google Calendar disconnected.', 'success', { title: 'Google Calendar' });
-          lastSt = r.data;
-          paint(r.data);
-          afterChange();
-        }).catch(function () { dis.disabled = false; toast('Could not reach Alfred.', 'critical', { title: 'Google Calendar' }); });
-      });
-      return el('div', 'cal-set-actions', [sync, dis]);
-    }
-
-    function connectAction(st) {
-      var connect = el('button', 'settings-save', ['Connect to Google']);
-      connect.type = 'button';
-      connect.disabled = !st.configured || waiting;
-      if (!st.configured) connect.title = 'Save the Client ID and Client secret first';
-      connect.addEventListener('click', function () {
-        connect.disabled = true;
-        bridgePost('/api/calendar/connect', {}).then(function (r) {
-          if (!r.ok) { connect.disabled = false; return failToast(r, 'Could not start the sign-in.'); }
-          waiting = true;
-          paint(st);
-          startWatch();
-        }).catch(function () { connect.disabled = false; toast('Could not reach Alfred.', 'critical', { title: 'Google Calendar' }); });
-      });
-      return el('div', 'cal-set-actions', [connect]);
-    }
-
-    function help() {
-      var list = el('ol', 'cal-set-help', CAL_HELP_STEPS.map(function (s) { return el('li', null, [s]); }));
-      list.id = 'cal-set-help';
-      list.hidden = !helpOpen;
-      var toggle = el('button', 'cal-set-toggle', ['How do I get a client ID?']);
-      toggle.type = 'button';
-      toggle.setAttribute('aria-expanded', helpOpen ? 'true' : 'false');
-      toggle.setAttribute('aria-controls', 'cal-set-help');
-      toggle.addEventListener('click', function () {
-        helpOpen = !helpOpen;
-        list.hidden = !helpOpen;
-        toggle.setAttribute('aria-expanded', helpOpen ? 'true' : 'false');
-      });
-      return [toggle, list];
-    }
-
-    function paint(st) {
-      body.textContent = '';
-      if (!st) {
-        body.appendChild(el('p', 'settings-warn', [
-          'Alfred\'s server did not answer the calendar status request. If Alfred was updated after it started, restart it so it loads the new code, then reopen Settings.',
-        ]));
-        return;
-      }
-      body.appendChild(statusBlock(st));
-      if (!st.connected) {
-        body.appendChild(credentials(st));
-        body.appendChild(connectAction(st));
-        if (waiting) {
-          var note = el('p', 'settings-note', ['Finish the sign-in in the browser tab that opened; this updates when you\'re done.']);
-          note.setAttribute('role', 'status');
-          body.appendChild(note);
-        }
-        help().forEach(function (n) { body.appendChild(n); });
-      } else {
-        body.appendChild(connectedActions(st));
-        body.appendChild(credentials(st));
-        help().forEach(function (n) { body.appendChild(n); });
-      }
-    }
-
-    bridgeFetch('/api/calendar/status')
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (st) { lastSt = st; paint(st); })
-      .catch(function () { paint(null); });
-    return sec;
-  }
-
   // --- settings ---------------------------------------------------------
   // Same dialog as the Field Manual and the gauges. The key is write-only from
   // the UI's point of view: the server never sends it back, only a masked tail,
   // so a shoulder-surfer or a screenshot cannot recover it from this page.
-  function openSettings(opts) {
-    var wantCalendar = !!(opts && opts.section === 'calendar');   // the click handlers pass an Event, which has no .section
+  function openSettings() {
     document.getElementById('kb-modal-title').textContent = 'Settings';
     kbBody.textContent = '';
     var status = el('p', null, ['Loading…']);
@@ -6709,10 +6954,6 @@
           }).catch(function (err) { vaultSave.disabled = false; toast(String(err.message || err), 'critical', { title: 'Brain location' }); });
         }
         vaultSave.addEventListener('click', function () { saveVault(vaultInput.value.trim()); });
-
-        // --- Google Calendar --------------------------------------------
-        var calSection = renderCalendarSettings(kbBody);
-        if (wantCalendar) setTimeout(function () { calSection.scrollIntoView({ block: 'start' }); }, 0);
 
         // --- GitHub -----------------------------------------------------
         // Deliberately no "paste a personal access token" field. Both routes
@@ -7145,7 +7386,7 @@
   // reads as a region lighting up rather than as a colour.
   //
   // Regions are labelled by FOLDER, never by lobe name. The outline is
-  // anatomy; mapping "Decisions" onto a frontal region is a metaphor, and
+  // anatomy; mapping "Projects" onto a frontal region is a metaphor, and
   // labelling the metaphor with real anatomical terms would put a false claim
   // about neuroanatomy on a screen the CEO shows other people.
   // ============================================================
@@ -7287,22 +7528,29 @@
     else if (node.x * sign < 0) { node.x = sign * ax; node.vx = 0; } // wrong side of the fissure
   }
 
+  // One region per area of the Second Brain. 'folders' lists the top-level
+  // folders that live in each; the small ones share (Outputs with Research,
+  // Reminders/Routines/Inbox as the Day region). The older vault layout's
+  // folders are aliased so a vault in that shape still lands somewhere sensible.
+  // 'folder' is the region key used by the filter buttons and the palette.
   var BRAIN_LOBES = [
-    { folder: 'Projects',    label: 'PROJECTS',    x:  0.33, y: -0.56, r: 0.42 },
-    { folder: 'Decisions',   label: 'DECISIONS',   x: -0.33, y: -0.56, r: 0.40 },
-    { folder: 'Patterns',    label: 'PATTERNS',    x:  0.43, y:  0.06, r: 0.42 },
-    { folder: 'Learning',    label: 'LEARNING',    x: -0.45, y:  0.06, r: 0.42 },
-    { folder: 'Claude-Code', label: 'CLAUDE-CODE', x:  0.21, y:  0.60, r: 0.36 },
-    { folder: 'Other',       label: 'OTHER',       x: -0.22, y:  0.62, r: 0.36 },
+    { folder: 'Projects',  label: 'PROJECTS',  folders: ['Projects'], x: 0.33, y: -0.56, r: 0.42 },
+    { folder: 'Memory',    label: 'MEMORY',    folders: ['Memory'], x: -0.33, y: -0.56, r: 0.40 },
+    { folder: 'Knowledge', label: 'KNOWLEDGE', folders: ['Knowledge', 'Decisions', 'Patterns', 'Learning'], x: 0.43, y: 0.06, r: 0.42 },
+    { folder: 'Research',  label: 'RESEARCH',  folders: ['Research', 'Outputs'], x: -0.45, y: 0.06, r: 0.42 },
+    { folder: 'Day',       label: 'DAY',       folders: ['Reminders', 'Routines', 'Inbox', 'Calendar'], x: 0.21, y: 0.60, r: 0.36 },
+    { folder: 'System',    label: 'SYSTEM',    folders: ['System', '(root)', 'Claude-Code'], x: -0.22, y: 0.62, r: 0.36 },
   ];
+  // Anything not listed above (a folder the operator adds later) joins SYSTEM.
+  var FALLBACK_LOBE = 'System';
   // folder -> { score 0..1, count, lastMs }, refreshed by the /api/status poll.
   // Server-derived from note mtimes, decaying over 6h — see buildBrainActivity.
   var brainActivity = {};
 
-  // Folders outside the five coloured ones all render in the OTHER region, so
-  // their activity has to be merged there too. Reading brainActivity directly
-  // per lobe would silently drop every Business/Investigations/DailyBrief
-  // edit, and OTHER would be the one region that never lit up.
+  // Activity arrives per top-level folder, and several folders share a region,
+  // so it has to be merged per region. Reading brainActivity directly per lobe
+  // would silently drop every Reminders/Routines/Inbox edit, and DAY would be
+  // the one region that never lit up.
   function lobeActivityScore(folder) {
     var best = 0;
     for (var k in brainActivity) {
@@ -7315,10 +7563,12 @@
   }
 
   var lobeByFolder = {};
-  BRAIN_LOBES.forEach(function (L) { lobeByFolder[L.folder] = L; });
-  // Everything outside the five coloured folders shares the OTHER region —
-  // the same fallback colorFor() already makes, so colour and position agree.
-  function lobeFor(folder) { return lobeByFolder[folder] || lobeByFolder.Other; }
+  BRAIN_LOBES.forEach(function (L) {
+    lobeByFolder[L.folder] = L;
+    L.folders.forEach(function (f) { lobeByFolder[f] = L; });
+  });
+  // colorFor() goes through this too, so colour and position always agree.
+  function lobeFor(folder) { return lobeByFolder[folder] || lobeByFolder[FALLBACK_LOBE]; }
 
   // Drawn as TWO closed hemispheres with a gap between them, not one silhouette
   // with a line down it. A single outline reads as an egg no matter how many
@@ -7696,7 +7946,7 @@
 
       var isHi = highlightSet && highlightSet.has(n.id);
       var isOps = currentView === 'ops';
-      var dim = (highlightSet && !isHi) || (!isOps && folderFilter && n.folder !== folderFilter) || (isOps && n.orgStatus === 'idle');
+      var dim = (highlightSet && !isHi) || (!isOps && folderFilter && lobeFor(n.folder).folder !== folderFilter) || (isOps && n.orgStatus === 'idle');
       var matchScore = searchMatches ? searchMatches.get(n.id) : null;
 
       var r = n.r * cam.scale;
@@ -10186,14 +10436,14 @@
 
   function buildLegend() {
     var legend = document.getElementById('legend');
-    Object.keys(FOLDER_COLORS).forEach(function (folder) {
+    BRAIN_LOBES.forEach(function (L) {
+      var col = FOLDER_COLORS[L.folder] || DEFAULT_COLOR;
       var dot = el('span', 'dot', []);
-      dot.style.background = FOLDER_COLORS[folder]; dot.style.color = FOLDER_COLORS[folder];
-      legend.appendChild(el('div', 'chip', [dot, folder]));
+      dot.style.background = col; dot.style.color = col;
+      var chip = el('div', 'chip', [dot, L.folder]);
+      chip.title = L.folders.filter(function (f) { return f !== '(root)'; }).join(', ');
+      legend.appendChild(chip);
     });
-    var dot2 = el('span', 'dot', []);
-    dot2.style.background = DEFAULT_COLOR; dot2.style.color = DEFAULT_COLOR;
-    legend.appendChild(el('div', 'chip', [dot2, 'Other']));
   }
 
   // ============================================================
