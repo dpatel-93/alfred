@@ -505,12 +505,12 @@ if (ours && theirs) {
   chk('closing our own reminder edits it in place and returns the fresh feed', c1.s===200 && c1.d?.via==='direct' && c1.d?.applied===true
     && !c1.d.feed.today.some((i) => i.file===ours.file) && c1.d.feed.doneToday.some((i) => i.title===ours.title), JSON.stringify(c1.d).slice(0,200));
   const c2 = await post('/api/assistant/action',{file:theirs.file,action:'close'});
-  chk('closing Grok\'s reminder goes by close signal and is applied at once', c2.s===200 && c2.d?.via==='signal' && c2.d?.applied===true
-    && /^Inbox\/\d{4}-\d{2}-\d{2}-\d{4}--user--grok--close--/.test(c2.d?.signal||'') && !c2.d.feed.today.some((i) => i.file===theirs.file), JSON.stringify(c2.d).slice(0,200));
+  chk('closing Grok\'s reminder edits it in place too (rule 2)', c2.s===200 && c2.d?.via==='direct' && c2.d?.applied===true
+    && !c2.d.feed.today.some((i) => i.file===theirs.file) && c2.d.feed.doneToday.some((i) => i.title===theirs.title), JSON.stringify(c2.d).slice(0,200));
   const todo = c2.d?.feed?.todos?.find((i) => !i.ours);
   const t1 = todo ? await post('/api/assistant/action',{file:todo.file,action:'tomorrow'}) : {s:0,d:null};
-  chk('moving Grok\'s to-do sends an amend signal and marks the item pending', t1.s===200 && t1.d?.applied===false && t1.d?.pending==='amend'
-    && t1.d.feed.upcoming.concat(t1.d.feed.todos).find((i) => i.file===todo.file)?.pending==='amend', JSON.stringify(t1.d).slice(0,200));
+  chk('moving Grok\'s to-do sets its Due to tomorrow in place', t1.s===200 && t1.d?.applied===true && t1.d?.via==='direct'
+    && t1.d.feed.upcoming.some((i) => i.file===todo.file && i.due===t1.d.due), JSON.stringify(t1.d).slice(0,200));
   chk('closing an already-closed item is a clear 404', (await post('/api/assistant/action',{file:ours.file,action:'close'})).s===404);
 }
 const lib = await post('/api/assistant/librarian',{});
@@ -518,6 +518,26 @@ chk('POST /api/assistant/librarian runs the pass and returns the feed', lib.s===
 await new Promise((r) => setTimeout(r, 2000));  // the version bump is debounced 1.5s
 const status2 = (await j('/api/status')).d;
 chk('brainVersion moved after dashboard actions', typeof status2?.brainVersion==='number' && status2.brainVersion > (status?.brainVersion ?? -1), `${status?.brainVersion} -> ${status2?.brainVersion}`);
+
+// --- Google Calendar: the date bus (no real Google in tests; run.mjs points ALFRED_LOCAL_CONFIG_DIR at a temp dir) ---
+const calNoTok = await fetch(B+'/api/calendar/status');
+chk('GET /api/calendar/status without token blocked', calNoTok.status===401||calNoTok.status===403, `got ${calNoTok.status}`);
+const calSt = await j('/api/calendar/status',{headers:{'X-Alfred-Token':TOKEN}});
+chk('GET /api/calendar/status reports unconfigured, never a secret', calSt.s===200 && calSt.d?.configured===false && calSt.d?.connected===false && !('clientSecret' in (calSt.d||{})), JSON.stringify(calSt.d));
+chk('connect before config is a clear 409', (await post('/api/calendar/connect',{})).s===409);
+chk('a malformed client ID is refused', (await post('/api/calendar/config',{clientId:'nope',clientSecret:'x'.repeat(12)})).s===400);
+const cfg = await post('/api/calendar/config',{clientId:'123-abc.apps.googleusercontent.com',clientSecret:'GOCSPX-testsecret1234'});
+chk('saving the OAuth client marks the calendar configured and returns no secret', cfg.s===200 && cfg.d?.configured===true && !JSON.stringify(cfg.d).includes('GOCSPX'), JSON.stringify(cfg.d));
+const con = await post('/api/calendar/connect',{});
+chk('connect returns the Google consent URL with a loopback redirect', con.s===200 && /accounts\.google\.com/.test(con.d?.url||'') && /oauth2%2Fgoogle/.test(con.d?.url||''), JSON.stringify(con.d).slice(0,200));
+const cb = await fetch(B+'/oauth2/google?code=x&state=bogus');
+chk('the OAuth callback refuses an unknown state', cb.status===400, `got ${cb.status}`);
+const cbErr = await fetch(B+'/oauth2/google?error=access_denied');
+chk('the OAuth callback reports a declined consent', cbErr.status===400 && /declined/i.test(await cbErr.text()), `got ${cbErr.status}`);
+const feedCal = (await j('/api/assistant',{headers:{'X-Alfred-Token':TOKEN}})).d;
+chk('the feed carries the calendar state', feedCal?.calendar && feedCal.calendar.connected===false && feedCal.calendar.configured===true, JSON.stringify(feedCal?.calendar));
+const dis = await post('/api/calendar/disconnect',{});
+chk('disconnect answers with the status', dis.s===200 && dis.d?.connected===false);
 
 // --- injection / traversal probes ---
 const trav = await j('/api/note?path=../../../etc/passwd');

@@ -78,20 +78,13 @@ export function brainNote(brain, rel) {
   return { status: 200, markdown: fs.readFileSync(full, 'utf8') };
 }
 
-// --- Who may edit a brain file in place? (MANIFESTO §6: its Author, or the Librarian) ---
-// The dashboard acts for Claude Code, whose hooks are also the Librarian's mechanical half.
-// A file whose Author is Claude Code, Claude, Alfred or the librarian is edited directly.
-// Anyone else's file gets a signal in Inbox/ instead; a `close` is then applied at once by
-// the Librarian pass (its sanctioned job), while an `amend` waits for the file's curator.
+// --- Whose file is it? Informational since MANIFESTO rule 2 (2026-10-23) let any AI edit any
+// file; the dashboard still records "file by <author>" when it touches someone else's, and the
+// hand-off strip colours rows by author.
 const OURS = /^(claude( code)?|alfred|librarian)$/i;
 export function authorIsOurs(author) {
   return OURS.test(String(author || '').split('(')[0].trim());
 }
-const KNOWN_AIS = ['grok', 'gemini', 'codex', 'claude', 'claude-code', 'librarian'];
-const curatorOf = (author) => {
-  const w = String(author || '').toLowerCase().split(/[\s(]/)[0];
-  return KNOWN_AIS.includes(w) ? w : 'grok';  // Reminders/ is Grok's shelf (Reminders/README.md)
-};
 
 // --- Signals: one small file in Inbox/, named and headed per MANIFESTO §6 ---
 const slugify = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'item';
@@ -127,46 +120,38 @@ export function applyAction(brain, { file, action, due, by = 'user' } = {}, now 
   const h = readFields(text);
   const title = titleOf(text, path.basename(rel));
   const ours = authorIsOurs(h.author);
-  const to = curatorOf(h.author);
   const moveTo = (dir) => {
     fs.mkdirSync(dir, { recursive: true });
     const dest = path.join(dir, path.basename(full));
     if (!fs.existsSync(dest)) fs.renameSync(full, dest);
   };
 
+  // MANIFESTO rule 2 (2026-10-23): any AI edits any file in place, so the dashboard writes
+  // directly whoever created the file, notes who did it and why, then runs the Librarian
+  // pass so index.md's open-items view is current for the next AI that reads it.
+  const who = `${by} (Alfred dashboard${ours ? '' : `; file by ${String(h.author || 'another AI').split('(')[0].trim()}`})`;
+  const stamp = (text) => text.replace(/^- \*\*Last updated:\*\*.*$/m, `- **Last updated:** ${now.stamp}`);
+  let result;
   if (action === 'close') {
     if (inDone) return { status: 400, error: 'already closed' };
-    if (ours) {
-      text = `${setField(text, 'Status', 'done').trimEnd()}\n- Closed: ${now.stamp} by ${by} (Alfred dashboard)\n`;
-      fs.writeFileSync(full, text, 'utf8');
-      moveTo(path.join(brain, 'Reminders', 'Done'));
-      return { status: 200, applied: true, via: 'direct', title };
-    }
-    const signal = writeSignal(brain, { type: 'close', from: by, to, re: rel, subject: title,
-      body: `The user marked this done on the Alfred dashboard at ${now.stamp}.` }, now);
-    runLibrarian(brain, { now });  // the Librarian applies close signals mechanically (MANIFESTO §9)
-    return { status: 200, applied: !fs.existsSync(full), via: 'signal', signal, title };
-  }
-
-  const newDue = action === 'snooze' ? (String(due || '').match(/^\d{4}-\d{2}-\d{2}$/) || [])[0]
-    : action === 'carryover' ? now.date : addDays(now.date, 1);  // carry-over means "today"
-  if (!newDue) return { status: 400, error: 'snooze needs due: YYYY-MM-DD' };
-  if (action === 'carryover' && !inDone) return { status: 400, error: 'carryover is for expired items in Reminders/Done/' };
-  const oldDue = h.due || 'none';
-  if (ours) {
+    text = `${stamp(setField(text, 'Status', 'done')).trimEnd()}\n- Closed: ${now.stamp} by ${who}\n`;
+    fs.writeFileSync(full, text, 'utf8');
+    moveTo(path.join(brain, 'Reminders', 'Done'));
+    result = { status: 200, applied: true, via: 'direct', title };
+  } else {
+    const newDue = action === 'snooze' ? (String(due || '').match(/^\d{4}-\d{2}-\d{2}$/) || [])[0]
+      : action === 'carryover' ? now.date : addDays(now.date, 1);  // carry-over means "today"
+    if (!newDue) return { status: 400, error: 'snooze needs due: YYYY-MM-DD' };
+    if (action === 'carryover' && !inDone) return { status: 400, error: 'carryover is for expired items in Reminders/Done/' };
     text = setField(text, 'Due', newDue);
     if (inDone) text = setField(text, 'Status', 'open');
-    text = `${text.trimEnd()}\n- Moved: ${now.stamp} to ${newDue} by ${by} (Alfred dashboard${inDone ? ', carried over' : ''})\n`;
+    text = `${stamp(text).trimEnd()}\n- Moved: ${now.stamp} to ${newDue} by ${who}${inDone ? ' (carried over)' : ''}\n`;
     fs.writeFileSync(full, text, 'utf8');
     if (inDone) moveTo(path.join(brain, 'Reminders'));
-    return { status: 200, applied: true, via: 'direct', title, due: newDue };
+    result = { status: 200, applied: true, via: 'direct', title, due: newDue };
   }
-  const change = inDone
-    ? `Reopen it: set \`- **Status:** open\`, replace \`- **Due:** ${oldDue}\` with \`- **Due:** ${newDue}\`, and move it back to Reminders/.`
-    : `Replace \`- **Due:** ${oldDue}\` with \`- **Due:** ${newDue}\`.`;
-  const signal = writeSignal(brain, { type: 'amend', from: by, to, re: rel, subject: `${title} to ${newDue}`,
-    body: `${change}\nThe user moved it on the Alfred dashboard at ${now.stamp}.` }, now);
-  return { status: 200, applied: false, via: 'signal', pending: 'amend', signal, title, due: newDue };
+  runLibrarian(brain, { now });  // regenerates index.md and files anything finished
+  return result;
 }
 
 // --- Projects: one line each from status.md, for the day view ---

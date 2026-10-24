@@ -2053,8 +2053,7 @@ const ASSISTANT_MODULE = path.join(__dirname, '..', 'helpers', 'brain-assistant.
 
 async function handleAssistant(req, res) {
   try {
-    const { assistantFeed } = await import(pathToFileURL(ASSISTANT_MODULE).href);
-    return sendJson(res, 200, assistantFeed());
+    return sendJson(res, 200, await fullFeed());
   } catch (err) {
     return sendJson(res, 200, { brain: false, error: String(err.message || err).slice(0, 200) });
   }
@@ -2082,13 +2081,14 @@ async function handleAssistantAction(req, res) {
   let body;
   try { body = await readJsonBody(req); } catch { return sendJson(res, 400, { error: 'invalid JSON body' }); }
   try {
-    const { applyAction, assistantFeed, sharedBrainPath } = await import(pathToFileURL(ASSISTANT_MODULE).href);
+    const { applyAction, sharedBrainPath } = await import(pathToFileURL(ASSISTANT_MODULE).href);
     const { status, ...result } = applyAction(sharedBrainPath(), {
       file: String(body.file || ''), action: String(body.action || ''),
       due: body.due ? String(body.due) : undefined, by: 'user',
     });
     bumpBrainVersion();
-    return sendJson(res, status, status === 200 ? { ...result, feed: assistantFeed() } : result);
+    if (status === 200) scheduleCalendarSync('dashboard action');
+    return sendJson(res, status, status === 200 ? { ...result, feed: await fullFeed() } : result);
   } catch (err) {
     return sendJson(res, 500, { error: String(err.message || err).slice(0, 200) });
   }
@@ -2099,12 +2099,11 @@ async function handleAssistantAction(req, res) {
 async function handleAssistantLibrarian(req, res) {
   try {
     const { assistantFeed, sharedBrainPath } = await import(pathToFileURL(ASSISTANT_MODULE).href);
-    const { runLibrarian } = await import(pathToFileURL(LIBRARIAN_MODULE).href);
     const brain = sharedBrainPath();
     if (!brain || !fs.existsSync(brain)) return sendJson(res, 404, { error: 'shared brain not found' });
-    const actions = runLibrarian(brain);
+    const actions = await runLibrarianPass('dashboard');
     bumpBrainVersion();
-    return sendJson(res, 200, { actions, feed: assistantFeed() });
+    return sendJson(res, 200, { actions, feed: await fullFeed() });
   } catch (err) {
     return sendJson(res, 500, { error: String(err.message || err).slice(0, 200) });
   }
@@ -2144,6 +2143,46 @@ function brainSignature(brain) {
   return sig;
 }
 
+// --- The Librarian while the dashboard runs ---
+// MANIFESTO §9: the mechanical pass runs nightly, at desk-session start, every 10 minutes
+// while the dashboard is up, and whenever a signal lands in Inbox/. That last trigger is
+// what makes a `close` Grok leaves from the car land within seconds. The pass itself moves
+// Inbox files, which would re-trigger the watcher, so runs are serialised and a short
+// quiet window follows each one.
+const LIBRARIAN_INTERVAL_MS = 10 * 60 * 1000;
+const LIBRARIAN_QUIET_MS = 8 * 1000;
+let librarianBusy = false;
+let librarianLastRun = 0;
+let librarianTimer = null;
+
+async function runLibrarianPass(why) {
+  if (librarianBusy) return [];
+  librarianBusy = true;
+  try {
+    const { sharedBrainPath } = await import(pathToFileURL(ASSISTANT_MODULE).href);
+    const { runLibrarian } = await import(pathToFileURL(LIBRARIAN_MODULE).href);
+    const brain = sharedBrainPath();
+    if (!brain || !fs.existsSync(brain)) return [];
+    const actions = runLibrarian(brain);
+    if (actions.length) { console.log(`[librarian] ${why}: ${actions.length} action(s)`); bumpBrainVersion(); }
+    scheduleCalendarSync(`after librarian (${why})`, 1000);
+    return actions;
+  } catch (err) {
+    console.log(`[librarian] ${why}: ${err.message}`);
+    return [];
+  } finally {
+    librarianLastRun = Date.now();
+    librarianBusy = false;
+  }
+}
+
+function scheduleLibrarian(why) {
+  clearTimeout(librarianTimer);
+  const wait = Math.max(2500, LIBRARIAN_QUIET_MS - (Date.now() - librarianLastRun));
+  librarianTimer = setTimeout(() => runLibrarianPass(why), wait);
+  if (librarianTimer.unref) librarianTimer.unref();
+}
+
 async function startBrainWatch() {
   let brain;
   try { brain = (await import(pathToFileURL(ASSISTANT_MODULE).href)).sharedBrainPath(); } catch { return; }
@@ -2152,7 +2191,13 @@ async function startBrainWatch() {
     const dir = path.join(brain, rel);
     if (!fs.existsSync(dir)) continue;
     try {
-      const w = fs.watch(dir, { persistent: false, recursive: rel === 'Projects' }, () => bumpBrainVersion());
+      const w = fs.watch(dir, { persistent: false, recursive: rel === 'Projects' }, (event, name) => {
+        bumpBrainVersion();
+        // A new or changed signal in Inbox/ (not Inbox/Done/) asks for a pass.
+        if (rel === 'Inbox' && name && /\.md$/i.test(String(name)) && !/readme/i.test(String(name))) scheduleLibrarian('signal landed');
+        // A reminder written from the car or by the Librarian should reach the calendar soon.
+        if (rel.startsWith('Reminders')) scheduleCalendarSync('reminders changed', 10000);
+      });
       w.on('error', () => {});
     } catch { /* no watcher here; the poll below still catches up */ }
   }
@@ -2162,6 +2207,12 @@ async function startBrainWatch() {
     if (now !== last) { last = now; bumpBrainVersion(); }
   }, BRAIN_WATCH_POLL_MS);
   if (t.unref) t.unref();
+  const l = setInterval(() => runLibrarianPass('timer'), LIBRARIAN_INTERVAL_MS);
+  if (l.unref) l.unref();
+  const v = setInterval(() => refreshCalendarView(true), CALENDAR_VIEW_TTL_MS);
+  if (v.unref) v.unref();
+  refreshCalendarView(true);
+  scheduleCalendarSync('startup', 5000);
 }
 
 // --- Bench: who is signed in, with a real probe for Claude and an age for Grok ---
@@ -2199,6 +2250,149 @@ function grokAuthAge() {
     const ageDays = (Date.now() - fs.statSync(full).mtimeMs) / 86400000;
     return { present: true, ageDays: Math.round(ageDays * 10) / 10, expiresSoon: ageDays >= 6 };
   } catch { return null; }
+}
+
+// --- Google Calendar: the date bus (helpers/brain-calendar.mjs) ---
+// Reminders/ stays the truth; a dedicated "Second Brain" calendar mirrors every
+// dated reminder and anything created there becomes a reminder. The month view
+// reads every calendar the account sees. Credentials never reach the page: the
+// OAuth code lands on the loopback callback below and only a refresh token is
+// kept, in an owner-only file under ~/.alfred.
+const CALENDAR_MODULE = path.join(__dirname, '..', 'helpers', 'brain-calendar.mjs');
+const CALENDAR_VIEW_TTL_MS = 5 * 60 * 1000;
+let calendarCache = { at: 0, view: null };
+let calendarSyncTimer = null;
+let calendarBusy = false;
+const calendarMod = () => import(pathToFileURL(CALENDAR_MODULE).href);
+
+async function refreshCalendarView(force) {
+  if (!force && calendarCache.view && Date.now() - calendarCache.at < CALENDAR_VIEW_TTL_MS) return calendarCache.view;
+  try {
+    const cal = await calendarMod();
+    if (!cal.calendarStatus().connected) { calendarCache = { at: Date.now(), view: null }; return null; }
+    const view = await cal.calendarView();
+    calendarCache = { at: Date.now(), view };
+    return view;
+  } catch (err) {
+    console.log(`[calendar] view: ${err.message}`);
+    return calendarCache.view;
+  }
+}
+
+async function runCalendarSync(why) {
+  if (calendarBusy) return null;
+  calendarBusy = true;
+  try {
+    const cal = await calendarMod();
+    if (!cal.calendarStatus().connected) return null;
+    const result = await cal.syncCalendar();
+    if (result.actions.length) { console.log(`[calendar] ${why}: ${result.actions.join('; ')}`); bumpBrainVersion(); }
+    if (!result.ok) console.log(`[calendar] ${why}: ${result.error}`);
+    await refreshCalendarView(true);
+    return result;
+  } catch (err) {
+    console.log(`[calendar] ${why}: ${err.message}`);
+    return null;
+  } finally {
+    calendarBusy = false;
+  }
+}
+
+function scheduleCalendarSync(why, delay = 3000) {
+  clearTimeout(calendarSyncTimer);
+  calendarSyncTimer = setTimeout(() => runCalendarSync(why), delay);
+  if (calendarSyncTimer.unref) calendarSyncTimer.unref();
+}
+
+// What the feed and /api/calendar/status carry: the connection state plus the cached month.
+function calendarPayload(status) {
+  const view = calendarCache.view;
+  return { ...status, ...(view ? { from: view.from, to: view.to, calendars: view.calendars, days: view.days, fetchedAt: view.fetchedAt } : {}) };
+}
+
+// The day view's feed with the calendar folded in. Used by every handler that returns a feed.
+async function fullFeed() {
+  const { assistantFeed } = await import(pathToFileURL(ASSISTANT_MODULE).href);
+  const feed = assistantFeed();
+  try {
+    const cal = await calendarMod();
+    const status = cal.calendarStatus();
+    if (status.connected && !calendarCache.view) refreshCalendarView(true);  // warm in the background; never block the page
+    feed.calendar = calendarPayload(status);
+  } catch { feed.calendar = { connected: false }; }
+  return feed;
+}
+
+function openBrowser(url) {
+  if (process.platform === 'win32') execFile('rundll32', ['url.dll,FileProtocolHandler', url], () => {});
+  else if (process.platform === 'darwin') execFile('open', [url], () => {});
+  else execFile('xdg-open', [url], () => {});
+}
+
+async function handleCalendarStatus(req, res) {
+  try {
+    const cal = await calendarMod();
+    return sendJson(res, 200, calendarPayload(cal.calendarStatus()));
+  } catch (err) { return sendJson(res, 500, { error: String(err.message || err).slice(0, 200) }); }
+}
+
+async function handleCalendarConfig(req, res) {
+  let body;
+  try { body = await readJsonBody(req); } catch { return sendJson(res, 400, { error: 'invalid JSON body' }); }
+  const clientId = String(body.clientId || '').trim();
+  const clientSecret = String(body.clientSecret || '').trim();
+  if (!/^[\w-]+\.apps\.googleusercontent\.com$/.test(clientId)) return sendJson(res, 400, { error: 'the client ID should end in .apps.googleusercontent.com' });
+  if (!/^[\w-]{8,}$/.test(clientSecret)) return sendJson(res, 400, { error: 'the client secret looks wrong' });
+  try {
+    const cal = await calendarMod();
+    cal.saveConfig({ clientId, clientSecret, lastError: null });
+    return sendJson(res, 200, cal.calendarStatus());
+  } catch (err) { return sendJson(res, 500, { error: String(err.message || err).slice(0, 200) }); }
+}
+
+async function handleCalendarConnect(req, res) {
+  try {
+    const cal = await calendarMod();
+    const url = cal.connectUrl(PORT);
+    if (process.env.ALFRED_CC_DRY_RUN !== '1') openBrowser(url);
+    return sendJson(res, 200, { ok: true, url });
+  } catch (err) { return sendJson(res, 409, { error: String(err.message || err).slice(0, 200) }); }
+}
+
+// GET /oauth2/google: Google's browser redirect. Loopback only, no token (the browser
+// has none); the one-time code is exchanged here and never echoed back.
+async function handleGoogleOAuthCallback(req, res, url) {
+  if (!isLoopbackAddress(req.socket.remoteAddress)) return sendText(res, 403, 'forbidden');
+  const page = (status, title, text) => {
+    res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(`<!doctype html><meta charset="utf-8"><title>Alfred — Google Calendar</title><body style="font:15px system-ui;background:#07080d;color:#e8f1ff;padding:40px"><h1 style="font-size:20px">${title}</h1><p>${text}</p></body>`);
+  };
+  const error = url.searchParams.get('error');
+  if (error) return page(400, 'Google declined', `Google said: ${String(error).replace(/[<>&]/g, '')}. Close this tab and try again from Alfred's settings.`);
+  try {
+    const cal = await calendarMod();
+    await cal.finishConnect({ code: url.searchParams.get('code') || '', state: url.searchParams.get('state') || '' });
+    scheduleCalendarSync('connected', 500);
+    return page(200, 'Connected', 'Google Calendar is linked to Alfred. You can close this tab; the dashboard updates on its own.');
+  } catch (err) {
+    return page(400, 'Could not connect', String(err.message || err).replace(/[<>&]/g, '').slice(0, 300));
+  }
+}
+
+async function handleCalendarDisconnect(req, res) {
+  try {
+    const cal = await calendarMod();
+    const status = cal.disconnect();
+    calendarCache = { at: 0, view: null };
+    return sendJson(res, 200, status);
+  } catch (err) { return sendJson(res, 500, { error: String(err.message || err).slice(0, 200) }); }
+}
+
+async function handleCalendarSync(req, res) {
+  try {
+    const result = await runCalendarSync('dashboard');
+    return sendJson(res, 200, { result, feed: await fullFeed() });
+  } catch (err) { return sendJson(res, 500, { error: String(err.message || err).slice(0, 200) }); }
 }
 
 async function handleBench(req, res, url) {
@@ -5886,6 +6080,9 @@ async function main() {
     try {
       const url = new URL(req.url, `http://localhost:${PORT}`);
 
+      // Google's OAuth redirect lands here from the user's browser (loopback only).
+      if (url.pathname === '/oauth2/google' && req.method === 'GET') return await handleGoogleOAuthCallback(req, res, url);
+
       if (url.pathname === '/api/ask') {
         if (req.method !== 'POST') return sendJson(res, 405, { error: 'method not allowed' });
         return await handleAsk(req, res);
@@ -5928,6 +6125,10 @@ async function main() {
           || url.pathname === '/api/terminals'
           || url.pathname === '/api/assistant/action'
           || url.pathname === '/api/assistant/librarian'
+          || url.pathname === '/api/calendar/config'
+          || url.pathname === '/api/calendar/connect'
+          || url.pathname === '/api/calendar/disconnect'
+          || url.pathname === '/api/calendar/sync'
           || termAction
           || agentAction;
         if (!isBridgePost) return sendJson(res, 404, { error: 'not found' });
@@ -5935,6 +6136,10 @@ async function main() {
 
         if (url.pathname === '/api/assistant/action') return await handleAssistantAction(req, res);
         if (url.pathname === '/api/assistant/librarian') return await handleAssistantLibrarian(req, res);
+        if (url.pathname === '/api/calendar/config') return await handleCalendarConfig(req, res);
+        if (url.pathname === '/api/calendar/connect') return await handleCalendarConnect(req, res);
+        if (url.pathname === '/api/calendar/disconnect') return await handleCalendarDisconnect(req, res);
+        if (url.pathname === '/api/calendar/sync') return await handleCalendarSync(req, res);
         if (url.pathname === '/api/terminals') return await handleTerminalCreate(req, res);
         if (termAction && termAction[2] === 'kill') return handleTerminalKill(req, res, termAction[1]);
         if (termAction && termAction[2] === 'resize') return await handleTerminalResize(req, res, termAction[1]);
@@ -5986,12 +6191,14 @@ async function main() {
           || url.pathname === '/api/command-center/seats' || url.pathname === '/api/council'
           || url.pathname === '/api/terminals' || url.pathname === '/api/assistant'
           || url.pathname === '/api/assistant/note' || url.pathname === '/api/bench'
+          || url.pathname === '/api/calendar/status'
           || councilGet || agentOutput) {
         if (!authorize(req, res)) return;
         if (url.pathname === '/api/terminals') return handleTerminalList(req, res);
         if (url.pathname === '/api/assistant') return await handleAssistant(req, res);
         if (url.pathname === '/api/assistant/note') return await handleAssistantNote(req, res, url);
         if (url.pathname === '/api/bench') return await handleBench(req, res, url);
+        if (url.pathname === '/api/calendar/status') return await handleCalendarStatus(req, res);
         if (url.pathname === '/api/command-center/seats') return await handleCommandCenterSeats(req, res, url);
         if (url.pathname === '/api/council') return handleCouncilList(req, res);
         if (councilGet) return handleCouncilGet(req, res, councilGet[1]);

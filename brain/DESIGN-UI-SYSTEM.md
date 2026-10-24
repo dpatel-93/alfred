@@ -1592,3 +1592,51 @@ Known gap, inherited and not widened: `--border-focusable` `#3b4a6b` is 2.27:1 o
 value (`#56545f`) was 2.51 and 2.14, so the gap predates the skin. Controls rely on their
 label text and the 2px `--blue` focus ring, not on the resting border, to be found; if the
 floor is to be enforced, `#52648c` reaches 3.00 on surface-2.
+
+---
+
+## 8. Calendar (2026-10-23)
+
+The Day view gained a date layer: dots on a month grid for what needs to happen which day,
+fed by the brain's dated reminders (the truth) and by Google Calendar (every calendar the
+account sees, shared ones and invitations included). No new tokens; the classes live in one
+block, `CALENDAR`, after "Since you last looked". Built with `el()`/`textContent` only.
+
+| Surface | Where | Notes |
+|---|---|---|
+| Calendar card (`.cal-card`) | top of Day column 2 | month label, `‹ ›` buttons, a "Today" button when away from today, 6-week grid (42 `button.cal-day`, weeks start Sunday), the agenda for the picked day |
+| Today on the calendar | top of Day column 1 | Google events for today (time, title, calendar chip); absent when not connected or empty |
+| Summary line | Day header | "· N events" once Google's days have loaded (never a false 0) |
+| Settings, Google Calendar | `#settings-gcal`, after Brain location | one-line explainer, status block (status, account, Second Brain calendar, last sync, last error in red), Client ID and secret, Connect, Sync now, Disconnect, "How do I get a client ID?" |
+
+**Dots** (6px, `aria-hidden`; the cell's `aria-label` carries the counts): mint = a brain
+reminder due that day (`feed.overdue/today/upcoming/later` by `due`); the calendar's own colour
+= a Google event, set inline as `--accent` and only after it passes a `#hex` test, otherwise
+blue; hollow (ring in the calendar colour) = an invitation still `needsAction`. Order is
+reminders, then invitations, then events, so a pending invite is never the dot that gets cut.
+Up to 4 dots show; five or more collapse to 3 dots plus `+N`. A Google event that mirrors a
+reminder (`brain && brainFile`) is never drawn; the reminder row, with its actions, wins.
+
+**Cell states.** Today: mint ring. Selected: blue tint plus a 2px inset bottom bar and
+`aria-pressed` (blue = selected, §1.2). Outside the month: `--text-dim` (colour, never
+opacity). `:focus-visible` is the standard 2px `--blue` ring. One tab stop (roving
+`tabindex`); arrows move the pick by 1 day or 7, PageUp/PageDown by a month, Enter/Space
+select. Month buttons keep focus on themselves so they can be pressed repeatedly. A click or
+arrow repaints only the calendar node, not the whole Day view.
+
+**Agenda** (`.cal-agenda`): the picked day's reminders as the shared `.day-item` rows (Done /
+Tomorrow / Snooze), then `.cal-event` rows: time or "All day", title, a `.cal-chip` (calendar
+name, colour swatch), location, and badges (`invite · needs answer` = warn, `tentative` = info).
+An event opens Google's own page (`calendar/event?eid=`, new tab, `noopener`). Not connected:
+the grid still shows reminder dots and one line says "Google Calendar not connected — Settings
+→ Calendar" (the link opens Settings scrolled to the section).
+
+**Window.** The server fetches roughly today minus 7 days to today plus 42, so days outside it
+carry reminder dots only, and the card says so ("Google events cover ... to ...").
+
+**Settings flow.** The secret is write-only: one POST, the input is cleared, the page only ever
+shows "saved" (Replace reveals empty inputs). Connect opens Google's consent page in a browser
+tab (the server does this), then the section polls `/api/calendar/status` every 5 s for up to
+5 minutes and flips to Connected on its own, even if Settings was closed meanwhile (it then
+re-polls the Day feed). Disconnect asks first. Sync now toasts "Calendar: N changes" and
+repaints Day from the returned feed.

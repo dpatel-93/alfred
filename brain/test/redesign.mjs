@@ -351,6 +351,25 @@ if (!(await up())) {
       }
     }
 
+    // The feed carries `calendar` once Google is connected, and a test run never is. Inject one Google
+    // event for today into the real feed, so the calendar card and "Today on the calendar" are checked
+    // against the shape the server sends rather than against a stub of the whole page.
+    await page.route('**/api/assistant', async (route) => {
+      // A poll can still be in flight when the context closes; that must not become an unhandled rejection.
+      let resp, j;
+      try { resp = await route.fetch(); j = await resp.json(); } catch { return route.abort().catch(() => {}); }
+      const iso = j.date || new Date().toISOString().slice(0, 10);
+      j.brain = j.brain || 'test-brain';
+      j.calendar = {
+        configured: true, connected: true, account: 'me@example.com', brainCalendarId: 'b@x', lastSync: null, lastError: null,
+        from: iso, to: iso, fetchedAt: new Date().toISOString(), calendars: [],
+        days: { [iso]: [{ id: 'e1', calendar: 'Home', calendarId: 'home@x', color: '#4cc9ff', brain: false, title: 'Test event',
+          allDay: false, start: iso + 'T09:30:00-04:00', end: iso + 'T10:00:00-04:00', time: '09:30', location: null,
+          invite: true, response: 'needsAction', brainFile: null }] },
+      };
+      await route.fulfill({ response: resp, json: j }).catch(() => {});
+    });
+
     // --- Day: key 1 returns to it; the date header and the bench strip are mounted -------
     await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
     await page.keyboard.press('1');
@@ -361,9 +380,30 @@ if (!(await up())) {
       && /^[A-Z][a-z]+day, [A-Z][a-z]+ \d{1,2}$/.test(document.getElementById('day-date').textContent)
       && !!document.getElementById('bench') && !!document.getElementById('signin-banner')));
 
+    // --- Day: the calendar (month grid, today, dots, agenda, today's events) ------------
+    await page.waitForFunction(() => !!document.querySelector('.cal-event'), null, { timeout: 8000 }).catch(() => {});
+    chk(tag('Day: the Calendar card tops column 2 with a 6-week grid (42 day buttons)'), await page.evaluate(() => {
+      const cols = document.querySelectorAll('.day-col');
+      const card = cols[1] && cols[1].firstElementChild;
+      return !!card && card.classList.contains('cal-card') && card.querySelectorAll('.cal-grid > button.cal-day').length === 42
+        && /\b20\d\d\b/.test((card.querySelector('.cal-month') || {}).textContent || '');
+    }));
+    chk(tag('Day: today is ringed and selected, with one roving tab stop, and its agenda is shown'), await page.evaluate(() => {
+      const t = document.querySelectorAll('.cal-day.today');
+      return t.length === 1 && t[0].classList.contains('selected') && t[0].getAttribute('aria-current') === 'date'
+        && document.querySelectorAll('.cal-day[tabindex="0"]').length === 1 && !!document.querySelector('.cal-agenda');
+    }));
+    chk(tag('Day: a pending invitation is a hollow dot, its event is in the agenda, and "Today on the calendar" lists it'), await page.evaluate(() => {
+      const t = document.querySelector('.cal-day.today');
+      const first = document.querySelector('.day-col').firstElementChild;
+      return t.querySelectorAll('.cal-dot.hollow').length === 1 && /invite · needs answer/.test(document.querySelector('.cal-agenda').textContent)
+        && /Today on the calendar/.test(first.textContent) && /\b1 event\b/.test(document.getElementById('day-summary').textContent);
+    }));
+
     // --- 7/8. no uncaught JS errors, at this width -------------------------
     chk(tag('no uncaught JS errors'), errs.length === 0, errs.slice(0, 3).join(' | '));
 
+    await page.unroute('**/api/assistant').catch(() => {});
     await ctx.close();
   }
 

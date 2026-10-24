@@ -49,6 +49,11 @@ put('Reminders/2026-10-22--author-closed.md', reminder('reminder', 'done', '2026
 put('Reminders/README.md', '# Reminders\n');
 put('Reminders/Done/2026-09-01--ancient.md', reminder('todo', 'done', 'none', 'done', 'Ancient'), old);
 put('Inbox/2026-10-24-0800--claude--grok--close--close-me.md', signal('close', 'claude', 'grok', 'Reminders/2026-10-22--closed-by-signal.md'));
+// Structured amends (MANIFESTO §6 / §9): a Set: header, a "replace … with …" body line, a reopen, and one that needs judgement.
+put('Inbox/2026-10-24-0810--grok--claude--amend--move-todo.md', `${signal('amend', 'grok', 'claude', 'Reminders/2026-10-21--todo.md')}- **Set:** Due = 2026-10-28\n\nThe user asked for next Wednesday.\n`);
+put('Reminders/Done/2026-10-23--expired-errand.md', reminder('errand', 'expired', '2026-10-23', 'end-of-day', 'Expired errand'));
+put('Inbox/2026-10-24-0815--grok--claude--amend--reopen-errand.md', `${signal('amend', 'grok', 'claude', 'Reminders/Done/2026-10-23--expired-errand.md')}\nReopen it: replace \`- **Status:** expired\` with \`- **Status:** open\` and replace \`- **Due:** 2026-10-23\` with \`- **Due:** 2026-10-24\`.\n`);
+put('Inbox/2026-10-24-0820--grok--claude--amend--topic-fact.md', `${signal('amend', 'grok', 'claude', 'Memory/topics/home.md')}\nAdd a line about the boiler.\n`);
 put('Inbox/2026-10-23-0900--grok--claude--handoff--do-thing.md', signal('handoff', 'grok', 'claude', 'none'));
 put('Inbox/2026-10-24-0700--claude--grok--reply--did-thing.md', signal('reply', 'claude', 'grok', '2026-10-23-0900--grok--claude--handoff--do-thing.md'));
 put('Inbox/2026-10-10-0900--grok--claude--capture--stale.md', signal('capture', 'grok', 'claude', 'Memory/topics/home.md'), old);
@@ -92,12 +97,23 @@ const home = read(p('Memory/topics/home.md'));
 chk('expired temporary memory line removed', !/Away this week/.test(home) && /Permanent fact/.test(home) && /Future temp/.test(home));
 chk('expired line kept in Archive', /Away this week/.test(read(p('Archive/2026-10/expired-memory.md'))));
 const index = read(p('index.md'));
-chk('index lists today\'s errand under Due today', /### Due today \(1\)[\s\S]*Today errand/.test(index));
+chk('index lists today\'s errand and the reopened one under Due today', /### Due today \(2\)[\s\S]*Expired errand[\s\S]*Today errand|### Due today \(2\)[\s\S]*Today errand[\s\S]*Expired errand/.test(index), index.slice(0, 600));
 chk('index lists the overdue item', /### Overdue \(1\)[\s\S]*Overdue thing/.test(index));
 chk('index offers yesterday\'s errand for carry-over', /carry over \(1\)[\s\S]*Yesterday errand/.test(index));
 chk('index flags the stale signal', /older than 7 days/.test(index));
 chk('index keeps Grok as author line', /Author:\*\* Grok/.test(index));
 chk('run is logged', /Librarian log/.test(read(p('System/logs/librarian-2026-10.md'))));
+
+console.log('\nAmend signals');
+const movedTodo = read(p('Reminders/2026-10-21--todo.md'));
+chk('a Set: amend changes the field and notes who asked', /\*\*Due:\*\* 2026-10-28/.test(movedTodo) && /- Amended: 2026-10-24 09:00 ET by grok \(Due = 2026-10-28; signal /.test(movedTodo), movedTodo);
+chk('its signal is filed as applied', !fs.existsSync(p('Inbox/2026-10-24-0810--grok--claude--amend--move-todo.md'))
+  && /done \(applied by librarian/.test(read(p('Inbox/Done/2026-10-24-0810--grok--claude--amend--move-todo.md'))));
+const reopened = read(p('Reminders/2026-10-23--expired-errand.md'));
+chk('a replace-with amend reopens an expired errand and moves it back', !!reopened && /\*\*Status:\*\* open/.test(reopened) && /\*\*Due:\*\* 2026-10-24/.test(reopened)
+  && !fs.existsSync(p('Reminders/Done/2026-10-23--expired-errand.md')), reopened);
+chk('an amend on a non-reminder is left for a person', fs.existsSync(p('Inbox/2026-10-24-0820--grok--claude--amend--topic-fact.md'))
+  && !/boiler/.test(read(p('Memory/topics/home.md'))));
 
 console.log('\nIdempotency and open-items hook');
 const again = run(['--dry-run']);

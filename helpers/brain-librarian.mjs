@@ -118,6 +118,51 @@ function applyCloseSignals(brain, run, now) {
   }
 }
 
+// 1b. structured amend signals on reminders -> apply the field changes
+// Two shapes are understood, both from MANIFESTO §6: header lines `- **Set:** Due = 2026-10-27`
+// (one per field) and body lines "replace `- **Due:** X` with `- **Due:** Y`". Only reminder
+// fields with a bounded meaning are applied; anything else stays for a person to judge.
+const AMEND_FIELDS = ['due', 'status', 'until', 'scope', 'nudge'];
+export function parseAmend(text) {
+  const changes = [];
+  for (const line of text.split(/\r?\n/)) {
+    const set = line.match(/^- \*\*Set:\*\*\s*([A-Za-z]+)\s*=\s*(.+)$/);
+    if (set) { changes.push({ field: set[1], value: set[2].trim() }); continue; }
+    for (const rep of line.matchAll(/replace\s+`- \*\*([A-Za-z]+):\*\*[^`]*`\s+with\s+`- \*\*([A-Za-z]+):\*\*\s*([^`]*)`/gi)) {
+      if (rep[1].toLowerCase() === rep[2].toLowerCase()) changes.push({ field: rep[1], value: rep[3].trim() });
+    }
+  }
+  return changes.filter((c) => AMEND_FIELDS.includes(c.field.toLowerCase()))
+    .map((c) => ({ field: c.field[0].toUpperCase() + c.field.slice(1).toLowerCase(), value: c.value }));
+}
+
+function applyAmendSignals(brain, run, now) {
+  const inbox = path.join(brain, 'Inbox');
+  const reminders = path.join(brain, 'Reminders');
+  for (const f of mdFiles(inbox)) {
+    const file = path.join(inbox, f);
+    const text = fs.readFileSync(file, 'utf8');
+    const h = readFields(text);
+    if (firstWord(h.type) !== 'amend' || firstWord(h.status) === 'done') continue;
+    const ref = cleanRef(h.re);
+    if (!/^Reminders\//.test(ref)) continue;  // only reminders are mechanical; other amends need judgement
+    const changes = parseAmend(text);
+    if (!changes.length) { run.note(`amend signal ${f}: no structured change found; left for a person`); continue; }
+    const candidates = [path.join(brain, ref), path.join(reminders, path.basename(ref)), path.join(reminders, 'Done', path.basename(ref))];
+    const target = candidates.find((c) => fs.existsSync(c) && c.endsWith('.md'));
+    if (!target) { run.note(`amend signal ${f}: target "${ref}" not found; left for a person`); continue; }
+    let t = fs.readFileSync(target, 'utf8');
+    for (const c of changes) t = setField(t, c.field, c.value);
+    t = t.replace(/^- \*\*Last updated:\*\*.*$/m, `- **Last updated:** ${now.stamp}`);
+    t = `${t.trimEnd()}\n- Amended: ${now.stamp} by ${h.from || 'another AI'} (${changes.map((c) => `${c.field} = ${c.value}`).join(', ')}; signal ${f})\n`;
+    run.write(target, t, `amended by signal from ${h.from || '?'}`);
+    const status = firstWord(readFields(t).status);
+    if (path.dirname(target) === path.join(reminders, 'Done') && ['open', 'snoozed'].includes(status)) run.move(target, reminders, 'reopened by amend');
+    run.write(file, setField(text, 'Status', `done (applied by librarian ${now.stamp})`), 'signal applied');
+    run.move(file, path.join(inbox, 'Done'), 'signal applied');
+  }
+}
+
 // 2. expire errands and lapsed items; file anything already finished
 function expireAndFileReminders(brain, run, now) {
   const dir = path.join(brain, 'Reminders');
@@ -310,6 +355,7 @@ export function renderIndex(brain, now = easternNow()) {
 export function runLibrarian(brain, { dryRun = false, now = easternNow() } = {}) {
   const run = makeRunner(brain, dryRun);
   applyCloseSignals(brain, run, now);
+  applyAmendSignals(brain, run, now);
   expireAndFileReminders(brain, run, now);
   fileHandledSignals(brain, run, now);
   ageOut(brain, run, now);

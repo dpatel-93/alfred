@@ -399,16 +399,24 @@ yesterday's errands to carry over, the routines that fall today; the middle is G
 brief and the week ahead; the right is open to-dos, what each project is waiting on, signals
 waiting between AIs, and an end-of-day card that lists what got done and tidies up.
 
-Every item has **Done**, **Tomorrow** and **Snooze**. What an action does depends on who wrote
-the file, because the brain's rule is one writer per file (MANIFESTO §6):
-
-| The reminder's Author | Done | Tomorrow / Snooze |
-|---|---|---|
-| Claude Code / Alfred | Edits the file in place, moves it to `Reminders/Done/` | Edits the `Due` line in place |
-| Grok (or any other AI) | Writes a `close` signal in `Inbox/` from `user`, then runs the Librarian pass, which applies it at once | Writes an `amend` signal; the item shows **pending** until Grok applies it on its next Drive sync |
+Every item has **Done**, **Tomorrow** and **Snooze**. They edit the reminder file in place
+whoever wrote it (MANIFESTO rule 2: any AI edits any file), add a dated `Closed:` or `Moved:`
+line naming the dashboard, and regenerate the brain's `index.md` at once so the next AI that
+reads it, Grok in the car included, sees the change. Signals left in `Inbox/` by other AIs
+(`close`, and structured `amend`s on reminders) are applied by the Librarian pass, which runs
+every ten minutes while the dashboard is up and the moment a signal lands.
 
 The view re-reads the brain whenever a watched folder changes on disk (Drive for Desktop
 lands Grok's car-side edits within seconds), every two minutes otherwise, and on Refresh.
+
+**Calendar.** With Google Calendar connected (Settings → Google Calendar, a one-time OAuth
+client from the Google Cloud Console), Alfred keeps a dedicated "Second Brain" calendar on the
+account in step with the brain: every open dated reminder is an all-day event there, closing
+the reminder removes it, and an event anyone creates in that calendar (Grok through its own
+Google Calendar connector, the phone, you) becomes a reminder file; moving or deleting the
+event moves or closes the reminder. The Day view's month grid shows a dot per item per day
+across every calendar the account sees, shared calendars and invitations included, and a
+day's agenda on click. Only a refresh token is stored, in an owner-only file under `~/.alfred`.
 
 The **bench strip** in the Day header shows each AI seat's state (ready, needs sign-in, not
 installed) with a Sign in button that opens the provider's own login console. At startup, if
