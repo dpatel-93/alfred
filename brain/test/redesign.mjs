@@ -373,7 +373,8 @@ if (!(await up())) {
           { file: 'Routines/test-review.md', title: 'Weekly review', schedule: 'Fridays', status: 'active', today: false },
           { file: 'Routines/test-odd.md', title: 'Deep clean', schedule: 'every other Friday', status: 'active', today: false },
         ],
-        paused: [{ file: 'Routines/test-water.md', title: 'Water the plants', schedule: 'Mondays and Thursdays', status: 'paused', today: false }],
+        paused: [{ file: 'Routines/test-water.md', title: 'Water the plants', schedule: 'Mondays and Thursdays 08:00', time: '08:00',
+          status: 'paused', today: false }],
       };
       const timed = { id: 'ev-1', title: 'Test event', date: iso, end: null, time: '09:30', endTime: '10:00', allDay: false,
         location: 'Room 4', by: 'grok', line: 8 };
@@ -767,10 +768,11 @@ if (!(await up())) {
       head: document.getElementById('ie-title').textContent, title: document.getElementById('ie-f-title').value,
       freq: document.getElementById('ie-f-freq').value,
       days: [...document.querySelectorAll('.ie-modal .ie-days input')].filter((c) => c.checked).map((c) => c.getAttribute('aria-label')),
+      time: document.getElementById('ie-f-time').value,
     }));
-    chk(tag('Day: editing a routine parses "Mondays and Thursdays" back into the builder'),
+    chk(tag('Day: editing a routine parses "Mondays and Thursdays 08:00" back into the days and the time'),
       routinePrefill.head === 'Edit routine' && routinePrefill.title === 'Water the plants' && routinePrefill.freq === 'weekly'
-        && routinePrefill.days.join() === 'Monday,Thursday', JSON.stringify(routinePrefill));
+        && routinePrefill.days.join() === 'Monday,Thursday' && routinePrefill.time === '08:00', JSON.stringify(routinePrefill));
     await page.check(ie + ' input[aria-label="Saturday"]');
     await save();
     await waitCalls(12);

@@ -1643,3 +1643,58 @@ to add or fix an event.
 
 **Window.** The server sends the 1st of last month through the last day of next month, so
 months beyond it carry reminder dots only and the note says so.
+
+## 9. Add and edit (2026-10-23)
+
+The Day view can write, not only read: add a to-do, reminder, errand, routine or event, edit a
+reminder or a routine, and pause or resume a routine. Grok can already do all of this from his
+side; this gives the HUD the same reach. One dialog does all of it (the item editor). No new
+tokens; the classes sit in one CSS block, `ITEM EDITOR`. Built with `el()`/`textContent` only.
+
+| Surface | Where | Notes |
+|---|---|---|
+| `+ Add` (`#day-add`, `.btn.primary`) | Day header, `.day-tools`, before Refresh | opens the editor on To-do |
+| `Edit` (`.btn.day-act`) | every reminder row's action group: Overdue, Due today, Carry over, This week, To-dos, Later, Watching (and the calendar agenda's rows) | after Done / Tomorrow, before the `⋯` snooze; opens the editor prefilled from the row. Rows marked pending have no actions, so no Edit |
+| `Edit` | "Routines today" rows | routine rows have no Done |
+| My routines (`details.day-card`, collapsed) | Day right column, after Watching | every routine: active (today's first), then paused (grey `badge idle`, `.day-item.paused`); each row has its full schedule, Edit and Pause or Resume; a `+ Add routine` button at the foot |
+
+**The editor** is a `.modal`/`.scrim` pair (`.modal.ie-modal`) created on open and removed on
+close: `role="dialog"`, `aria-modal="true"`, `aria-labelledby` its title. Focus moves to the
+Title field; Tab and Shift+Tab wrap inside it; Esc and Cancel (and the ✕) close it and return
+focus to what opened it. A save repaints Day and replaces the row's buttons, so focus then goes
+to the same kind of button for the same file (`data-act` / `data-file`), else to `+ Add`.
+Keys typed in the dialog never reach the page's one-key shortcuts. The toast stack is raised
+above the dialog while it is open (`body.ie-open`).
+
+Adding: a type choice at the top (`.btn.ie-type`, `aria-pressed`; selected is `--blue`).
+Editing a reminder replaces it with a Kind select (to-do, reminder, errand, watch).
+
+| Type | Fields |
+|---|---|
+| To-do | title, scope, note (no date) |
+| Reminder | title, date (required), time, scope, note |
+| Errand | title, scope, note (the date is today; no date field) |
+| Routine | title, schedule builder, time, note |
+| Event | title, date (required), end date, start and end time, place |
+
+Inputs share the Tell Grok input's look (`--surface-2`, `--border-focusable`, 2px `--blue`
+`:focus-visible` ring). Fields not used by the chosen type are `hidden`, not disabled.
+
+**Schedule builder.** Repeats: Daily, Weekdays, Weekends, Weekly on (Mon to Sun checkboxes),
+Monthly on (day 1 to 31), or Other (free text). It writes the words the brain stores, and a
+"Saved as: ..." line under it shows them: `daily`, `weekdays`, `weekends`, `Mondays`,
+`Mondays and Thursdays`, `Mondays, Wednesdays and Fridays`, `monthly on the 15th` (st, nd, rd,
+th, with 11 to 13 as th). Editing parses the stored text back into the builder when it is one of
+those shapes (case-insensitive); anything else opens as free text with a hint. The brain keeps
+a routine's time inside its schedule ("Mondays 08:00"), so the editor reads the time into its own
+field and compares schedules without it; an update sends the schedule only when its words changed.
+
+**Saving** is `POST /api/assistant/item` (`op` create or update; `type` reminder, routine or
+event). An update sends only the fields that changed (a note is appended by the server, so it
+is sent only when typed); a cleared date is `due: "none"`, a cleared time is `null`. Nothing
+changed is refused inline. Checks before sending: title; a reminder's date; a weekly routine
+needs a day; a monthly day is 1 to 31; an event needs a date and cannot end first. Save is
+disabled while the request is in flight. On 200 the editor closes, a toast says `Saved: <title>`
+and the reply's feed is painted; on a refusal the editor stays open and the server's message
+shows in `.ie-error` (`role="alert"`, `--red` rule) and in a toast. Pause and Resume send just
+`{ status }` from the row, with the row marked busy meanwhile.

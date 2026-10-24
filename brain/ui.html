@@ -3888,6 +3888,9 @@
   }
 
   function scheduleKey(s) { return String(s || '').trim().replace(/\.$/, '').toLowerCase(); }
+  // The brain stores a routine's time inside its schedule ("Mondays 08:00"); the feed sends that whole
+  // string plus the time on its own, and the editor has a separate time field, so compare without it.
+  function scheduleBase(s) { return String(s || '').replace(/\s*\b\d{2}:\d{2}\b/, '').trim(); }
   function ieTimeOf(v) { return IE_TIME.test(String(v || '')) ? v : ''; }
   function ieDateOf(v) { return ISO_DATE.test(String(v || '')) ? v : ''; }
   function ieKindOf(item) { return String((item && item.kind) || 'reminder').toLowerCase(); }
@@ -4018,7 +4021,7 @@
     }
     var f = {};
     if (title !== String(item.title || '')) f.title = title;
-    if (scheduleKey(sched.text) !== scheduleKey(item.schedule)) f.schedule = sched.text;
+    if (scheduleKey(sched.text) !== scheduleKey(scheduleBase(item.schedule))) f.schedule = sched.text;
     if (time !== ieTimeOf(item.time)) f.time = time || null;
     if (note) f.note = note;
     if (!Object.keys(f).length) return { error: 'Nothing has changed yet.', focus: n.title };
@@ -4229,14 +4232,14 @@
     } else if (edit === 'routine') {
       n.title.value = String(item.title || '');
       n.time.value = ieTimeOf(item.time);
-      var parsed = parseSchedule(item.schedule);
+      var parsed = parseSchedule(scheduleBase(item.schedule));
       if (parsed) {
         n.freq.value = parsed.freq;
         (parsed.days || []).forEach(function (i) { n.dayBoxes[i].checked = true; });
         if (parsed.monthDay) n.monthDay.value = String(parsed.monthDay);
       } else {
         n.freq.value = 'custom';
-        n.custom.value = String(item.schedule || '');
+        n.custom.value = scheduleBase(item.schedule);
       }
     }
 
