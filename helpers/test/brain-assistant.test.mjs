@@ -192,7 +192,7 @@ chk('a file older than a day is not', !feed.recent.some((r) => r.file === 'Remin
 chk('newest first', feed.recent.every((r, i, a) => i === 0 || a[i - 1].ageMinutes <= r.ageMinutes));
 
 chk('items carry a short author and whether we may edit them',
-  feed.today.find((i) => i.title === 'A Grok errand')?.author === 'grok' && feed.today.find((i) => i.title === 'A Grok errand')?.ours === false
+  feed.upcoming.find((i) => i.title === 'A Grok errand')?.author === 'grok' && feed.upcoming.find((i) => i.title === 'A Grok errand')?.ours === false
   && feed.today.find((i) => i.title === 'Yesterday\'s errand')?.author === 'Claude Code' && feed.today.find((i) => i.title === 'Yesterday\'s errand')?.ours === true);
 
 fs.rmSync(ROOT, { recursive: true, force: true });

@@ -97,7 +97,7 @@ const home = read(p('Memory/topics/home.md'));
 chk('expired temporary memory line removed', !/Away this week/.test(home) && /Permanent fact/.test(home) && /Future temp/.test(home));
 chk('expired line kept in Archive', /Away this week/.test(read(p('Archive/2026-10/expired-memory.md'))));
 const index = read(p('index.md'));
-chk('index lists today\'s errand under Due today', /### Due today \(1\)[\s\S]*Today errand/.test(index));
+chk('index lists today\'s errand and the reopened one under Due today', /### Due today \(2\)[\s\S]*Expired errand[\s\S]*Today errand|### Due today \(2\)[\s\S]*Today errand[\s\S]*Expired errand/.test(index), index.slice(0, 600));
 chk('index lists the overdue item', /### Overdue \(1\)[\s\S]*Overdue thing/.test(index));
 chk('index offers yesterday\'s errand for carry-over', /carry over \(1\)[\s\S]*Yesterday errand/.test(index));
 chk('index flags the stale signal', /older than 7 days/.test(index));
