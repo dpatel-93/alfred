@@ -36,16 +36,21 @@ const cap = (f) => f.split(' ').map((w) => w[0].toUpperCase() + w.slice(1)).join
 const titleOf = (text, fallback) => (text.match(/^#\s+(.+)$/m) || [, fallback])[1].trim();
 
 // --- Reading one note ----------------------------------------------------------------
+// A whole-file replacement sits between two "=====" lines, or between
+// "<!-- BEGIN REPLACEMENT -->" and "<!-- END REPLACEMENT -->" (both seen from Grok's bots).
+const FENCE_RE = /^(?:={5,}|<!--\s*(?:BEGIN|END)\s+REPLACEMENT\s*-->)\s*$/i;
+
 export function parseNote(name, text) {
-  // The note's own fields come from above any "=====" replacement block, never from inside it
+  // The note's own fields come from above any replacement block, never from inside it
   // (a replacement routine carries its own Kind, Type and Status lines).
-  const h = readFields(text.split(/^={5,}\s*$/m)[0]);
+  const lines = text.split(/\r?\n/);
+  const firstFence = lines.findIndex((l) => FENCE_RE.test(l));
+  const h = readFields((firstFence >= 0 ? lines.slice(0, firstFence) : lines).join('\n'));
   const type = firstWord(h.type);
   const target = [h.target, h.re].map(cleanRef).find((r) => /\.md$/i.test(r)) || '';
   const set = {};
   const add = [];
   const cancel = [];
-  const lines = text.split(/\r?\n/);
   for (const line of lines) {
     // "- **Set:** Due = 2026-10-30", or several on one line: "- **Set:** Due: 2026-10-24; Nudge: wake + brief".
     const s = line.match(/^- \*\*Set:\*\*\s*(.+)$/);
@@ -65,11 +70,11 @@ export function parseNote(name, text) {
   }
   // A calendar capture carries plain event lines in its body (the Travel Bot shape).
   if (type === 'capture' && target === CALENDAR_FILE && !add.length) add.push(...parseEvents(text).events);
-  // A whole-file replacement sits between two "=====" lines.
-  const fences = lines.map((l, i) => (/^={5,}\s*$/.test(l) ? i : -1)).filter((i) => i >= 0);
+  const fences = lines.map((l, i) => (FENCE_RE.test(l) ? i : -1)).filter((i) => i >= 0);
   const replace = fences.length >= 2 ? `${lines.slice(fences[0] + 1, fences[1]).join('\n').trim()}\n` : null;
   const status = firstWord(h.status) || 'open';
-  const from = (h.from || (name.match(/^\d{4}-\d{2}-\d{2}-\d{4}--([a-z0-9-]+)--/i) || [])[1] || '').toLowerCase();
+  // "grok (Cloud Engineering Bot)" is grok: sub-bots sign with their bot name in brackets.
+  const from = firstWord(h.from || (name.match(/^\d{4}-\d{2}-\d{2}-\d{4}--([a-z0-9-]+)--/i) || [])[1] || '');
   const close = type === 'close' || ['done', 'cancelled'].includes(firstWord(set.status));
   const actionable = NOTE_TYPES.includes(type) && !!target
     && (close || Object.keys(set).length > 0 || add.length > 0 || cancel.length > 0 || !!replace);
@@ -87,6 +92,12 @@ export function openNotes(brain) {
 // --- Where a note points ---------------------------------------------------------------
 function resolveTarget(brain, ref) {
   if (ref === CALENDAR_FILE) return { kind: 'calendar', rel: ref };
+  // Another signal: a close note may file it (Grok can't move files the PC made).
+  if (/^Inbox\/(?:Done\/)?[^/]+\.md$/i.test(ref)) {
+    const base = path.basename(ref);
+    const rel = [`Inbox/${base}`, `Inbox/Done/${base}`].find((r) => fs.existsSync(path.join(brain, r))) || ref;
+    return { kind: 'signal', rel, full: path.join(brain, rel), exists: fs.existsSync(path.join(brain, rel)), inDone: /^Inbox\/Done\//.test(rel) };
+  }
   const base = path.basename(ref);
   const tries = /^Reminders\//.test(ref) || !ref.includes('/')
     ? [ref, `Reminders/${base}`, `Reminders/Done/${base}`, ...(!ref.includes('/') ? [`Routines/${base}`] : [])] : [ref];
@@ -203,6 +214,18 @@ function applyToCalendar(brain, n, { asOf, now }) {
   return done.join('; ');
 }
 
+// A close note on another signal files it: Status done, a Handled line, moved to Inbox/Done/.
+function fileSignal(brain, n, t, { run, now, by }) {
+  if (!n.close) fail(`a signal can only be closed by note, not changed (${t.rel})`);
+  if (!t.exists) fail(`target "${n.target}" not found`);
+  if (t.full === path.join(brain, n.file)) fail('a note cannot close itself');
+  if (t.inDone) return `already filed: ${t.rel}`;
+  const text = setField(fs.readFileSync(t.full, 'utf8'), 'Status', 'done');
+  run.write(t.full, `${text.trimEnd()}\n- Handled: ${now.stamp} by ${by}\n`, 'signal closed by change note');
+  run.move(t.full, path.join(brain, 'Inbox', 'Done'), 'signal closed by change note');
+  return `filed ${t.rel}`;
+}
+
 // The Librarian's step 1: apply every open change note, oldest first.
 export function applyChangeNotes(brain, run, now = easternNow()) {
   for (const n of openNotes(brain)) {
@@ -219,6 +242,7 @@ export function applyChangeNotes(brain, run, now = easternNow()) {
     try {
       const t = resolveTarget(brain, n.target);
       if (t.kind === 'calendar') outcome = applyToCalendar(brain, n, ctx);
+      else if (t.kind === 'signal') outcome = fileSignal(brain, n, t, ctx);
       else {
         if (!t.exists && !(n.replace && t.kind === 'file')) fail(`target "${n.target}" not found`);
         const later = supersededBy(t, n);
@@ -254,7 +278,7 @@ export function pendingChanges(brain) {
       out.calendar.cancel.push(...n.cancel);
       continue;
     }
-    if (!t.exists || supersededBy(t, n)) continue;
+    if (!['reminder', 'routine'].includes(t.kind) || !t.exists || supersededBy(t, n)) continue;
     let set = n.set;
     if (n.replace) {
       const f = readFields(n.replace);

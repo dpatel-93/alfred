@@ -69,6 +69,13 @@ put('Inbox/2026-10-26-0845--grok--librarian--amend--calendar.md', note('amend', 
 put('Inbox/2026-10-26-0850--grok--librarian--capture--ignite.md', note('capture', 'Calendar/events.md', '2026-10-26 08:50 ET',
   '\nPlease add this line:\n\n- 2026-11-17..2026-11-20 Microsoft Ignite @ San Francisco (added by grok)\n'));
 put('Inbox/2026-10-26-0855--grok--claude--amend--topic.md', note('amend', 'Memory/topics/home.md', '2026-10-26 08:55 ET', '\nAdd a line about the boiler.\n'));
+// Shapes seen from Grok's bots on 2026-10-24: a close note that files another signal, and a
+// whole-file replacement between HTML comment markers, both signed "grok (<bot name>)".
+put('Inbox/2026-10-25-2100--user--grok--handoff--old-ask.md', '# Handoff: old ask\n\n- **Kind:** signal\n- **Type:** handoff\n- **From:** user\n- **To:** grok\n- **Status:** open\n- **Created:** 2026-10-25 21:00 ET\n\nDone already.\n');
+put('Inbox/2026-10-26-0900--grok--librarian--close--file-old-ask.md', note('close', 'Inbox/2026-10-25-2100--user--grok--handoff--old-ask.md', '2026-10-26 09:00 ET', '', 'grok (Grok Bot)'));
+put('Outputs/news/cloud/2026-10-26-brief.md', '# Brief\n\nPlaceholder.\n');
+put('Inbox/2026-10-26-0905--grok--all--amend--brief.md', note('amend', 'Outputs/news/cloud/2026-10-26-brief.md', '2026-10-26 09:05 ET',
+  '\nReplace its whole content with:\n\n<!-- BEGIN REPLACEMENT -->\n# Cloud brief, Monday\n\nThree verified stories, with sources, written by the cloud bot.\n<!-- END REPLACEMENT -->\n', 'grok (Cloud Engineering Bot)'));
 
 // --- Reading ---
 console.log('Reading');
@@ -101,7 +108,8 @@ chk('the index\'s next 7 days include waiting calendar changes', upcomingEvents(
 console.log('\nApplying');
 const before = read('Reminders/2026-10-21--dentist.md');
 runLibrarian(ROOT, { dryRun: true, now: NOW });
-chk('a dry run changes nothing', read('Reminders/2026-10-21--dentist.md') === before && openNotes(ROOT).length === 12);
+chk('a dry run changes nothing', read('Reminders/2026-10-21--dentist.md') === before && openNotes(ROOT).length === 14);
+chk('a bot\'s signature "grok (Cloud Engineering Bot)" reads as grok', parseNote('b.md', read('Inbox/2026-10-26-0905--grok--all--amend--brief.md')).from === 'grok');
 
 // --- The Librarian applies ---
 const actions = runLibrarian(ROOT, { now: NOW });
@@ -118,6 +126,8 @@ chk('a later desk change wins: the note is filed as superseded and nothing is ov
 const past = read('Inbox/2026-10-26-0820--grok--librarian--amend--past.md');
 chk('a change that fails its checks stays in the Inbox marked for a person', /\*\*Status:\*\* needs a look \(2026-10-01 is in the past\)/.test(past)
   && /\*\*Due:\*\* 2026-10-30/.test(read('Reminders/2026-10-23--past.md')), past);
+chk('a refused ("needs a look") note is never shown as applied', collectOpenItems(ROOT, NOW).all.find((i) => i.file === 'Reminders/2026-10-23--past.md')?.due === '2026-10-30'
+  && !pendingChanges(ROOT).reminders.has('2026-10-23--past.md'));
 chk('a user routine is paused, with the date', /\*\*Status:\*\* paused \(since 2026-10-26\)/.test(read('Routines/user-walk.md')));
 const errands = read('Routines/grok-errands.md');
 const kept = fs.readdirSync(path.join(ROOT, 'Archive/2026-10/replaced')).find((f) => f.startsWith('Routines__grok-errands--'));
@@ -132,6 +142,11 @@ chk('calendar notes add a line and strike one through (never delete)', /- 2026-1
   && /- ~~2026-10-31 19:00 Dinner with S\. @ Home~~ \(cancelled by user via grok\)/.test(calText), calText);
 chk('a calendar capture is added once, under its month', (calText.match(/Microsoft Ignite/g) || []).length === 1 && /## 2026-11/.test(calText)
   && readCalendar(ROOT).problems.length === 0);
+chk('a close note files another signal it points at', exists('Inbox/Done/2026-10-25-2100--user--grok--handoff--old-ask.md')
+  && /\*\*Status:\*\* done/.test(read('Inbox/Done/2026-10-25-2100--user--grok--handoff--old-ask.md'))
+  && /- Handled: .* by grok \(change note/.test(read('Inbox/Done/2026-10-25-2100--user--grok--handoff--old-ask.md')));
+chk('a replacement between HTML comment markers is applied', read('Outputs/news/cloud/2026-10-26-brief.md').startsWith('# Cloud brief, Monday')
+  && exists('Inbox/Done/2026-10-26-0905--grok--all--amend--brief.md'), read('Outputs/news/cloud/2026-10-26-brief.md'));
 chk('a note with nothing structured is left for a person, untouched', exists('Inbox/2026-10-26-0855--grok--claude--amend--topic.md')
   && /\*\*Status:\*\* open/.test(read('Inbox/2026-10-26-0855--grok--claude--amend--topic.md')));
 chk('the run is logged', actions.some((a) => /change note applied/.test(a)) && /Librarian log/.test(read('System/logs/librarian-2026-10.md')));
