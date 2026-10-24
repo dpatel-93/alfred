@@ -259,11 +259,44 @@ if (hadIndex) {
 // would make the brain suite assert against the developer's own notes.
 try { fs.unlinkSync(indexPath); } catch { /* none to remove */ }
 
+// A throwaway SHARED brain for the day view. Without this the test server reads
+// the shared-brain path from the developer's profile — the real Google Drive
+// brain — and the api suite's close/tomorrow actions would edit real reminders.
+// Dates are today's Eastern date, because the feed buckets by it.
+const BRAIN = path.join(os.tmpdir(), `alfred-test-brain-${PORT}`);
+function makeTestBrain() {
+  fs.rmSync(BRAIN, { recursive: true, force: true });
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date()).map((x) => [x.type, x.value]));
+  const today = `${p.year}-${p.month}-${p.day}`;
+  const put = (rel, text) => {
+    fs.mkdirSync(path.dirname(path.join(BRAIN, rel)), { recursive: true });
+    fs.writeFileSync(path.join(BRAIN, rel), text, 'utf8');
+  };
+  const reminder = (kind, due, author, title) =>
+    `# ${title}\n\n- **Kind:** ${kind}\n- **Status:** open\n- **Due:** ${due}\n- **Scope:** personal\n- **Author:** ${author}\n\nBody.\n`;
+  put('README.md', '# Test brain\n');
+  put('Reminders/README.md', '# Reminders\n');
+  put('Reminders/2026-01-01--ours-errand.md', reminder('errand', today, 'Claude Code (migrated; originally captured by Grok)', 'Our errand'));
+  put('Reminders/2026-01-01--grok-errand.md', reminder('errand', today, 'grok', 'A Grok errand'));
+  put('Reminders/2026-01-01--grok-todo.md', reminder('todo', 'none', 'grok', 'A Grok to-do'));
+  put('Routines/user-daily.md', '# The user: daily thing\n\n- **Kind:** routine\n- **Runs:** the user\n- **Schedule:** daily\n- **Status:** active\n');
+  put(`Outputs/briefs/${today}.md`, `# Morning brief\n\n- Last updated: ${today} 7:00 AM ET\n\n## Top of the brief\n1. **Test headline.** Body.\n`);
+  put('Projects/demo/status.md', '# Demo\n\n- **Status:** Active\n- **Track:** Personal\n\n## Where it stands\n- (2026-01-01) Going fine.\n\n## Next\n1. Ship it.\n');
+  put('Inbox/README.md', '# Inbox\n');
+  return BRAIN;
+}
+makeTestBrain();
+
 const server = spawn(process.execPath, [path.join(HERE, '..', 'server.mjs')], {
   env: {
     ...process.env,
     PORT: String(PORT),
     ALFRED_VAULT: path.join(HERE, 'fixtures', 'vault'),
+    ALFRED_SHARED_BRAIN: BRAIN,
+    // The Day view auto-opens a sign-in console for a signed-out seat; never on a test run.
+    ALFRED_CC_DRY_RUN: '1',
     // Never the live token file — see TOKEN_FILE in server.mjs.
     ALFRED_TOKEN_FILE: path.join(os.tmpdir(), `alfred-test-${PORT}.token`),
     // The brain suite exists to cover the DEGRADED path — keyword fallback with

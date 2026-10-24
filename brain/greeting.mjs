@@ -194,7 +194,9 @@ function dayLines(today) {
  * @param {?object} o.today      brain-assistant.mjs feed, or null to leave the day out
  */
 export function composeGreetingLines({ name, now, counts, notes, indexStale, mcpServers, returning, today = null }) {
-  const lines = [{ label: null, text: `${timeOfDayGreeting(now)}, ${name}. ${returning ? 'Welcome back.' : 'Welcome.'}` }];
+  // No nickname configured: greet without one rather than with a placeholder.
+  const salute = name && !/^(there|ceo)$/i.test(name) ? `${timeOfDayGreeting(now)}, ${name}.` : `${timeOfDayGreeting(now)}.`;
+  const lines = [{ label: null, text: `${salute} ${returning ? 'Welcome back.' : 'Welcome.'}` }];
   lines.push(...dayLines(today));
 
   const ready = [];

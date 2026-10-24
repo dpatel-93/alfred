@@ -6,7 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { collectOpenItems, easternNow, readFields, sharedBrainPath } from './brain-librarian.mjs';
+import { addDays, collectOpenItems, easternNow, readFields, runLibrarian, setField, sharedBrainPath } from './brain-librarian.mjs';
 
 export { sharedBrainPath };
 export const easternDate = () => easternNow().date;
@@ -78,12 +78,143 @@ export function brainNote(brain, rel) {
   return { status: 200, markdown: fs.readFileSync(full, 'utf8') };
 }
 
+// --- Who may edit a brain file in place? (MANIFESTO §6: its Author, or the Librarian) ---
+// The dashboard acts for Claude Code, whose hooks are also the Librarian's mechanical half.
+// A file whose Author is Claude Code, Claude, Alfred or the librarian is edited directly.
+// Anyone else's file gets a signal in Inbox/ instead; a `close` is then applied at once by
+// the Librarian pass (its sanctioned job), while an `amend` waits for the file's curator.
+const OURS = /^(claude( code)?|alfred|librarian)$/i;
+export function authorIsOurs(author) {
+  return OURS.test(String(author || '').split('(')[0].trim());
+}
+const KNOWN_AIS = ['grok', 'gemini', 'codex', 'claude', 'claude-code', 'librarian'];
+const curatorOf = (author) => {
+  const w = String(author || '').toLowerCase().split(/[\s(]/)[0];
+  return KNOWN_AIS.includes(w) ? w : 'grok';  // Reminders/ is Grok's shelf (Reminders/README.md)
+};
+
+// --- Signals: one small file in Inbox/, named and headed per MANIFESTO §6 ---
+const slugify = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'item';
+const hhmm = (now) => (now.stamp.match(/ (\d{2}):(\d{2}) ET$/) || ['', '00', '00']).slice(1, 3).join('');
+export function writeSignal(brain, { type, from = 'user', to, re, subject, body = '' }, now = easternNow()) {
+  const inbox = path.join(brain, 'Inbox');
+  fs.mkdirSync(inbox, { recursive: true });
+  const base = `${now.date}-${hhmm(now)}--${from}--${to}--${type}--${slugify(subject)}`;
+  let name = `${base}.md`;
+  for (let n = 2; fs.existsSync(path.join(inbox, name)); n++) name = `${base}-${n}.md`;
+  const text = [`# ${type[0].toUpperCase()}${type.slice(1)}: ${subject}`, '',
+    '- **Kind:** signal', `- **Type:** ${type}`, `- **From:** ${from}`, `- **To:** ${to}`, `- **Re:** ${re}`,
+    '- **Status:** open', `- **Created:** ${now.stamp}`, '', body.trim(), ''].join('\n');
+  fs.writeFileSync(path.join(inbox, name), text, 'utf8');
+  return `Inbox/${name}`;
+}
+
+// --- Actions on a reminder: close, tomorrow, snooze (to a date), carryover (an expired errand) ---
+// Returns {status, ...} like brainNote so the server can pass it straight through.
+const ACTIONS = ['close', 'tomorrow', 'snooze', 'carryover'];
+const BY_RE = /^[a-z][a-z-]{1,19}$/;
+export function applyAction(brain, { file, action, due, by = 'user' } = {}, now = easternNow()) {
+  if (!brain || !fs.existsSync(brain)) return { status: 404, error: 'shared brain not found' };
+  if (!ACTIONS.includes(action)) return { status: 400, error: `unknown action: ${action}` };
+  if (!BY_RE.test(by)) return { status: 400, error: 'bad actor name' };
+  const rel = String(file || '').replace(/\\/g, '/');
+  const inDone = /^Reminders\/Done\/[^/]+\.md$/.test(rel);
+  if (!/^Reminders\/[^/]+\.md$/.test(rel) && !inDone) return { status: 400, error: 'only Reminders/ files take actions' };
+  if (/readme\.md$/i.test(rel)) return { status: 400, error: 'not a reminder' };
+  const full = path.join(brain, rel);
+  if (!fs.existsSync(full)) return { status: 404, error: 'not found: it may have just been closed or archived' };
+  let text = fs.readFileSync(full, 'utf8');
+  const h = readFields(text);
+  const title = titleOf(text, path.basename(rel));
+  const ours = authorIsOurs(h.author);
+  const to = curatorOf(h.author);
+  const moveTo = (dir) => {
+    fs.mkdirSync(dir, { recursive: true });
+    const dest = path.join(dir, path.basename(full));
+    if (!fs.existsSync(dest)) fs.renameSync(full, dest);
+  };
+
+  if (action === 'close') {
+    if (inDone) return { status: 400, error: 'already closed' };
+    if (ours) {
+      text = `${setField(text, 'Status', 'done').trimEnd()}\n- Closed: ${now.stamp} by ${by} (Alfred dashboard)\n`;
+      fs.writeFileSync(full, text, 'utf8');
+      moveTo(path.join(brain, 'Reminders', 'Done'));
+      return { status: 200, applied: true, via: 'direct', title };
+    }
+    const signal = writeSignal(brain, { type: 'close', from: by, to, re: rel, subject: title,
+      body: `The user marked this done on the Alfred dashboard at ${now.stamp}.` }, now);
+    runLibrarian(brain, { now });  // the Librarian applies close signals mechanically (MANIFESTO §9)
+    return { status: 200, applied: !fs.existsSync(full), via: 'signal', signal, title };
+  }
+
+  const newDue = action === 'snooze' ? (String(due || '').match(/^\d{4}-\d{2}-\d{2}$/) || [])[0]
+    : action === 'carryover' ? now.date : addDays(now.date, 1);  // carry-over means "today"
+  if (!newDue) return { status: 400, error: 'snooze needs due: YYYY-MM-DD' };
+  if (action === 'carryover' && !inDone) return { status: 400, error: 'carryover is for expired items in Reminders/Done/' };
+  const oldDue = h.due || 'none';
+  if (ours) {
+    text = setField(text, 'Due', newDue);
+    if (inDone) text = setField(text, 'Status', 'open');
+    text = `${text.trimEnd()}\n- Moved: ${now.stamp} to ${newDue} by ${by} (Alfred dashboard${inDone ? ', carried over' : ''})\n`;
+    fs.writeFileSync(full, text, 'utf8');
+    if (inDone) moveTo(path.join(brain, 'Reminders'));
+    return { status: 200, applied: true, via: 'direct', title, due: newDue };
+  }
+  const change = inDone
+    ? `Reopen it: set \`- **Status:** open\`, replace \`- **Due:** ${oldDue}\` with \`- **Due:** ${newDue}\`, and move it back to Reminders/.`
+    : `Replace \`- **Due:** ${oldDue}\` with \`- **Due:** ${newDue}\`.`;
+  const signal = writeSignal(brain, { type: 'amend', from: by, to, re: rel, subject: `${title} to ${newDue}`,
+    body: `${change}\nThe user moved it on the Alfred dashboard at ${now.stamp}.` }, now);
+  return { status: 200, applied: false, via: 'signal', pending: 'amend', signal, title, due: newDue };
+}
+
+// --- Projects: one line each from status.md, for the day view ---
+function projectLines(brain) {
+  const dir = path.join(brain, 'Projects');
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && !e.name.startsWith('_'))
+    .map((e) => {
+      const s = path.join(dir, e.name, 'status.md');
+      if (!fs.existsSync(s)) return null;
+      const text = fs.readFileSync(s, 'utf8');
+      const h = readFields(text);
+      const section = (name) => (text.split(/^## /m).find((c) => c.toLowerCase().startsWith(name)) || '').split('\n').slice(1).join('\n');
+      const first = (block) => { const m = block.match(/^\s*(?:[-*]|\d+\.)\s+(.+)$/m); return m ? plain(m[1]) : ''; };
+      return { file: `Projects/${e.name}/status.md`, name: e.name, title: titleOf(text, e.name),
+        status: firstWord(h.status) || '', track: h.track || '', updated: h['last updated'] || h.date || '',
+        stands: first(section('where it stands')), next: first(section('next')) };
+    })
+    .filter((p) => p && !['dormant', 'archived', 'done'].includes(p.status));
+}
+
+// --- Closed today: what the end-of-day panel can show as done ---
+function doneToday(brain, date) {
+  const dir = path.join(brain, 'Reminders', 'Done');
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir).filter((f) => f.endsWith('.md')).map((f) => {
+    const text = fs.readFileSync(path.join(dir, f), 'utf8');
+    const h = readFields(text);
+    const closedOn = (text.match(/^- Closed: (\d{4}-\d{2}-\d{2})/m) || [])[1] || null;
+    return { file: `Reminders/Done/${f}`, title: titleOf(text, f), kind: firstWord(h.kind), status: firstWord(h.status), closedOn };
+  }).filter((i) => i.status === 'done' && i.closedOn === date);
+}
+
 // --- The whole panel ---
 export function assistantFeed(brain = sharedBrainPath(), now = easternNow()) {
   const base = { generatedAt: now.stamp, date: now.date, weekday: DAYS[weekdayOf(now.date)], calendar: { connected: false } };
   if (!brain || !fs.existsSync(brain)) return { ...base, brain: false };
   const open = collectOpenItems(brain, now);
-  const slim = ({ file, title, kind, due, scope }) => ({ file, title, kind, due, scope });
+  // An item with a signal already in flight (a close waiting for the Librarian, an amend waiting
+  // for its curator) is marked so the dashboard shows "pending" instead of offering the action again.
+  const pending = new Map();
+  for (const s of open.signals) if (s.re && ['close', 'amend'].includes(s.type)) pending.set(path.basename(s.re), s.type);
+  const slim = ({ file, title, kind, due, scope, author }) => ({
+    file, title, kind, due, scope,
+    author: String(author || '').split('(')[0].trim(), ours: authorIsOurs(author),
+    pending: pending.get(path.basename(file)) || null,
+  });
   const undated = open.undated.map(slim);
   return {
     ...base,
@@ -96,7 +227,10 @@ export function assistantFeed(brain = sharedBrainPath(), now = easternNow()) {
     watching: undated.filter((i) => i.kind === 'watch'),
     later: open.later.map(slim),
     carryOver: open.carryOver.map(slim),
+    doneToday: doneToday(brain, now.date),
     routines: userRoutines(brain, now.date),
+    projects: projectLines(brain),
+    signals: open.signals.map(({ file, title, from, to, type, ageDays }) => ({ file, title, from, to, type, ageDays })),
   };
 }
 

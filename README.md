@@ -363,6 +363,7 @@ that governs you.
 
 | View | What it shows |
 |---|---|
+| **Day** | The landing page: what is due, Grok's morning brief, this week, open to-dos, project status, signals between AIs, and an end-of-day wrap-up — with Done / Tomorrow / Snooze actions that write back to the shared brain |
 | **Brain** | Your notes as a cortical graph, regions lit by recent activity |
 | **Workshop** | Your live GitHub repositories, with local clone state merged in where a clone exists |
 | **Protocols** | Every CLAUDE.md and settings file governing this machine, as a scope pyramid — click one to read or edit it |
@@ -390,9 +391,36 @@ Everything else happens from the search bar:
 | Reindex button (status rail) | Rebuilds the search index, with live progress; the Indexed stat next to it turns amber when the index is stale |
 | Settings (status rail) | Where an optional free cloud-model key is entered; the saved key is proven against the provider, and a rejected key is reported in the Interns panel. Also where GitHub is connected for the Workshop view |
 
+### Day
+
+The page Alfred opens on. It is the desk view of the shared brain (the Google Drive "Second
+Brain" folder that every AI reads): the left column is today — overdue, due today,
+yesterday's errands to carry over, the routines that fall today; the middle is Grok's morning
+brief and the week ahead; the right is open to-dos, what each project is waiting on, signals
+waiting between AIs, and an end-of-day card that lists what got done and tidies up.
+
+Every item has **Done**, **Tomorrow** and **Snooze**. What an action does depends on who wrote
+the file, because the brain's rule is one writer per file (MANIFESTO §6):
+
+| The reminder's Author | Done | Tomorrow / Snooze |
+|---|---|---|
+| Claude Code / Alfred | Edits the file in place, moves it to `Reminders/Done/` | Edits the `Due` line in place |
+| Grok (or any other AI) | Writes a `close` signal in `Inbox/` from `user`, then runs the Librarian pass, which applies it at once | Writes an `amend` signal; the item shows **pending** until Grok applies it on its next Drive sync |
+
+The view re-reads the brain whenever a watched folder changes on disk (Drive for Desktop
+lands Grok's car-side edits within seconds), every two minutes otherwise, and on Refresh.
+
+The **bench strip** in the Day header shows each AI seat's state (ready, needs sign-in, not
+installed) with a Sign in button that opens the provider's own login console. At startup, if
+Claude or Grok is signed out, a banner says so and the sign-in console opens once per server
+boot (a checkbox on the banner turns the auto-open off). Grok's subscription sign-in lapses
+every 7 days, so this is the Friday nudge made visible.
+
 ### Command Center
 
-One page that houses every AI you have signed into on this machine. A **seat** is any
+Retired from the navigation in favour of the Day view's bench strip; still reachable with the
+`3` key or `#command` in the URL while its remaining pieces (in-page consoles, the council)
+are being folded into the single ask box. A **seat** is any
 provider in `helpers/providers.json` that is the host (Claude Code), a CLI you can sign into
 (Grok Build, Antigravity) or the local Ollama daemon. Adding a
 seat is a data edit in that registry — there is no code to change.

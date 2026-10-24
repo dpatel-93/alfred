@@ -369,7 +369,7 @@ async function embed(text) {
 // the 1.5b model answered "approximately 7-8 miles per hour" instead of
 // refusing. This exact wording at temperature 0 fixed it — re-verify BOTH
 // out-of-vault refusal cases after any further wording change.
-const ASK_REFUSAL = "I don't have that in the vault, sir.";
+const ASK_REFUSAL = "I don't have that in the brain.";
 function buildAskPrompt(q, context) {
   return 'You are Alfred, a butler-voiced assistant answering only from the excerpts below. '
     + 'You are forbidden from using outside knowledge.\n\n'
@@ -2072,6 +2072,155 @@ async function handleAssistantNote(req, res, url) {
   }
 }
 
+// --- Day view actions: close / tomorrow / snooze / carryover on one reminder ---
+// The helper picks between an in-place edit (a file Claude Code authored) and an
+// Inbox signal (anyone else's file, MANIFESTO §6), and runs the Librarian pass so
+// a close lands at once. The reply carries the fresh feed: one round trip.
+const LIBRARIAN_MODULE = path.join(__dirname, '..', 'helpers', 'brain-librarian.mjs');
+
+async function handleAssistantAction(req, res) {
+  let body;
+  try { body = await readJsonBody(req); } catch { return sendJson(res, 400, { error: 'invalid JSON body' }); }
+  try {
+    const { applyAction, assistantFeed, sharedBrainPath } = await import(pathToFileURL(ASSISTANT_MODULE).href);
+    const { status, ...result } = applyAction(sharedBrainPath(), {
+      file: String(body.file || ''), action: String(body.action || ''),
+      due: body.due ? String(body.due) : undefined, by: 'user',
+    });
+    bumpBrainVersion();
+    return sendJson(res, status, status === 200 ? { ...result, feed: assistantFeed() } : result);
+  } catch (err) {
+    return sendJson(res, 500, { error: String(err.message || err).slice(0, 200) });
+  }
+}
+
+// POST /api/assistant/librarian: the mechanical pass on demand — the end-of-day
+// button, or "Grok left signals from the car". Same code the SessionStart hook runs.
+async function handleAssistantLibrarian(req, res) {
+  try {
+    const { assistantFeed, sharedBrainPath } = await import(pathToFileURL(ASSISTANT_MODULE).href);
+    const { runLibrarian } = await import(pathToFileURL(LIBRARIAN_MODULE).href);
+    const brain = sharedBrainPath();
+    if (!brain || !fs.existsSync(brain)) return sendJson(res, 404, { error: 'shared brain not found' });
+    const actions = runLibrarian(brain);
+    bumpBrainVersion();
+    return sendJson(res, 200, { actions, feed: assistantFeed() });
+  } catch (err) {
+    return sendJson(res, 500, { error: String(err.message || err).slice(0, 200) });
+  }
+}
+
+// --- Shared-brain change signal ---
+// Grok writes the brain from the car through Google Drive; Drive for Desktop puts
+// the file on this disk within seconds. A watcher on the day-to-day folders bumps a
+// version that /api/status (polled every 10s anyway) carries, so the day view
+// re-reads its feed when something changed instead of waiting for its own timer.
+// fs.watch is best-effort on a Drive-backed volume, so a slow mtime poll backs it up.
+const BRAIN_WATCH_DIRS = ['Reminders', 'Reminders/Done', 'Inbox', 'Routines', 'Outputs/briefs', 'Projects'];
+const BRAIN_WATCH_POLL_MS = 45 * 1000;
+let brainVersion = 0;
+let brainChangedAt = null;
+let brainBumpTimer = null;
+
+function bumpBrainVersion() {
+  clearTimeout(brainBumpTimer);
+  brainBumpTimer = setTimeout(() => { brainVersion++; brainChangedAt = new Date().toISOString(); }, 1500);
+  if (brainBumpTimer.unref) brainBumpTimer.unref();
+}
+
+function brainSignature(brain) {
+  let sig = '';
+  const stat = (p) => { try { return fs.statSync(p).mtimeMs; } catch { return 0; } };
+  for (const rel of BRAIN_WATCH_DIRS) {
+    const dir = path.join(brain, rel);
+    let entries = [];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      if (e.isFile() && e.name.endsWith('.md')) sig += `${rel}/${e.name}:${stat(path.join(dir, e.name))};`;
+      // Projects/<p>/status.md is the line the day view shows.
+      else if (rel === 'Projects' && e.isDirectory()) sig += `${rel}/${e.name}:${stat(path.join(dir, e.name, 'status.md'))};`;
+    }
+  }
+  return sig;
+}
+
+async function startBrainWatch() {
+  let brain;
+  try { brain = (await import(pathToFileURL(ASSISTANT_MODULE).href)).sharedBrainPath(); } catch { return; }
+  if (!brain || !fs.existsSync(brain)) return;
+  for (const rel of BRAIN_WATCH_DIRS) {
+    const dir = path.join(brain, rel);
+    if (!fs.existsSync(dir)) continue;
+    try {
+      const w = fs.watch(dir, { persistent: false, recursive: rel === 'Projects' }, () => bumpBrainVersion());
+      w.on('error', () => {});
+    } catch { /* no watcher here; the poll below still catches up */ }
+  }
+  let last = brainSignature(brain);
+  const t = setInterval(() => {
+    const now = brainSignature(brain);
+    if (now !== last) { last = now; bumpBrainVersion(); }
+  }, BRAIN_WATCH_POLL_MS);
+  if (t.unref) t.unref();
+}
+
+// --- Bench: who is signed in, with a real probe for Claude and an age for Grok ---
+// The seat list only knows whether a credential FILE exists. For the day view's
+// sign-in check that is not enough: Claude's file can exist while logged out, and
+// Grok's subscription sign-in lapses after 7 days. So: `claude auth status --json`
+// (cached 5 min) and the Grok auth file's age. Nothing here reads a credential.
+const BENCH_TTL_MS = 5 * 60 * 1000;
+let benchCache = { at: 0, claude: null };
+
+function claudeAuthStatus(force) {
+  if (!force && benchCache.claude && Date.now() - benchCache.at < BENCH_TTL_MS) return Promise.resolve(benchCache.claude);
+  return new Promise((resolve) => {
+    const bin = resolveClaudeBin();
+    if (!bin) return resolve({ loggedIn: false, reason: 'not installed' });
+    execFile(bin, ['auth', 'status', '--json'], { timeout: 10000, windowsHide: true, shell: false }, (err, stdout) => {
+      let out = null;
+      try { out = JSON.parse(String(stdout || '')); } catch { out = null; }
+      const claude = out && typeof out.loggedIn === 'boolean'
+        ? { loggedIn: out.loggedIn, authMethod: out.authMethod || null, subscription: out.subscriptionType || null }
+        : { loggedIn: !err, reason: err ? 'probe failed' : 'no json' };
+      benchCache = { at: Date.now(), claude };
+      resolve(claude);
+    });
+  });
+}
+
+function grokAuthAge() {
+  try {
+    const reg = JSON.parse(fs.readFileSync(path.join(HELPERS_DIR, 'providers.json'), 'utf8'));
+    const p = (reg.grok && reg.grok.authPaths || [])[0];
+    if (!p) return null;
+    const full = p.replace(/^~(?=$|[\\/])/, os.homedir());
+    if (!fs.existsSync(full)) return { present: false };
+    const ageDays = (Date.now() - fs.statSync(full).mtimeMs) / 86400000;
+    return { present: true, ageDays: Math.round(ageDays * 10) / 10, expiresSoon: ageDays >= 6 };
+  } catch { return null; }
+}
+
+async function handleBench(req, res, url) {
+  const force = url.searchParams.get('refresh') === '1';
+  const seats = await councilSeats(force);
+  const claude = seats.some((s) => s.id === 'claude' && s.installed) ? await claudeAuthStatus(force) : null;
+  const grok = grokAuthAge();
+  const out = seats.map((s) => {
+    const seat = { id: s.id, label: s.label, installed: s.installed, signedIn: s.signedIn, ready: s.ready,
+      canSignIn: Array.isArray(s.signin), loginCmd: s.loginCmd || null, cost: s.cost, specialism: s.specialism || null };
+    if (s.id === 'claude' && claude) { seat.signedIn = s.installed && claude.loggedIn; seat.ready = seat.signedIn; seat.detail = claude; }
+    if (s.id === 'grok' && grok) seat.detail = grok;
+    return seat;
+  });
+  sendJson(res, 200, {
+    checkedAt: new Date().toISOString(),
+    serverStarted: new Date(SERVER_STARTED_MS).toISOString(),
+    seats: out,
+    needsSignIn: out.filter((s) => s.installed && !s.signedIn && s.canSignIn).map((s) => s.id),
+  });
+}
+
 function handleSettingsGet(req, res) {
   const key = cloudKey();
   sendJson(res, 200, {
@@ -2777,7 +2926,7 @@ async function handleAskStream(req, res) {
     // "needs live external info or the full agent", which this vault-only
     // engine cannot supply. Skip retrieval/generation entirely — no ack, no
     // sources, no deltas — and say so honestly.
-    const answer = "That needs live information or the full agent session, sir — not something I can pull from the vault. Ask me to look into it directly and I'll dispatch a proper turn.";
+    const answer = "That needs live information or a full agent session, which the brain alone can't supply. Ask for it directly and I'll dispatch a proper turn.";
     return finish(answer, ASK_ENGINE_NEEDS_AGENT);
   }
 
@@ -4607,6 +4756,9 @@ async function handleStatus(req, res) {
     uiBuild: uiBuildStamp(),
     serverBuild: serverBuildStamp(),
     serverStarted: new Date(SERVER_STARTED_MS).toISOString(),
+    // Bumped when the shared brain's day-to-day folders change (see startBrainWatch).
+    brainVersion,
+    brainChangedAt,
   });
 }
 
@@ -4998,6 +5150,7 @@ async function handleCommandCenterSignin(req, res) {
   openConsole(title, seat.signin);
   // The seat list is cached for 30s; the next refresh must see the new credential.
   seatsCache.at = 0;
+  benchCache.at = 0;
   sendJson(res, 200, { ok: true, provider: id, opened: title });
 }
 
@@ -5722,6 +5875,7 @@ async function main() {
     await buildIndex();
   }
   loadIndex();
+  startBrainWatch();
 
   // Warm the MCP health cache now, so the first greeting of the session has a
   // real answer instead of "still checking". The probe is slow, which is
@@ -5772,11 +5926,15 @@ async function main() {
           || url.pathname === '/api/command-center/signin'
           || url.pathname === '/api/council'
           || url.pathname === '/api/terminals'
+          || url.pathname === '/api/assistant/action'
+          || url.pathname === '/api/assistant/librarian'
           || termAction
           || agentAction;
         if (!isBridgePost) return sendJson(res, 404, { error: 'not found' });
         if (!authorize(req, res)) return;
 
+        if (url.pathname === '/api/assistant/action') return await handleAssistantAction(req, res);
+        if (url.pathname === '/api/assistant/librarian') return await handleAssistantLibrarian(req, res);
         if (url.pathname === '/api/terminals') return await handleTerminalCreate(req, res);
         if (termAction && termAction[2] === 'kill') return handleTerminalKill(req, res, termAction[1]);
         if (termAction && termAction[2] === 'resize') return await handleTerminalResize(req, res, termAction[1]);
@@ -5827,12 +5985,13 @@ async function main() {
           || url.pathname === '/api/github/status' || url.pathname === '/api/workshop'
           || url.pathname === '/api/command-center/seats' || url.pathname === '/api/council'
           || url.pathname === '/api/terminals' || url.pathname === '/api/assistant'
-          || url.pathname === '/api/assistant/note'
+          || url.pathname === '/api/assistant/note' || url.pathname === '/api/bench'
           || councilGet || agentOutput) {
         if (!authorize(req, res)) return;
         if (url.pathname === '/api/terminals') return handleTerminalList(req, res);
         if (url.pathname === '/api/assistant') return await handleAssistant(req, res);
         if (url.pathname === '/api/assistant/note') return await handleAssistantNote(req, res, url);
+        if (url.pathname === '/api/bench') return await handleBench(req, res, url);
         if (url.pathname === '/api/command-center/seats') return await handleCommandCenterSeats(req, res, url);
         if (url.pathname === '/api/council') return handleCouncilList(req, res);
         if (councilGet) return handleCouncilGet(req, res, councilGet[1]);

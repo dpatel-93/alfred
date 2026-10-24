@@ -479,6 +479,46 @@ const afterBad = await j('/api/settings',{headers:{'X-Alfred-Token':TOKEN}});
 chk('a rejected brain path is never stored', afterBad.d?.vault?.path === vaultBefore,
   `${afterBad.d?.vault?.path} vs ${vaultBefore}`);
 
+// --- Day view: bench, actions, librarian (run.mjs points the server at a throwaway brain) ---
+const benchNoTok = await fetch(B+'/api/bench');
+chk('GET /api/bench without token blocked', benchNoTok.status===401||benchNoTok.status===403, `got ${benchNoTok.status}`);
+const benchR = await j("/api/bench",{headers:{"X-Alfred-Token":TOKEN}});
+chk('GET /api/bench lists seats and who needs sign-in',
+  benchR.s===200 && Array.isArray(benchR.d?.seats) && Array.isArray(benchR.d?.needsSignIn) && typeof benchR.d?.serverStarted==='string'
+  && benchR.d.seats.every((s) => typeof s.signedIn==='boolean' && typeof s.canSignIn==='boolean'),
+  `got ${benchR.s} ${JSON.stringify(benchR.d).slice(0,160)}`);
+chk('/api/status carries a numeric brainVersion', typeof status?.brainVersion==='number', JSON.stringify(status?.brainVersion));
+
+const post = (p, body) => fetch(B+p,{method:'POST',headers:H,body:JSON.stringify(body)}).then(async (r) => ({s:r.status, d:await r.json().catch(()=>null)}));
+const actNoTok = await fetch(B+'/api/assistant/action',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+chk('POST /api/assistant/action without token blocked', actNoTok.status===401||actNoTok.status===403, `got ${actNoTok.status}`);
+chk('action refuses a file outside Reminders/', (await post('/api/assistant/action',{file:'Memory/profile.md',action:'close'})).s===400);
+chk('action refuses an unknown verb', (await post('/api/assistant/action',{file:'Reminders/2026-01-01--ours-errand.md',action:'delete'})).s===400);
+
+const feed0 = (await j('/api/assistant',{headers:{'X-Alfred-Token':TOKEN}})).d;
+const ours = (feed0?.today||[]).find((i) => i.ours);
+const theirs = (feed0?.today||[]).find((i) => !i.ours);
+chk('the test brain feeds the day view (one of ours, one of Grok\'s, due today)', !!ours && !!theirs && feed0.brief?.isToday === true
+  && feed0.routines?.today?.length===1 && feed0.projects?.length===1, JSON.stringify(feed0).slice(0,240));
+if (ours && theirs) {
+  const c1 = await post('/api/assistant/action',{file:ours.file,action:'close'});
+  chk('closing our own reminder edits it in place and returns the fresh feed', c1.s===200 && c1.d?.via==='direct' && c1.d?.applied===true
+    && !c1.d.feed.today.some((i) => i.file===ours.file) && c1.d.feed.doneToday.some((i) => i.title===ours.title), JSON.stringify(c1.d).slice(0,200));
+  const c2 = await post('/api/assistant/action',{file:theirs.file,action:'close'});
+  chk('closing Grok\'s reminder goes by close signal and is applied at once', c2.s===200 && c2.d?.via==='signal' && c2.d?.applied===true
+    && /^Inbox\/\d{4}-\d{2}-\d{2}-\d{4}--user--grok--close--/.test(c2.d?.signal||'') && !c2.d.feed.today.some((i) => i.file===theirs.file), JSON.stringify(c2.d).slice(0,200));
+  const todo = c2.d?.feed?.todos?.find((i) => !i.ours);
+  const t1 = todo ? await post('/api/assistant/action',{file:todo.file,action:'tomorrow'}) : {s:0,d:null};
+  chk('moving Grok\'s to-do sends an amend signal and marks the item pending', t1.s===200 && t1.d?.applied===false && t1.d?.pending==='amend'
+    && t1.d.feed.upcoming.concat(t1.d.feed.todos).find((i) => i.file===todo.file)?.pending==='amend', JSON.stringify(t1.d).slice(0,200));
+  chk('closing an already-closed item is a clear 404', (await post('/api/assistant/action',{file:ours.file,action:'close'})).s===404);
+}
+const lib = await post('/api/assistant/librarian',{});
+chk('POST /api/assistant/librarian runs the pass and returns the feed', lib.s===200 && Array.isArray(lib.d?.actions) && lib.d?.feed?.brain===true, `got ${lib.s} ${JSON.stringify(lib.d).slice(0,160)}`);
+await new Promise((r) => setTimeout(r, 2000));  // the version bump is debounced 1.5s
+const status2 = (await j('/api/status')).d;
+chk('brainVersion moved after dashboard actions', typeof status2?.brainVersion==='number' && status2.brainVersion > (status?.brainVersion ?? -1), `${status?.brainVersion} -> ${status2?.brainVersion}`);
+
 // --- injection / traversal probes ---
 const trav = await j('/api/note?path=../../../etc/passwd');
 chk('/api/note rejects path traversal', trav.s!==200 || !JSON.stringify(trav.d).includes('root:'), `got ${trav.s}`);

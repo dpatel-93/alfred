@@ -50,6 +50,8 @@ const server = spawn(process.execPath, [path.join(HERE, '..', 'server.mjs')], {
     ALFRED_COUNCIL_STUB_DIR: stub,
     ALFRED_PROVIDERS: REGISTRY,
     ALFRED_TERM_STUB_CMD: JSON.stringify([process.execPath, '-e', echoScript]),
+    // The Day view auto-opens a sign-in console for a signed-out seat; never on a test run.
+    ALFRED_CC_DRY_RUN: '1',
   },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
@@ -119,13 +121,27 @@ if (!(await up())) {
       document.body.classList.remove('bench-tight', 'rail-collapsed');
     });
 
+    // --- the Day place is the default landing ---------------------------------
+    // No hash: the app opens on Day (not the Brain), and the nav is Day then Brain with
+    // Day active. Command is no longer a tab (still reachable by hash and key 3, which the
+    // Command section below uses). Instant checks only: the Command section that follows
+    // races a once-per-page terminal re-attach, so nothing here may add delay before it.
+    chk(tag('with no hash the app lands on the Day view'), await page.evaluate(() =>
+      !document.getElementById('pane-day').hidden && document.getElementById('pane-brain').hidden
+      && document.getElementById('pane-command').hidden));
+    chk(tag('the nav is Day then Brain, Day active, and there is no Command tab'), await page.evaluate(() => {
+      const b = [...document.querySelectorAll('#views .view-btn')];
+      return b.map((x) => x.dataset.view).join(',') === 'day,brain' && b[0].classList.contains('active')
+        && b[0].getAttribute('aria-selected') === 'true' && !b[1].classList.contains('active');
+    }));
+
     // --- the Command place: tab strip, grid mode, unread dot, seats -------
     // Seats now render on the Bench (#cc-seats), visible on every place —
     // P5 moved them out of the Command pane's old "Lanes" section and moved
     // pollCommandCenter into GLOBAL_POLLS to match. Every control that used
     // to sit directly on a seat card (model, open/native/sign-in) now lives behind that row's own
     // "..." popover (#seat-popover) — plan §3.2.
-    await page.click('[data-view="command"]');
+    await page.evaluate(() => { location.hash = 'command'; }); // no tab any more: hash (or key 3)
     await page.waitForFunction(
       () => document.querySelectorAll('#cc-seats .seat').length > 0,
       null, { timeout: 10000 },
@@ -303,6 +319,11 @@ if (!(await up())) {
     // not 1, so an off-by-a-constant error can't coincidentally cancel out.
     await page.click('[data-view="brain"]');
     await sleep(1500); // let the force layout settle before reading node positions
+    chk(tag('the Brain graph fills its pane (the Today panel moved to the Day view)'), await page.evaluate(() => {
+      const c = document.querySelector('.brain-canvas').getBoundingClientRect();
+      const p = document.getElementById('pane-brain').getBoundingClientRect();
+      return !document.getElementById('assistant') && Math.abs(c.width - p.width) < 2;
+    }));
     const dbg = await page.evaluate(() => window.__alfredDebug ? window.__alfredDebug() : null);
     const canvasRect = await page.evaluate(() => document.getElementById('graph').getBoundingClientRect().toJSON());
     const nodeCount = dbg && dbg.nodes ? dbg.nodes.length : 0;
@@ -329,6 +350,16 @@ if (!(await up())) {
           `expected="${node.title}" actual="${title}"`);
       }
     }
+
+    // --- Day: key 1 returns to it; the date header and the bench strip are mounted -------
+    await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
+    await page.keyboard.press('1');
+    await page.waitForFunction(() => !document.getElementById('pane-day').hidden, null, { timeout: 5000 }).catch(() => {});
+    await page.waitForFunction(() => /,/.test(document.getElementById('day-date').textContent), null, { timeout: 8000 }).catch(() => {});
+    chk(tag('key 1 returns to Day, with the weekday date header and the bench strip mounted'), await page.evaluate(() =>
+      !document.getElementById('pane-day').hidden
+      && /^[A-Z][a-z]+day, [A-Z][a-z]+ \d{1,2}$/.test(document.getElementById('day-date').textContent)
+      && !!document.getElementById('bench') && !!document.getElementById('signin-banner')));
 
     // --- 7/8. no uncaught JS errors, at this width -------------------------
     chk(tag('no uncaught JS errors'), errs.length === 0, errs.slice(0, 3).join(' | '));
