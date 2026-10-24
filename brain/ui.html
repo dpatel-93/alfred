@@ -634,6 +634,20 @@
   .day-summary { margin: var(--sp-2) 0 0; color: var(--text-dim); font-size: var(--fs-sm); }
   .day-summary.warn { color: var(--amber); }
   .day-tools { display: flex; align-items: center; gap: var(--sp-4); flex: none; }
+  /* Tell Grok: the desk box. What the user would say to Grok in the car. */
+  .tell-grok { flex: 1 1 420px; min-width: 0; display: flex; align-items: center; gap: var(--sp-3); }
+  .tell-grok-label {
+    flex: none; font-family: var(--font-mono); font-size: var(--fs-micro); font-weight: 600;
+    letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--p-grok);
+  }
+  .tell-grok input {
+    flex: 1 1 auto; min-width: 0; height: 32px; padding: 0 var(--sp-4);
+    border: 1px solid var(--border-focusable); border-radius: var(--r-sm);
+    background: var(--surface-2); color: var(--text); font: inherit; font-size: var(--fs-sm);
+  }
+  .tell-grok input::placeholder { color: var(--text-dim); }
+  .tell-grok input:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; border-color: var(--blue); }
+  .tell-grok.busy input { color: var(--text-dim); }
 
   .bench { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); flex: none; }
   .bench-seat {
@@ -2404,6 +2418,12 @@
           <h1 id="day-date" class="day-date">Today</h1>
           <p id="day-summary" class="day-summary" aria-live="polite">Loading&hellip;</p>
         </div>
+        <form id="tell-grok" class="tell-grok" autocomplete="off" aria-label="Tell Grok">
+          <label for="tell-grok-input" class="tell-grok-label">Tell Grok</label>
+          <input id="tell-grok-input" type="text" maxlength="500" enterkeyhint="send"
+                 placeholder="remind me to… · dentist Tuesday 3pm · add milk to my errands">
+          <button id="tell-grok-send" class="btn" type="submit">Send</button>
+        </form>
         <div class="day-tools">
           <button id="day-refresh" class="btn" type="button" title="Re-read the shared brain now">Refresh</button>
         </div>
@@ -3715,6 +3735,56 @@
       toast('Could not reach Alfred.', 'critical', { title: 'Day' });
     });
   }
+
+  // --- Tell Grok: the desk box ------------------------------------------------------------
+  // What the user would say to Grok in the car. The server asks Grok for a plan and saves it
+  // itself (Reminders/, Calendar/events.md, or Grok's Inbox when Grok cannot answer); the
+  // reply carries the fresh feed, so the new item is on the page when the toast appears.
+  (function () {
+    var form = document.getElementById('tell-grok');
+    if (!form) return;
+    var input = document.getElementById('tell-grok-input');
+    var send = document.getElementById('tell-grok-send');
+    function savedLine(s) {
+      if (s.type === 'event') return 'Calendar: ' + s.title + ' (' + dayLabel(s.date) + ')';
+      if (s.type === 'reminder') {
+        var k = s.kind === 'todo' ? 'To-do' : s.kind.charAt(0).toUpperCase() + s.kind.slice(1);
+        return k + ': ' + s.title + (s.due && s.due !== 'none' ? ' (' + dayLabel(s.due) + ')' : '');
+      }
+      return "Grok's inbox: " + s.title;
+    }
+    function setBusy(on) {
+      form.classList.toggle('busy', on);
+      input.disabled = on;
+      send.disabled = on;
+      send.textContent = on ? 'Grok is on it…' : 'Send';
+    }
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var text = input.value.trim();
+      if (!text || form.classList.contains('busy')) return;
+      setBusy(true);
+      bridgePost('/api/assistant/tell-grok', { text: text }).then(function (r) {
+        var d = r.data || {};
+        if (!r.ok) { toast(d.error || 'Grok could not take that.', 'critical', { title: 'Tell Grok' }); return; }
+        input.value = '';
+        if (d.via === 'inbox') {
+          toast("Grok didn't answer (" + (d.why || 'no reason given') + "). It's waiting in Grok's inbox for its next sync.",
+            'warn', { title: 'Tell Grok' });
+        } else {
+          var lines = (d.saved || []).map(savedLine);
+          if (d.skipped && d.skipped.length) lines.push(d.skipped.length + ' not saved: ' + d.skipped.map(function (s) { return s.error; }).join('; '));
+          toast((d.reply ? d.reply + ' ' : '') + lines.join(' · '), d.skipped && d.skipped.length ? 'warn' : 'success', { title: 'Grok' });
+        }
+        if (d.feed) applyDayFeed(d.feed); else pollAssistant();
+      }).catch(function () {
+        toast('Could not reach Alfred.', 'critical', { title: 'Tell Grok' });
+      }).then(function () {
+        setBusy(false);
+        input.focus();
+      });
+    });
+  })();
 
   function dayButton(label, cls, tip, item, onClick) {
     var b = el('button', 'btn day-act' + (cls ? ' ' + cls : ''), [label]);

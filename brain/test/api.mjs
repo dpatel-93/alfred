@@ -519,25 +519,27 @@ await new Promise((r) => setTimeout(r, 2000));  // the version bump is debounced
 const status2 = (await j('/api/status')).d;
 chk('brainVersion moved after dashboard actions', typeof status2?.brainVersion==='number' && status2.brainVersion > (status?.brainVersion ?? -1), `${status?.brainVersion} -> ${status2?.brainVersion}`);
 
-// --- Google Calendar: the date bus (no real Google in tests; run.mjs points ALFRED_LOCAL_CONFIG_DIR at a temp dir) ---
-const calNoTok = await fetch(B+'/api/calendar/status');
-chk('GET /api/calendar/status without token blocked', calNoTok.status===401||calNoTok.status===403, `got ${calNoTok.status}`);
-const calSt = await j('/api/calendar/status',{headers:{'X-Alfred-Token':TOKEN}});
-chk('GET /api/calendar/status reports unconfigured, never a secret', calSt.s===200 && calSt.d?.configured===false && calSt.d?.connected===false && !('clientSecret' in (calSt.d||{})), JSON.stringify(calSt.d));
-chk('connect before config is a clear 409', (await post('/api/calendar/connect',{})).s===409);
-chk('a malformed client ID is refused', (await post('/api/calendar/config',{clientId:'nope',clientSecret:'x'.repeat(12)})).s===400);
-const cfg = await post('/api/calendar/config',{clientId:'123-abc.apps.googleusercontent.com',clientSecret:'GOCSPX-testsecret1234'});
-chk('saving the OAuth client marks the calendar configured and returns no secret', cfg.s===200 && cfg.d?.configured===true && !JSON.stringify(cfg.d).includes('GOCSPX'), JSON.stringify(cfg.d));
-const con = await post('/api/calendar/connect',{});
-chk('connect returns the Google consent URL with a loopback redirect', con.s===200 && /accounts\.google\.com/.test(con.d?.url||'') && /oauth2%2Fgoogle/.test(con.d?.url||''), JSON.stringify(con.d).slice(0,200));
-const cb = await fetch(B+'/oauth2/google?code=x&state=bogus');
-chk('the OAuth callback refuses an unknown state', cb.status===400, `got ${cb.status}`);
-const cbErr = await fetch(B+'/oauth2/google?error=access_denied');
-chk('the OAuth callback reports a declined consent', cbErr.status===400 && /declined/i.test(await cbErr.text()), `got ${cbErr.status}`);
+// --- The shared calendar file (Calendar/events.md; Google Calendar was removed 2026-10-23) ---
 const feedCal = (await j('/api/assistant',{headers:{'X-Alfred-Token':TOKEN}})).d;
-chk('the feed carries the calendar state', feedCal?.calendar && feedCal.calendar.connected===false && feedCal.calendar.configured===true, JSON.stringify(feedCal?.calendar));
-const dis = await post('/api/calendar/disconnect',{});
-chk('disconnect answers with the status', dis.s===200 && dis.d?.connected===false);
+const cal = feedCal?.calendar || {};
+const todayEv = (cal.days?.[feedCal?.date] || []).find((e) => e.title === 'Test event');
+chk('the feed reads the calendar file', cal.source==='file' && cal.exists===true && cal.file==='Calendar/events.md', JSON.stringify(cal).slice(0,200));
+chk('today\'s event carries its time, place and author', !!todayEv && todayEv.time==='09:30' && todayEv.endTime==='10:00' && todayEv.location==='the office' && todayEv.by==='grok', JSON.stringify(todayEv));
+chk('an unreadable line is reported, not dropped', Array.isArray(cal.problems) && cal.problems.length===1 && /99:99/.test(cal.problems[0].text), JSON.stringify(cal.problems));
+// --- The desk box: Tell Grok (tests run with ALFRED_CC_DRY_RUN=1, so Grok is never called) ---
+const tgNoTok = await fetch(B+'/api/assistant/tell-grok',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:'x'})});
+chk('POST /api/assistant/tell-grok without token blocked', tgNoTok.status===401||tgNoTok.status===403, `got ${tgNoTok.status}`);
+chk('an empty request is refused', (await post('/api/assistant/tell-grok',{text:'   '})).s===400);
+chk('an over-long request is refused', (await post('/api/assistant/tell-grok',{text:'a'.repeat(501)})).s===400);
+const tg = await post('/api/assistant/tell-grok',{text:'remind me to test the desk box tomorrow'});
+chk('when Grok cannot answer, the words go to Grok\'s inbox and the reason is given', tg.s===200 && tg.d?.via==='inbox' && tg.d?.saved?.[0]?.type==='inbox'
+  && /--user--grok--handoff--/.test(tg.d.saved[0].file) && /dry run/i.test(tg.d?.why||''), JSON.stringify(tg.d).slice(0,300));
+chk('the handoff is waiting in the feed\'s signals', (tg.d?.feed?.signals||[]).some((s) => s.file===tg.d?.saved?.[0]?.file && s.to==='grok' && s.type==='handoff'),
+  JSON.stringify(tg.d?.feed?.signals).slice(0,300));
+
+chk('the Google sign-in endpoints are gone', (await fetch(B+'/oauth2/google?code=x')).status===404
+  && (await fetch(B+'/api/calendar/status',{headers:{'X-Alfred-Token':TOKEN}})).status===404
+  && (await post('/api/calendar/connect',{})).s===404);
 
 // --- injection / traversal probes ---
 const trav = await j('/api/note?path=../../../etc/passwd');

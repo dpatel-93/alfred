@@ -284,6 +284,7 @@ function makeTestBrain() {
   put('Routines/user-daily.md', '# The user: daily thing\n\n- **Kind:** routine\n- **Runs:** the user\n- **Schedule:** daily\n- **Status:** active\n');
   put(`Outputs/briefs/${today}.md`, `# Morning brief\n\n- Last updated: ${today} 7:00 AM ET\n\n## Top of the brief\n1. **Test headline.** Body.\n`);
   put('Projects/demo/status.md', '# Demo\n\n- **Status:** Active\n- **Track:** Personal\n\n## Where it stands\n- (2026-01-01) Going fine.\n\n## Next\n1. Ship it.\n');
+  put('Calendar/events.md', `# Calendar\n\n- **Kind:** calendar\n\n## ${today.slice(0, 7)}\n\n- ${today} 09:30-10:00 Test event @ the office (added by grok)\n- ${today} 99:99 A line that cannot be read\n`);
   put('Inbox/README.md', '# Inbox\n');
   return BRAIN;
 }

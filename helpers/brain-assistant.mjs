@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { addDays, collectOpenItems, easternNow, readFields, runLibrarian, setField, sharedBrainPath } from './brain-librarian.mjs';
+import { addEvent } from './brain-calendar.mjs';
 
 export { sharedBrainPath };
 export const easternDate = () => easternNow().date;
@@ -100,6 +101,111 @@ export function writeSignal(brain, { type, from = 'user', to, re, subject, body 
     '- **Status:** open', `- **Created:** ${now.stamp}`, '', body.trim(), ''].join('\n');
   fs.writeFileSync(path.join(inbox, name), text, 'utf8');
   return `Inbox/${name}`;
+}
+
+// --- The desk box: "Tell Grok" ----------------------------------------------------------
+// The user types what they would say to Grok in the car. Grok (through its CLI, run by the
+// server) answers with a plan of items; this code checks every field and writes the files
+// itself, so a confused answer can never write anywhere else. Anything that is not a reminder
+// or an event goes to Grok's inbox as a handoff, in the user's own words.
+const KINDS = ['errand', 'reminder', 'todo', 'watch'];
+const MAX_ITEMS = 6;
+const isDay = (d) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d || '')) return false;
+  const t = new Date(`${d}T12:00:00Z`);
+  return !Number.isNaN(t.getTime()) && t.toISOString().slice(0, 10) === d;
+};
+const isClock = (t) => /^([01]\d|2[0-3]):[0-5]\d$/.test(t || '');
+const oneLine = (s, n) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n);
+
+export function tellGrokPrompt(text, now = easternNow()) {
+  const day = DAYS[weekdayOf(now.date)];
+  return [
+    "You are Grok, the user's personal executive assistant. The user typed this at their desk, the way they would say it to you in the car:",
+    `"${oneLine(text, 500)}"`, '',
+    `Now: ${day[0].toUpperCase()}${day.slice(1)} ${now.date}, ${now.stamp.split(' ')[1]} Eastern.`,
+    'Turn it into items for the shared brain. Reply with ONLY one JSON object, no prose and no code fence:',
+    '{"reply": "<one short sentence to say back, as you would in the car>", "items": [ ... ]}',
+    'Each item is one of:',
+    '{"type":"reminder","kind":"errand|reminder|todo|watch","title":"<a few words>","due":"YYYY-MM-DD or none","time":"HH:MM or null","scope":"personal|work","note":"<optional detail>"}',
+    '{"type":"event","title":"<a few words>","date":"YYYY-MM-DD","end":"YYYY-MM-DD or null","time":"HH:MM or null","endTime":"HH:MM or null","location":"<place or null>"}',
+    '{"type":"other","summary":"<anything else the user wants: remember a fact, track something, research>"}',
+    'Kinds: errand = do it today. todo = no date. reminder = do or remember something on a date. watch = a follow-up being waited on.',
+    'Something that happens on a date (appointment, plan, birthday, trip) is an event. Add a reminder as well only if the user asked to be reminded.',
+    'Resolve relative dates ("Saturday", "tomorrow", "next week") from the date above. Times are 24-hour. Never write full names of people: use a relationship or an initial.',
+  ].join('\n');
+}
+
+// Pulls the JSON object out of Grok's answer (it may wrap it in a fence or a sentence).
+// Returns null when there is no usable plan.
+export function parseGrokPlan(out) {
+  const s = String(out || '');
+  const a = s.indexOf('{');
+  const b = s.lastIndexOf('}');
+  if (a < 0 || b <= a) return null;
+  try {
+    const plan = JSON.parse(s.slice(a, b + 1));
+    return plan && Array.isArray(plan.items) ? plan : null;
+  } catch { return null; }
+}
+
+export function createReminder(brain, it, words, now = easternNow()) {
+  const kind = KINDS.includes(it.kind) ? it.kind : null;
+  if (!kind) throw new Error(`unknown kind "${oneLine(it.kind, 20)}"`);
+  const title = oneLine(it.title, 80);
+  if (!title) throw new Error('no title');
+  let due = it.due && it.due !== 'none' ? String(it.due) : 'none';
+  if (kind === 'errand' && due === 'none') due = now.date;
+  if (due !== 'none' && !isDay(due)) throw new Error(`"${oneLine(due, 20)}" is not a date`);
+  if (due !== 'none' && due < now.date) throw new Error(`${due} is in the past`);
+  const time = isClock(it.time) ? it.time : null;
+  const dir = path.join(brain, 'Reminders');
+  fs.mkdirSync(dir, { recursive: true });
+  const base = `${due !== 'none' ? due : now.date}--${slugify(title)}`;
+  let name = `${base}.md`;
+  for (let n = 2; fs.existsSync(path.join(dir, name)); n++) name = `${base}-${n}.md`;
+  const note = oneLine(it.note, 300);
+  const text = [`# ${title}`, '',
+    `- **Kind:** ${kind}`, '- **Status:** open', `- **Due:** ${due}${time && due !== 'none' ? ` ${time}` : ''}`,
+    `- **Until:** ${kind === 'errand' ? 'end-of-day' : 'done'}`, `- **Scope:** ${it.scope === 'work' ? 'work' : 'personal'}`,
+    '- **Nudge:** car + wake', '- **Author:** grok (from the Alfred desk box)',
+    `- **Created:** ${now.stamp}`, `- **Last updated:** ${now.stamp}`, '',
+    ...(note ? [note, ''] : []), `The user's words at the desk: "${oneLine(words, 300)}"`, ''].join('\n');
+  fs.writeFileSync(path.join(dir, name), text, 'utf8');
+  return { type: 'reminder', kind, title, due, file: `Reminders/${name}` };
+}
+
+export function handoffToGrok(brain, summary, words, now = easternNow(), why = '') {
+  const file = writeSignal(brain, {
+    type: 'handoff', from: 'user', to: 'grok', re: 'the Alfred desk box', subject: oneLine(summary || words, 60),
+    body: [`The user typed this at the desk for you: "${oneLine(words, 500)}"`, '',
+      ...(summary && summary !== words ? [`Read as: ${oneLine(summary, 300)}`, ''] : []),
+      ...(why ? [`Why it came by signal: ${oneLine(why, 200)}`, ''] : []),
+      'Handle it as you would in the car (MANIFESTO §5, §7, §8), confirm where it went in a `reply`, and file this signal. No need to report back aloud.'].join('\n'),
+  }, now);
+  return { type: 'inbox', title: oneLine(summary || words, 80), file };
+}
+
+export function applyGrokPlan(brain, plan, words, now = easternNow()) {
+  const saved = [];
+  const skipped = [];
+  const items = (plan.items || []).slice(0, MAX_ITEMS);
+  for (const it of items) {
+    try {
+      if (it && it.type === 'reminder') saved.push(createReminder(brain, it, words, now));
+      else if (it && it.type === 'event') {
+        if (!isDay(it.date) || it.date < now.date) throw new Error(`event date "${oneLine(it.date, 20)}" is missing or past`);
+        const ev = { date: it.date, end: isDay(it.end) ? it.end : null, time: isClock(it.time) ? it.time : null,
+          endTime: isClock(it.endTime) ? it.endTime : null, title: oneLine(it.title, 80), location: oneLine(it.location, 80) || null, by: 'grok' };
+        const line = addEvent(brain, ev, now);
+        saved.push({ type: 'event', title: ev.title, date: ev.date, file: 'Calendar/events.md', line });
+      } else if (it && it.type === 'other') saved.push(handoffToGrok(brain, oneLine(it.summary, 300), words, now));
+      else throw new Error('unknown item type');
+    } catch (err) { skipped.push({ item: it, error: err.message }); }
+  }
+  // Nothing usable came back: the user's words still reach Grok rather than vanishing.
+  if (!saved.length) saved.push(handoffToGrok(brain, null, words, now, skipped.length ? 'none of the items could be saved' : 'Grok returned no items'));
+  return { reply: oneLine(plan.reply, 240) || null, saved, skipped };
 }
 
 // --- Actions on a reminder: close, tomorrow, snooze (to a date), carryover (an expired errand) ---

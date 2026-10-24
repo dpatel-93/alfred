@@ -10,7 +10,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { applyAction, assistantFeed, authorIsOurs, brainNote, latestBrief, routineDueToday, writeSignal } from '../brain-assistant.mjs';
+import { applyAction, applyGrokPlan, assistantFeed, authorIsOurs, brainNote, latestBrief, parseGrokPlan, routineDueToday, tellGrokPrompt, writeSignal } from '../brain-assistant.mjs';
 import { easternNow } from '../brain-librarian.mjs';
 
 const ROOT = path.join(os.tmpdir(), `assistant-test-${process.pid}`);
@@ -183,6 +183,43 @@ chk('the feed no longer carries a recent-changes list (the dashboard card was re
 chk('items carry a short author and whether we may edit them',
   feed.upcoming.find((i) => i.title === 'A Grok errand')?.author === 'grok' && feed.upcoming.find((i) => i.title === 'A Grok errand')?.ours === false
   && feed.today.find((i) => i.title === 'Yesterday\'s errand')?.author === 'Claude Code' && feed.today.find((i) => i.title === 'Yesterday\'s errand')?.ours === true);
+
+// --- The desk box: "Tell Grok" ---
+console.log('\nTell Grok');
+const prompt = tellGrokPrompt('remind me to call the plumber Saturday and dentist Tuesday 3pm', NOW);
+chk('the prompt carries the user\'s words, today\'s date and weekday, and asks for JSON only',
+  prompt.includes('"remind me to call the plumber Saturday and dentist Tuesday 3pm"') && prompt.includes('Monday 2026-10-26') && /ONLY one JSON object/.test(prompt));
+chk('a plan wrapped in a code fence still parses', parseGrokPlan('Sure!\n```json\n{"reply":"Done.","items":[]}\n```')?.reply === 'Done.');
+chk('an answer with no plan is null, not a crash', parseGrokPlan('I cannot help with that.') === null && parseGrokPlan('{"reply":"x"}') === null);
+const words = 'remind me to call the plumber Saturday, dentist Tuesday 3pm, and remember the wifi router is in the basement';
+const plan = { reply: 'Got it: plumber Saturday, dentist Tuesday at 3.', items: [
+  { type: 'reminder', kind: 'reminder', title: 'Call the plumber', due: '2026-10-31', time: null, scope: 'personal' },
+  { type: 'event', title: 'Dentist', date: '2026-10-27', time: '15:00', endTime: null, location: 'Main St clinic' },
+  { type: 'other', summary: 'Remember: the wifi router is in the basement (home topic)' },
+  { type: 'reminder', kind: 'reminder', title: 'Back-dated', due: '2026-10-01' },
+  { type: 'reminder', kind: 'chore', title: 'Unknown kind' },
+  { type: 'event', title: 'No date' },
+] };
+const res = applyGrokPlan(ROOT, plan, words, NOW);
+const rem = res.saved.find((s) => s.type === 'reminder');
+const remText = rem ? fs.readFileSync(path.join(ROOT, rem.file), 'utf8') : '';
+chk('a reminder becomes one file in Reminders/, dated by its due date, authored by Grok via the desk box',
+  rem && rem.file === 'Reminders/2026-10-31--call-the-plumber.md' && /- \*\*Kind:\*\* reminder/.test(remText) && /- \*\*Status:\*\* open/.test(remText)
+  && /- \*\*Due:\*\* 2026-10-31/.test(remText) && /- \*\*Author:\*\* grok \(from the Alfred desk box\)/.test(remText) && remText.includes(words), remText);
+chk('the new reminder shows up in the feed', assistantFeed(ROOT, NOW).upcoming.some((i) => i.title === 'Call the plumber'));
+const cal = fs.readFileSync(path.join(ROOT, 'Calendar/events.md'), 'utf8');
+chk('an event becomes a line in the shared calendar, added by Grok', cal.includes('- 2026-10-27 15:00 Dentist @ Main St clinic (added by grok)'), cal);
+const inbox = res.saved.find((s) => s.type === 'inbox');
+chk('anything else goes to Grok\'s inbox as a handoff in the user\'s words', inbox && /--user--grok--handoff--/.test(inbox.file)
+  && fs.readFileSync(path.join(ROOT, inbox.file), 'utf8').includes(words), JSON.stringify(inbox));
+chk('a past date, an unknown kind and an event with no date are refused and reported, not written',
+  res.skipped.length === 3 && !fs.readdirSync(path.join(ROOT, 'Reminders')).some((f) => /back-dated|unknown-kind/.test(f)), JSON.stringify(res.skipped));
+chk('Grok\'s one-line reply is passed back', res.reply === 'Got it: plumber Saturday, dentist Tuesday at 3.');
+const empty = applyGrokPlan(ROOT, { reply: 'Hmm.', items: [{ type: 'reminder', kind: 'nope' }] }, 'do the thing', NOW);
+chk('when nothing in the plan can be saved, the words still reach Grok\'s inbox', empty.saved.length === 1 && empty.saved[0].type === 'inbox');
+const errand = applyGrokPlan(ROOT, { items: [{ type: 'reminder', kind: 'errand', title: 'Buy milk', due: 'none' }] }, 'add milk to my errands', NOW);
+chk('an errand with no date is due today and ends with the day', errand.saved[0]?.due === NOW.date
+  && /- \*\*Until:\*\* end-of-day/.test(fs.readFileSync(path.join(ROOT, errand.saved[0].file), 'utf8')));
 
 fs.rmSync(ROOT, { recursive: true, force: true });
 console.log(`\n${pass} passed, ${fails.length} failed`);

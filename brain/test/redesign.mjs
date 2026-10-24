@@ -410,6 +410,27 @@ if (!(await up())) {
       (dayLayout[2] || [])[0] === "Grok's morning brief", JSON.stringify(dayLayout[2]));
     chk(tag('Day: there is no "Since you last looked" card'),
       !dayLayout.flat().some((t) => /since you last looked/i.test(t)), JSON.stringify(dayLayout));
+
+    // --- Day: Tell Grok, the desk box. The server's answer is stubbed: Grok is never called here. ---
+    await page.route('**/api/assistant/tell-grok', async (route) => {
+      let sent = {};
+      try { sent = JSON.parse(route.request().postData() || '{}'); } catch { /* checked below */ }
+      await route.fulfill({ json: { via: 'grok', reply: `Got it: ${sent.text}.`,
+        saved: [{ type: 'reminder', kind: 'reminder', title: 'Call the plumber', due: 'none', file: 'Reminders/x.md' }], skipped: [] } }).catch(() => {});
+    });
+    const tgBox = await page.evaluate(() => {
+      const f = document.getElementById('tell-grok');
+      return !!f && !!f.querySelector('input#tell-grok-input') && /Tell Grok/.test(f.textContent);
+    });
+    chk(tag('Day: the Tell Grok box sits in the Day header'), tgBox);
+    await page.fill('#tell-grok-input', 'remind me to call the plumber');
+    await page.press('#tell-grok-input', 'Enter');
+    await page.waitForFunction(() => [...document.querySelectorAll('.toast')].some((t) => /Got it: remind me to call the plumber/.test(t.textContent)),
+      null, { timeout: 6000 }).catch(() => {});
+    chk(tag("Day: sending to Grok shows Grok's reply and what was saved, and clears the box"), await page.evaluate(() =>
+      [...document.querySelectorAll('.toast')].some((t) => /Got it: remind me to call the plumber/.test(t.textContent) && /Reminder: Call the plumber/.test(t.textContent))
+      && document.getElementById('tell-grok-input').value === '' && !document.getElementById('tell-grok-input').disabled));
+    await page.unroute('**/api/assistant/tell-grok').catch(() => {});
     chk(tag('Day: the Calendar card tops column 2 with a 6-week grid (42 day buttons)'), await page.evaluate(() => {
       const cols = document.querySelectorAll('.day-col');
       const card = cols[1] && cols[1].firstElementChild;

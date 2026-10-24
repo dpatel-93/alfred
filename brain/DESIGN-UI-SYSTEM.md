@@ -1559,7 +1559,7 @@ The user asked for the calendar in the middle and everything to act on to the le
 
 | Column | Cards, top to bottom |
 |---|---|
-| Left: today, this week and to-dos | Today on the calendar (when connected), Overdue, Due today, Carry over, Routines today, This week, To-dos, Later (collapsed) |
+| Left: today, this week and to-dos | Today on the calendar (when it has events), Overdue, Due today, Carry over, Routines today, This week, To-dos, Later (collapsed) |
 | Middle: calendar | The month calendar and the picked day's agenda, alone |
 | Right: brief and wrap-up | Grok's morning brief, Watching (collapsed), Projects, Signals waiting, End of day |
 
@@ -1596,27 +1596,26 @@ floor is to be enforced, `#52648c` reaches 3.00 on surface-2.
 
 ---
 
-## 8. Calendar (2026-10-23)
+## 8. Calendar (2026-10-23, file-backed)
 
-The Day view gained a date layer: dots on a month grid for what needs to happen which day,
-fed by the brain's dated reminders (the truth) and by Google Calendar (every calendar the
-account sees, shared ones and invitations included). No new tokens; the classes live in one
-block, `CALENDAR`. Built with `el()`/`textContent` only.
+The Day view has a date layer: dots on a month grid for what needs to happen which day. It has
+two sources: the brain's dated reminders (the truth) and one Markdown file in the shared brain,
+`Calendar/events.md`, that Grok and Claude both add to and read from. The server parses the
+file and sends it as `feed.calendar` (`exists`, `from`/`to` window, `count`, `days` by date,
+`problems`). There is no Google Calendar, no sign-in and no sync. No new tokens; the classes
+live in one block, `CALENDAR`. Built with `el()`/`textContent` only.
 
 | Surface | Where | Notes |
 |---|---|---|
-| Calendar card (`.cal-card`) | top of Day column 2 | month label, `‹ ›` buttons, a "Today" button when away from today, 6-week grid (42 `button.cal-day`, weeks start Sunday), the agenda for the picked day |
-| Today on the calendar | top of Day column 1 | Google events for today (time, title, calendar chip); absent when not connected or empty |
-| Summary line | Day header | "· N events" once Google's days have loaded (never a false 0) |
-| Settings, Google Calendar | `#settings-gcal`, after Brain location | one-line explainer, status block (status, account, Second Brain calendar, last sync, last error in red), Client ID and secret, Connect, Sync now, Disconnect, "How do I get a client ID?" |
+| Calendar card (`.cal-card`) | top of Day column 2 | month label, `‹ ›` buttons, a "Today" button when away from today, 6-week grid (42 `button.cal-day`, weeks start Sunday), a note line, the agenda for the picked day |
+| Today on the calendar | top of Day column 1 | the file's events for today (time, title, author); absent when there are none |
+| Summary line | Day header | "· N events" for today whenever the events file exists (omitted, never a false 0, when it does not) |
 
 **Dots** (6px, `aria-hidden`; the cell's `aria-label` carries the counts): mint = a brain
-reminder due that day (`feed.overdue/today/upcoming/later` by `due`); the calendar's own colour
-= a Google event, set inline as `--accent` and only after it passes a `#hex` test, otherwise
-blue; hollow (ring in the calendar colour) = an invitation still `needsAction`. Order is
-reminders, then invitations, then events, so a pending invite is never the dot that gets cut.
-Up to 4 dots show; five or more collapse to 3 dots plus `+N`. A Google event that mirrors a
-reminder (`brain && brainFile`) is never drawn; the reminder row, with its actions, wins.
+reminder due that day (`feed.overdue/today/upcoming/later` by `due`); blue (`--blue`, one fixed
+colour) = an event from the file, one dot each, a multi-day event on every day it covers. No
+per-calendar colours, no hollow dots, nothing from the file reaches a style. Reminders first,
+then events. Up to 4 dots show; five or more collapse to 3 dots plus `+N`.
 
 **Cell states.** Today: mint ring. Selected: blue tint plus a 2px inset bottom bar and
 `aria-pressed` (blue = selected, §1.2). Outside the month: `--text-dim` (colour, never
@@ -1626,18 +1625,21 @@ select. Month buttons keep focus on themselves so they can be pressed repeatedly
 arrow repaints only the calendar node, not the whole Day view.
 
 **Agenda** (`.cal-agenda`): the picked day's reminders as the shared `.day-item` rows (Done /
-Tomorrow / Snooze), then `.cal-event` rows: time or "All day", title, a `.cal-chip` (calendar
-name, colour swatch), location, and badges (`invite · needs answer` = warn, `tentative` = info).
-An event opens Google's own page (`calendar/event?eid=`, new tab, `noopener`). Not connected:
-the grid still shows reminder dots and one line says "Google Calendar not connected — Settings
-→ Calendar" (the link opens Settings scrolled to the section).
+Tomorrow / Snooze), then `button.cal-event` rows: time (`all day`, `09:30`, or `09:30–10:00`,
+24h Eastern as the file gives it), title, then a meta line with "through <date>" on a
+multi-day event's earlier days, the location, and a small muted `.ce-by` author label
+("Grok", "Claude", "You") from `by` when present. The today card drops the location. Clicking
+any event opens `Calendar/events.md` in the reader (`dayOpenFile`); that file is the one place
+to add or fix an event.
 
-**Window.** The server fetches roughly today minus 7 days to today plus 42, so days outside it
-carry reminder dots only, and the card says so ("Google events cover ... to ...").
+**Note under the grid** (`.cal-note`), one of:
 
-**Settings flow.** The secret is write-only: one POST, the input is cleared, the page only ever
-shows "saved" (Replace reveals empty inputs). Connect opens Google's consent page in a browser
-tab (the server does this), then the section polls `/api/calendar/status` every 5 s for up to
-5 minutes and flips to Connected on its own, even if Settings was closed meanwhile (it then
-re-polls the Day feed). Disconnect asks first. Sync now toasts "Calendar: N changes" and
-repaints Day from the returned feed.
+| State | Text |
+|---|---|
+| File missing (`exists: false`) | "No calendar file yet: Calendar/events.md" |
+| File present | "N events this month · Calendar/events.md", the file name being a `.cal-link` button that opens it; N counts each event once in the viewed month |
+| Viewed month outside the window | "Events cover <from> to <to>; other days show reminders only · Calendar/events.md" |
+| Unreadable lines (`problems` not empty), added to the above | warn (`--amber`): "N lines in Calendar/events.md could not be read"; the `title` lists the line numbers |
+
+**Window.** The server sends the 1st of last month through the last day of next month, so
+months beyond it carry reminder dots only and the note says so.
