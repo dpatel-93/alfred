@@ -250,7 +250,7 @@ Brain regions follow the Second Brain's top-level folders; small folders share a
 | Memory | Memory (the Claude Code mirror in Memory/agents/claude-code is not indexed) | `var(--violet)` |
 | Knowledge | Knowledge | `var(--amber)` |
 | Research | Research, Outputs | `var(--mint)` |
-| Day | Reminders, Routines, Inbox | pink `#ff7ab8` (category only, no token) |
+| Day | Reminders, Routines, Inbox, Calendar | pink `#ff7ab8` (category only, no token) |
 | System | System, the root files, anything unlisted | `var(--orange)` |
 
 ### 1.2 Status semantics (the contract)
