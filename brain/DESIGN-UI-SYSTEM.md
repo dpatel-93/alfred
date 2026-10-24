@@ -44,7 +44,7 @@ value.
 4. **Semantic color is a contract, not a palette.** mint = live/healthy/success and the
    primary action. blue = informational, selected, the default instrument color. amber =
    warn/stale. red = critical/error/destructive. violet and orange are *category* colors
-   only (Decisions, Claude-Code) — never status. gray = idle/disabled/absent.
+   only (Memory, System) — never status. gray = idle/disabled/absent.
    A card is never mint because mint looks nice. **The Bench's `--p-*` provider colours
    are a second, narrower contract layered on top of this one**: they may tint an
    *identity* surface only — a seat row, console head, tab, pane border, or composer
@@ -115,8 +115,8 @@ redesign) — copied here, not re-derived, so the two never drift silently again
   --red:    #ff7a80;   /* critical, error, destructive */
   --blue:   #6fa8ff;   /* info / selected — also the fixed focus-ring colour, see §5.2 */
   --blue-strong: #4f8ff0;
-  --violet: #b08cff;   /* category: Decisions */
-  --orange: #e0855c;   /* category: Claude-Code */
+  --violet: #b08cff;   /* category: Memory */
+  --orange: #e0855c;   /* category: System */
   --gray:   #908b9b;   /* idle / disabled / absent — contrast-gated at 4.81:1 on --surface-2 */
 
   /* ---------- Text — warm off-white, never blue-white ---------- */
@@ -242,13 +242,16 @@ status contract in §1.2 and the category convention in §1.1 are unchanged.
 `.cat-btn`). Never define it in `:root`. Any component that takes a category or status
 tint reads `var(--accent, var(--blue))`, so the blue instrument color is the fallback.
 
-| Vault folder / domain | `--accent` |
-|---|---|
-| Projects | `var(--blue)` |
-| Patterns | `var(--amber)` |
-| Decisions | `var(--violet)` |
-| Learning | `var(--mint)` |
-| Claude-Code | `var(--orange)` |
+Brain regions follow the Second Brain's top-level folders; small folders share a region.
+
+| Brain region | Second Brain folders | `--accent` |
+|---|---|---|
+| Projects | Projects | `var(--blue)` |
+| Memory | Memory (the Claude Code mirror in Memory/agents/claude-code is not indexed) | `var(--violet)` |
+| Knowledge | Knowledge | `var(--amber)` |
+| Research | Research, Outputs | `var(--mint)` |
+| Day | Reminders, Routines, Inbox | pink `#ff7ab8` (category only, no token) |
+| System | System, the root files, anything unlisted | `var(--orange)` |
 
 ### 1.2 Status semantics (the contract)
 

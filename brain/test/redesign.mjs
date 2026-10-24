@@ -400,6 +400,17 @@ if (!(await up())) {
         && /Today on the calendar/.test(first.textContent) && /\b1 event\b/.test(document.getElementById('day-summary').textContent);
     }));
 
+    // --- Brain map regions follow the Second Brain's folders -------------------
+    const regions = await page.evaluate(() => ({
+      buttons: [...document.querySelectorAll('.cat-btn')].map((b) => b.dataset.folder),
+      legend: [...document.querySelectorAll('#legend .chip')].map((c) => c.textContent.trim()),
+    }));
+    const wantRegions = ['Projects', 'Memory', 'Knowledge', 'Research', 'Day', 'System'];
+    chk(tag('Brain: one filter button per Second Brain region'),
+      JSON.stringify(regions.buttons) === JSON.stringify(wantRegions), JSON.stringify(regions.buttons));
+    chk(tag('Brain: the legend names the same regions, with no catch-all "Other"'),
+      JSON.stringify(regions.legend) === JSON.stringify(wantRegions), JSON.stringify(regions.legend));
+
     // --- 7/8. no uncaught JS errors, at this width -------------------------
     chk(tag('no uncaught JS errors'), errs.length === 0, errs.slice(0, 3).join(' | '));
 

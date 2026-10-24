@@ -12,7 +12,7 @@ import { execFile, spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WebSocketServer } from 'ws';
 import pty from 'node-pty';
-import { buildIndex, linkKey, noteKey, resolveVaultDir, SKIP_DIRS, vaultExcludes, isExcludedPath } from './index-vault.mjs';
+import { buildIndex, linkKey, noteKey, resolveVaultDir, isSkippedDir, vaultExcludes, isExcludedPath } from './index-vault.mjs';
 import { composeGreeting, composeGreetingLines, parseMcpList } from './greeting.mjs';
 import { composeMorningBriefParagraphs } from './morning-brief.mjs';
 
@@ -2006,7 +2006,7 @@ function maskKey(k) {
 // many notes are actually in it, because that is what tells the operator they
 // pointed at the right folder. Capped depth-first walk, not a full index build.
 //
-// Applies the INDEXER's own SKIP_DIRS rather than a second, similar-looking
+// Applies the INDEXER's own skip rule rather than a second, similar-looking
 // list. The first version skipped only dotfiles and node_modules and reported
 // 349 files against an index of 111 — two numbers describing the same folder
 // and disagreeing, which is worse than not showing a number at all.
@@ -2021,7 +2021,7 @@ function countMarkdown(dir, budget = 20000) {
     for (const e of entries) {
       if (e.isDirectory()) {
         const full = path.join(current, e.name);
-        if (!e.name.startsWith('.') && !SKIP_DIRS.has(e.name) && !isExcludedPath(dir, full, excludes)) stack.push(full);
+        if (!e.name.startsWith('.') && !isSkippedDir(e.name) && !isExcludedPath(dir, full, excludes)) stack.push(full);
       } else if (e.name.toLowerCase().endsWith('.md')) {
         n++;
       }
@@ -2427,10 +2427,6 @@ function handleSettingsGet(req, res) {
       value: storedGithubClientId() || '',
       source: process.env.ALFRED_GITHUB_CLIENT_ID ? 'env' : (loadLocalConfig().githubClientId ? 'config' : null),
     },
-    dailyBriefRepo: {
-      value: storedDailyBriefRepo() || '',
-      source: process.env.ALFRED_DAILY_BRIEF_REPO ? 'env' : (loadLocalConfig().dailyBriefRepo ? 'config' : null),
-    },
     // Where the brain actually is, plus how it got that value and whether the
     // folder exists — an install pointed at a folder that is not there reads
     // as "no notes" and is otherwise indistinguishable from an empty vault.
@@ -2447,8 +2443,7 @@ async function handleSettingsPost(req, res) {
   const hasOllama = Object.prototype.hasOwnProperty.call(body, 'ollamaApiKey');
   const hasClientId = Object.prototype.hasOwnProperty.call(body, 'githubClientId');
   const hasVault = Object.prototype.hasOwnProperty.call(body, 'vaultPath');
-  const hasDailyBriefRepo = Object.prototype.hasOwnProperty.call(body, 'dailyBriefRepo');
-  if (!hasOllama && !hasClientId && !hasVault && !hasDailyBriefRepo) {
+  if (!hasOllama && !hasClientId && !hasVault) {
     return sendJson(res, 400, { error: 'nothing to update' });
   }
   if (hasVault) {
@@ -2471,7 +2466,7 @@ async function handleSettingsPost(req, res) {
     indexCache = null;
     invalidateIndexDerived();
     activityCache = null;
-    if (!hasOllama && !hasClientId && !hasDailyBriefRepo) {
+    if (!hasOllama && !hasClientId) {
       return sendJson(res, 200, { ok: true, vault: vaultState(), reindexRequired: true });
     }
   }
@@ -2484,18 +2479,8 @@ async function handleSettingsPost(req, res) {
       return sendJson(res, 400, { error: 'that does not look like a GitHub Client ID — check for stray spaces or line breaks' });
     }
     saveLocalConfig({ githubClientId: cid });
-    if (!hasOllama && !hasDailyBriefRepo) {
-      return sendJson(res, 200, { ok: true, githubClientId: { value: storedGithubClientId() || '', source: cid ? 'config' : null } });
-    }
-  }
-  if (hasDailyBriefRepo) {
-    const repo = String(body.dailyBriefRepo || '').trim();
-    if (repo && !/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(repo)) {
-      return sendJson(res, 400, { error: 'expected an owner/repo, e.g. dpatel-93/DP_dailybrief' });
-    }
-    saveLocalConfig({ dailyBriefRepo: repo });
     if (!hasOllama) {
-      return sendJson(res, 200, { ok: true, dailyBriefRepo: { value: storedDailyBriefRepo() || '', source: repo ? 'config' : null } });
+      return sendJson(res, 200, { ok: true, githubClientId: { value: storedGithubClientId() || '', source: cid ? 'config' : null } });
     }
   }
   const raw = String(body.ollamaApiKey || '').trim();
@@ -4249,16 +4234,6 @@ function storedGithubToken() {
 }
 function storedGithubClientId() {
   return String(process.env.ALFRED_GITHUB_CLIENT_ID || loadLocalConfig().githubClientId || '').trim() || null;
-}
-
-// `owner/repo` of a project whose GitHub Action commits a daily brief back to
-// itself — e.g. dpatel-93/DP_dailybrief. Not hardcoded: this repo is the
-// portable, installable snapshot of one operator's setup, and baking a
-// personal repo name into shared framework source is exactly the kind of
-// stranger's-identity leak ONBOARDING.md exists to avoid. Unset by default;
-// the morning-brief button says so plainly rather than guessing a repo.
-function storedDailyBriefRepo() {
-  return String(process.env.ALFRED_DAILY_BRIEF_REPO || loadLocalConfig().dailyBriefRepo || '').trim() || null;
 }
 
 // One reader for both paths, so every caller downstream is identical.

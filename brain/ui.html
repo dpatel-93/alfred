@@ -48,8 +48,8 @@
     --red:    #ff4d6d;   /* critical / error */
     --blue:   #4cc9ff;   /* info / selected */
     --blue-strong: #1fb6ff;
-    --violet: #c77dff;   /* category: Decisions */
-    --orange: #ff8c42;   /* category: Claude-Code */
+    --violet: #c77dff;   /* category: Memory */
+    --orange: #ff8c42;   /* category: System */
     --gray:   #8590a8;   /* idle / disabled / absent — contrast-gated at 5.52:1 on --surface-2, 4.83:1 on its own 10% tint */
 
     /* ---------- Text — warm off-white, never blue-white ---------- */
@@ -427,7 +427,7 @@
   #dock { flex: 1 1 auto; display: flex; align-items: center; gap: 4px; min-width: 0; overflow-x: auto; }
   /* Sheet launcher icons (plan §2.1/P7): Library/Roster/Protocols/Enterprise/
      Workshop. Short glyphs (LIB/ROS/PRO/ENT/WKS), same abbreviation
-     convention as .cat-btn's PRJ/PAT/DEC/LRN/CLD — full names live in
+     convention as .cat-btn's PRJ/MEM/KNW/RES/DAY/SYS — full names live in
      `title`. Plain buttons, same active/hover contract as .view-btn, but
      kept a separate class since they open a sheet rather than switch #views'
      2-tab nav — only .view-btn drives aria-selected on a role="tab". */
@@ -2490,11 +2490,12 @@
          swapped dataset — with .brain-head hidden for that view (CSS). -->
     <section id="pane-brain" class="pane">
       <div id="radial-menu" class="brain-head">
-        <div class="cat-btn" data-folder="Projects" style="--accent:#5ca8ff;">PRJ</div>
-        <div class="cat-btn" data-folder="Patterns" style="--accent:#f0b35a;">PAT</div>
-        <div class="cat-btn" data-folder="Decisions" style="--accent:#ad8cff;">DEC</div>
-        <div class="cat-btn" data-folder="Learning" style="--accent:#63e6b5;">LRN</div>
-        <div class="cat-btn" data-folder="Claude-Code" style="--accent:#f18b5b;">CLD</div>
+        <div class="cat-btn" data-folder="Projects" title="Projects" style="--accent:#5ca8ff;">PRJ</div>
+        <div class="cat-btn" data-folder="Memory" title="Memory" style="--accent:#ad8cff;">MEM</div>
+        <div class="cat-btn" data-folder="Knowledge" title="Knowledge" style="--accent:#f0b35a;">KNW</div>
+        <div class="cat-btn" data-folder="Research" title="Research and Outputs" style="--accent:#63e6b5;">RES</div>
+        <div class="cat-btn" data-folder="Day" title="Reminders, Routines and Inbox" style="--accent:#ff7ab8;">DAY</div>
+        <div class="cat-btn" data-folder="System" title="System and the brain's root files" style="--accent:#f18b5b;">SYS</div>
       </div>
       <div class="brain-split">
         <div class="brain-canvas">
@@ -2830,15 +2831,18 @@
   // Saturated deliberately: at 7px against a near-black field the desaturated
   // originals read as uniformly grey-blue and the folder colour stopped
   // carrying information.
+  // Keyed by brain REGION (see BRAIN_LOBES), not by raw folder: several
+  // Second Brain folders share a region, and they must share its colour too.
   var FOLDER_COLORS = {
     'Projects': '#3d9bff',
-    'Patterns': '#ffb02e',
-    'Decisions': '#b478ff',
-    'Learning': '#2ff5a8',
-    'Claude-Code': '#ff7a3d',
+    'Memory': '#b478ff',
+    'Knowledge': '#ffb02e',
+    'Research': '#2ff5a8',
+    'Day': '#ff5fa2',
+    'System': '#ff7a3d',
   };
   var DEFAULT_COLOR = '#8d9dad';
-  function colorFor(folder) { return FOLDER_COLORS[folder] || DEFAULT_COLOR; }
+  function colorFor(folder) { return FOLDER_COLORS[lobeFor(folder).folder] || DEFAULT_COLOR; }
 
   // Wireframe, sulci, links and org lanes: a cyan at low alpha derived from --focus-rgb
   // (pulled 65% of the way toward the skin's cyan, #4cc9ff) so the brain follows the skin.
@@ -7145,7 +7149,7 @@
   // reads as a region lighting up rather than as a colour.
   //
   // Regions are labelled by FOLDER, never by lobe name. The outline is
-  // anatomy; mapping "Decisions" onto a frontal region is a metaphor, and
+  // anatomy; mapping "Projects" onto a frontal region is a metaphor, and
   // labelling the metaphor with real anatomical terms would put a false claim
   // about neuroanatomy on a screen the CEO shows other people.
   // ============================================================
@@ -7287,22 +7291,29 @@
     else if (node.x * sign < 0) { node.x = sign * ax; node.vx = 0; } // wrong side of the fissure
   }
 
+  // One region per area of the Second Brain. 'folders' lists the top-level
+  // folders that live in each; the small ones share (Outputs with Research,
+  // Reminders/Routines/Inbox as the Day region). The older vault layout's
+  // folders are aliased so a vault in that shape still lands somewhere sensible.
+  // 'folder' is the region key used by the filter buttons and the palette.
   var BRAIN_LOBES = [
-    { folder: 'Projects',    label: 'PROJECTS',    x:  0.33, y: -0.56, r: 0.42 },
-    { folder: 'Decisions',   label: 'DECISIONS',   x: -0.33, y: -0.56, r: 0.40 },
-    { folder: 'Patterns',    label: 'PATTERNS',    x:  0.43, y:  0.06, r: 0.42 },
-    { folder: 'Learning',    label: 'LEARNING',    x: -0.45, y:  0.06, r: 0.42 },
-    { folder: 'Claude-Code', label: 'CLAUDE-CODE', x:  0.21, y:  0.60, r: 0.36 },
-    { folder: 'Other',       label: 'OTHER',       x: -0.22, y:  0.62, r: 0.36 },
+    { folder: 'Projects',  label: 'PROJECTS',  folders: ['Projects'], x: 0.33, y: -0.56, r: 0.42 },
+    { folder: 'Memory',    label: 'MEMORY',    folders: ['Memory'], x: -0.33, y: -0.56, r: 0.40 },
+    { folder: 'Knowledge', label: 'KNOWLEDGE', folders: ['Knowledge', 'Decisions', 'Patterns', 'Learning'], x: 0.43, y: 0.06, r: 0.42 },
+    { folder: 'Research',  label: 'RESEARCH',  folders: ['Research', 'Outputs'], x: -0.45, y: 0.06, r: 0.42 },
+    { folder: 'Day',       label: 'DAY',       folders: ['Reminders', 'Routines', 'Inbox'], x: 0.21, y: 0.60, r: 0.36 },
+    { folder: 'System',    label: 'SYSTEM',    folders: ['System', '(root)', 'Claude-Code'], x: -0.22, y: 0.62, r: 0.36 },
   ];
+  // Anything not listed above (a folder the operator adds later) joins SYSTEM.
+  var FALLBACK_LOBE = 'System';
   // folder -> { score 0..1, count, lastMs }, refreshed by the /api/status poll.
   // Server-derived from note mtimes, decaying over 6h — see buildBrainActivity.
   var brainActivity = {};
 
-  // Folders outside the five coloured ones all render in the OTHER region, so
-  // their activity has to be merged there too. Reading brainActivity directly
-  // per lobe would silently drop every Business/Investigations/DailyBrief
-  // edit, and OTHER would be the one region that never lit up.
+  // Activity arrives per top-level folder, and several folders share a region,
+  // so it has to be merged per region. Reading brainActivity directly per lobe
+  // would silently drop every Reminders/Routines/Inbox edit, and DAY would be
+  // the one region that never lit up.
   function lobeActivityScore(folder) {
     var best = 0;
     for (var k in brainActivity) {
@@ -7315,10 +7326,12 @@
   }
 
   var lobeByFolder = {};
-  BRAIN_LOBES.forEach(function (L) { lobeByFolder[L.folder] = L; });
-  // Everything outside the five coloured folders shares the OTHER region —
-  // the same fallback colorFor() already makes, so colour and position agree.
-  function lobeFor(folder) { return lobeByFolder[folder] || lobeByFolder.Other; }
+  BRAIN_LOBES.forEach(function (L) {
+    lobeByFolder[L.folder] = L;
+    L.folders.forEach(function (f) { lobeByFolder[f] = L; });
+  });
+  // colorFor() goes through this too, so colour and position always agree.
+  function lobeFor(folder) { return lobeByFolder[folder] || lobeByFolder[FALLBACK_LOBE]; }
 
   // Drawn as TWO closed hemispheres with a gap between them, not one silhouette
   // with a line down it. A single outline reads as an egg no matter how many
@@ -7696,7 +7709,7 @@
 
       var isHi = highlightSet && highlightSet.has(n.id);
       var isOps = currentView === 'ops';
-      var dim = (highlightSet && !isHi) || (!isOps && folderFilter && n.folder !== folderFilter) || (isOps && n.orgStatus === 'idle');
+      var dim = (highlightSet && !isHi) || (!isOps && folderFilter && lobeFor(n.folder).folder !== folderFilter) || (isOps && n.orgStatus === 'idle');
       var matchScore = searchMatches ? searchMatches.get(n.id) : null;
 
       var r = n.r * cam.scale;
@@ -10186,14 +10199,14 @@
 
   function buildLegend() {
     var legend = document.getElementById('legend');
-    Object.keys(FOLDER_COLORS).forEach(function (folder) {
+    BRAIN_LOBES.forEach(function (L) {
+      var col = FOLDER_COLORS[L.folder] || DEFAULT_COLOR;
       var dot = el('span', 'dot', []);
-      dot.style.background = FOLDER_COLORS[folder]; dot.style.color = FOLDER_COLORS[folder];
-      legend.appendChild(el('div', 'chip', [dot, folder]));
+      dot.style.background = col; dot.style.color = col;
+      var chip = el('div', 'chip', [dot, L.folder]);
+      chip.title = L.folders.filter(function (f) { return f !== '(root)'; }).join(', ');
+      legend.appendChild(chip);
     });
-    var dot2 = el('span', 'dot', []);
-    dot2.style.background = DEFAULT_COLOR; dot2.style.color = DEFAULT_COLOR;
-    legend.appendChild(el('div', 'chip', [dot2, 'Other']));
   }
 
   // ============================================================
