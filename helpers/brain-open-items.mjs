@@ -15,6 +15,7 @@
 
 import fs from 'node:fs';
 import { sharedBrainPath, collectOpenItems, easternNow, upcomingEvents } from './brain-librarian.mjs';
+import { check as handoffCheck } from './brain-handoffs.mjs';
 
 // --- Configuration ---
 const NAMES = (process.env.ALFRED_INBOX_NAMES || 'claude,claude-code,librarian,all')
@@ -46,6 +47,13 @@ function main() {
   if (mine.length) {
     out.push(`  Signals for you (${mine.length}): handle per MANIFESTO §6, then reply or file them:`,
       ...mine.map((s) => `    - ${s.type} from ${s.from}${s.ageDays > 7 ? ` (${s.ageDays} days old)` : ''} · ${s.file}`));
+  }
+  // Grok's handoff file at the Drive root: what the user asked Grok for that Grok can't do
+  // itself. Checked at every session, so it is never left waiting for the hourly check.
+  const handoffs = handoffCheck(brain, { now }).items;
+  if (handoffs.length) {
+    out.push(`  From Grok's handoff file (${handoffs.length}): run \`node ~/.claude/helpers/brain-handoffs.mjs check --apply\`, do each ask, report it in your file (MANIFESTO §6):`,
+      ...handoffs.map((h) => `    - ${h.kind} · ${h.ref} · ${h.status}`));
   }
   if (out.length === 1) return;
   out.push('  Mention what is due. Close a reminder only when the user says it is done (edit it if you',
