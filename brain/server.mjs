@@ -2116,7 +2116,8 @@ async function handleAssistantLibrarian(req, res) {
 // Inbox as a handoff so nothing typed is lost. The CLI runs in an empty temp folder,
 // so it has nothing of the brain to read or edit; only the user's sentence and today's
 // date leave the machine.
-const PROVIDER_RUN = path.join(HELPERS_DIR, 'provider-run.mjs');
+// HELPERS_DIR is declared further down the file; this helper lives in the same folder.
+const PROVIDER_RUN = path.join(os.homedir(), '.claude', 'helpers', 'provider-run.mjs');
 const TELL_GROK_TIMEOUT_MS = 120 * 1000;
 const TELL_GROK_MAX_CHARS = 500;
 let tellGrokBusy = false;
