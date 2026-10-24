@@ -28,6 +28,11 @@ const LOCKED = [/^MANIFESTO\.md$/i, /^README\.md$/i, /^index\.md$/i, /^Inbox\//i
 const REMINDER_RAW = ['until', 'nudge'];
 const REMINDER_SET = ['title', 'due', 'time', 'kind', 'scope', 'note', 'status', ...REMINDER_RAW];
 const ROUTINE_SET = ['title', 'schedule', 'time', 'status', 'note'];
+// Bookkeeping the Librarian writes itself; a note that also sets them is not refused for it.
+const BOOKKEEPING = ['last updated', 'updated by'];
+// A bot's own log (System/logs/grok-2026-10.md): each Grok sub-bot has its own Drive grant,
+// so one bot often can't edit the log another made, and sends its line by note instead.
+const LOG_RE = /^System\/logs\/[^/]+\.md$/i;
 const RECENT_HOURS = 48;
 const RECENT_MAX = 30;
 
@@ -50,6 +55,7 @@ export function parseNote(name, text) {
   const target = [h.target, h.re].map(cleanRef).find((r) => /\.md$/i.test(r)) || '';
   const set = {};
   const add = [];
+  const logLines = [];
   const cancel = [];
   for (const line of lines) {
     // "- **Set:** Due = 2026-10-30", or several on one line: "- **Set:** Due: 2026-10-24; Nudge: wake + brief".
@@ -64,7 +70,11 @@ export function parseNote(name, text) {
       if (rep[1].toLowerCase() === rep[2].toLowerCase()) set[rep[1].trim().toLowerCase()] = rep[3].trim();
     }
     const a = line.match(/^- \*\*Add:\*\*\s*(?:-\s+)?(.+)$/);
-    if (a) add.push(...parseEvents(`- ${a[1].trim()}`).events);
+    if (a) {
+      const events = parseEvents(`- ${a[1].trim()}`).events;
+      add.push(...events);
+      if (!events.length) logLines.push(a[1].trim());
+    }
     const c = line.match(/^- \*\*Cancel:\*\*\s*(\d{4}-\d{2}-\d{2})\s+(.+?)\s*$/);
     if (c) cancel.push({ date: c[1], title: c[2].replace(/^\d{1,2}:\d{2}(?:-\d{1,2}:\d{2})?\s+/, '').replace(/\s+@\s+.*$/, '') });
   }
@@ -72,13 +82,15 @@ export function parseNote(name, text) {
   if (type === 'capture' && target === CALENDAR_FILE && !add.length) add.push(...parseEvents(text).events);
   const fences = lines.map((l, i) => (FENCE_RE.test(l) ? i : -1)).filter((i) => i >= 0);
   const replace = fences.length >= 2 ? `${lines.slice(fences[0] + 1, fences[1]).join('\n').trim()}\n` : null;
+  for (const f of BOOKKEEPING) delete set[f];
   const status = firstWord(h.status) || 'open';
   // "grok (Cloud Engineering Bot)" is grok: sub-bots sign with their bot name in brackets.
   const from = firstWord(h.from || (name.match(/^\d{4}-\d{2}-\d{2}-\d{4}--([a-z0-9-]+)--/i) || [])[1] || '');
   const close = type === 'close' || ['done', 'cancelled'].includes(firstWord(set.status));
   const actionable = NOTE_TYPES.includes(type) && !!target
-    && (close || Object.keys(set).length > 0 || add.length > 0 || cancel.length > 0 || !!replace);
-  return { name, file: `Inbox/${name}`, type, from, status, created: stampOf(h.created) || null, target, set, add, cancel, replace, close, actionable };
+    && (close || Object.keys(set).length > 0 || add.length > 0 || cancel.length > 0 || !!replace
+      || (LOG_RE.test(target) && logLines.length > 0));
+  return { name, file: `Inbox/${name}`, type, from, status, created: stampOf(h.created) || null, target, set, add, logLines, cancel, replace, close, actionable };
 }
 
 export function openNotes(brain) {
@@ -92,6 +104,7 @@ export function openNotes(brain) {
 // --- Where a note points ---------------------------------------------------------------
 function resolveTarget(brain, ref) {
   if (ref === CALENDAR_FILE) return { kind: 'calendar', rel: ref };
+  if (LOG_RE.test(ref)) return { kind: 'log', rel: ref, full: path.join(brain, ref), exists: fs.existsSync(path.join(brain, ref)) };
   // Another signal: a close note may file it (Grok can't move files the PC made).
   if (/^Inbox\/(?:Done\/)?[^/]+\.md$/i.test(ref)) {
     const base = path.basename(ref);
@@ -214,6 +227,26 @@ function applyToCalendar(brain, n, { asOf, now }) {
   return done.join('; ');
 }
 
+// "- **Add:** sync: checked" on the sender's own log: one "- HH:MM ET <text>" line under the
+// note's day heading, in time order, written once however often the note is seen.
+function applyToLog(brain, n, t, { run, asOf }) {
+  if (!n.logLines.length) fail(`only Add lines go into ${t.rel} by note`);
+  if (!n.from || !path.basename(t.rel).toLowerCase().startsWith(`${n.from}-`)) fail(`only ${n.from || 'its owner'}'s own log takes lines by note`);
+  const lines = (t.exists ? fs.readFileSync(t.full, 'utf8') : `# ${path.basename(t.rel, '.md')}\n`).trimEnd().split(/\r?\n/);
+  const time = asOf.stamp.slice(11, 16);
+  const fresh = n.logLines.map((l) => `- ${time} ET ${oneLine(l, 300)}`).filter((l) => !lines.includes(l));
+  if (!fresh.length) return `already in ${t.rel}`;
+  let head = lines.indexOf(`## ${asOf.date}`);
+  if (head < 0) { lines.push('', `## ${asOf.date}`); head = lines.length - 1; }
+  let end = lines.findIndex((l, i) => i > head && /^## /.test(l));
+  if (end < 0) end = lines.length;
+  while (end > head + 1 && !lines[end - 1].trim()) end--;
+  const later = lines.findIndex((l, i) => i > head && i < end && /^- \d{2}:\d{2} ET /.test(l) && l.slice(2, 7) > time);
+  lines.splice(later >= 0 ? later : end, 0, ...fresh);
+  run.write(t.full, `${lines.join('\n')}\n`, `log line from ${n.from}`);
+  return `added ${fresh.length} line(s) to ${t.rel}`;
+}
+
 // A close note on another signal files it: Status done, a Handled line, moved to Inbox/Done/.
 function fileSignal(brain, n, t, { run, now, by }) {
   if (!n.close) fail(`a signal can only be closed by note, not changed (${t.rel})`);
@@ -243,6 +276,7 @@ export function applyChangeNotes(brain, run, now = easternNow()) {
       const t = resolveTarget(brain, n.target);
       if (t.kind === 'calendar') outcome = applyToCalendar(brain, n, ctx);
       else if (t.kind === 'signal') outcome = fileSignal(brain, n, t, ctx);
+      else if (t.kind === 'log') outcome = applyToLog(brain, n, t, ctx);
       else {
         if (!t.exists && !(n.replace && t.kind === 'file')) fail(`target "${n.target}" not found`);
         const later = supersededBy(t, n);

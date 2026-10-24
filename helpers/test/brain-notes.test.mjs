@@ -69,6 +69,18 @@ put('Inbox/2026-10-26-0845--grok--librarian--amend--calendar.md', note('amend', 
 put('Inbox/2026-10-26-0850--grok--librarian--capture--ignite.md', note('capture', 'Calendar/events.md', '2026-10-26 08:50 ET',
   '\nPlease add this line:\n\n- 2026-11-17..2026-11-20 Microsoft Ignite @ San Francisco (added by grok)\n'));
 put('Inbox/2026-10-26-0855--grok--claude--amend--topic.md', note('amend', 'Memory/topics/home.md', '2026-10-26 08:55 ET', '\nAdd a line about the boiler.\n'));
+// Shapes seen on 2026-10-24: Grok also sets Last updated (refused then, applied now), and an
+// hourly sync bot sends its log line by note because it can't edit the main bot's log.
+put('Reminders/2026-10-25--vet.md', reminder('Vet visit', 'reminder', '2026-10-27 10:00'));
+put('Routines/user-stretch.md', '# The user: Stretch\n\n- **Kind:** routine\n- **Runs:** the user\n- **Schedule:** weekdays\n- **Status:** active\n- **Last updated:** 2026-10-20 09:00 ET\n');
+put('Inbox/2026-10-26-0856--grok--librarian--amend--move-vet.md', note('amend', 'Reminders/2026-10-25--vet.md', '2026-10-26 08:56 ET',
+  '- **Set:** Due = 2026-10-28 15:00\n- **Set:** Last updated = 2026-10-26 08:56 ET\n'));
+put('Inbox/2026-10-26-0857--grok--librarian--amend--pause-stretch.md', note('amend', 'Routines/user-stretch.md', '2026-10-26 08:57 ET',
+  '- **Set:** Status = paused\n- **Set:** Last updated = 2026-10-26 08:57 ET\n'));
+put('System/logs/grok-2026-10.md', '# Grok Bot Journal: October 2026\n\n- **Last updated:** 2026-10-26 09:30 ET\n\n## 2026-10-25\n- 21:00 ET sync: quiet.\n\n## 2026-10-26\n- 08:00 ET sync: quiet.\n- 09:30 ET sync: checked (2 new)\n');
+put('Inbox/2026-10-26-0901--grok--librarian--amend--log-sync-check.md', note('amend', 'System/logs/grok-2026-10.md', '2026-10-26 09:01 ET', '- **Add:** sync: checked (3 new)\n'));
+put('Inbox/2026-10-26-0930--grok--librarian--amend--log-sync-again.md', note('amend', 'System/logs/grok-2026-10.md', '2026-10-26 09:30 ET', '- **Add:** sync: checked (2 new)\n'));
+put('Inbox/2026-10-26-0931--gemini--librarian--amend--log-grok.md', note('amend', 'System/logs/grok-2026-10.md', '2026-10-26 09:31 ET', '- **Add:** gemini was here\n', 'gemini'));
 // Shapes seen from Grok's bots on 2026-10-24: a close note that files another signal, and a
 // whole-file replacement between HTML comment markers, both signed "grok (<bot name>)".
 put('Inbox/2026-10-25-2100--user--grok--handoff--old-ask.md', '# Handoff: old ask\n\n- **Kind:** signal\n- **Type:** handoff\n- **From:** user\n- **To:** grok\n- **Status:** open\n- **Created:** 2026-10-25 21:00 ET\n\nDone already.\n');
@@ -108,7 +120,7 @@ chk('the index\'s next 7 days include waiting calendar changes', upcomingEvents(
 console.log('\nApplying');
 const before = read('Reminders/2026-10-21--dentist.md');
 runLibrarian(ROOT, { dryRun: true, now: NOW });
-chk('a dry run changes nothing', read('Reminders/2026-10-21--dentist.md') === before && openNotes(ROOT).length === 14);
+chk('a dry run changes nothing', read('Reminders/2026-10-21--dentist.md') === before && openNotes(ROOT).length === 19, String(openNotes(ROOT).length));
 chk('a bot\'s signature "grok (Cloud Engineering Bot)" reads as grok', parseNote('b.md', read('Inbox/2026-10-26-0905--grok--all--amend--brief.md')).from === 'grok');
 
 // --- The Librarian applies ---
@@ -129,6 +141,16 @@ chk('a change that fails its checks stays in the Inbox marked for a person', /\*
 chk('a refused ("needs a look") note is never shown as applied', collectOpenItems(ROOT, NOW).all.find((i) => i.file === 'Reminders/2026-10-23--past.md')?.due === '2026-10-30'
   && !pendingChanges(ROOT).reminders.has('2026-10-23--past.md'));
 chk('a user routine is paused, with the date', /\*\*Status:\*\* paused \(since 2026-10-26\)/.test(read('Routines/user-walk.md')));
+chk('the dashboard keeps the buttons on an item whose note was refused', assistantFeed(ROOT, NOW).upcoming.find((i) => i.file === 'Reminders/2026-10-23--past.md')?.pending === null);
+chk('a note that also sets Last updated is applied, not refused (reminder)', /\*\*Due:\*\* 2026-10-28 15:00/.test(read('Reminders/2026-10-25--vet.md'))
+  && exists('Inbox/Done/2026-10-26-0856--grok--librarian--amend--move-vet.md'), read('Inbox/2026-10-26-0856--grok--librarian--amend--move-vet.md'));
+chk('a note that also sets Last updated is applied, not refused (routine)', /\*\*Status:\*\* paused/.test(read('Routines/user-stretch.md'))
+  && exists('Inbox/Done/2026-10-26-0857--grok--librarian--amend--pause-stretch.md'));
+const log = read('System/logs/grok-2026-10.md');
+chk('a bot\'s log line by note lands under its day, in time order, once', /- 08:00 ET sync: quiet\.\n- 09:01 ET sync: checked \(3 new\)\n- 09:30 ET sync: checked \(2 new\)\n$/.test(log)
+  && (log.match(/09:30 ET sync/g) || []).length === 1 && exists('Inbox/Done/2026-10-26-0930--grok--librarian--amend--log-sync-again.md'), log);
+chk('another AI cannot write into Grok\'s log by note', !/gemini was here/.test(log)
+  && /needs a look \(only gemini's own log/.test(read('Inbox/2026-10-26-0931--gemini--librarian--amend--log-grok.md')));
 const errands = read('Routines/grok-errands.md');
 const kept = fs.readdirSync(path.join(ROOT, 'Archive/2026-10/replaced')).find((f) => f.startsWith('Routines__grok-errands--'));
 chk('the AI that runs a routine can replace its whole text, and the old text is kept', errands === REPLACED

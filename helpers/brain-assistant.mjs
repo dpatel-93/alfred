@@ -297,8 +297,9 @@ export function assistantFeed(brain = sharedBrainPath(), now = easternNow()) {
   const open = collectOpenItems(brain, now);
   // An item with a signal already in flight (a close waiting for the Librarian, an amend waiting
   // for its curator) is marked so the dashboard shows "pending" instead of offering the action again.
+  // A refused note ("needs a look") changes nothing, so the item keeps its buttons.
   const pending = new Map();
-  for (const s of open.signals) if (s.re && ['close', 'amend'].includes(s.type)) pending.set(path.basename(s.re), s.type);
+  for (const s of open.signals) if (s.re && s.status === 'open' && ['close', 'amend'].includes(s.type)) pending.set(path.basename(s.re), s.type);
   const slim = ({ file, title, kind, due, time, scope, author, pendingNote }) => ({
     file, title, kind, due, time: time || null, scope,
     author: String(author || '').split('(')[0].trim(), ours: authorIsOurs(author),
