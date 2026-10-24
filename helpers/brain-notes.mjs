@@ -47,8 +47,14 @@ export function parseNote(name, text) {
   const cancel = [];
   const lines = text.split(/\r?\n/);
   for (const line of lines) {
-    const s = line.match(/^- \*\*Set:\*\*\s*([A-Za-z ]+?)\s*=\s*(.+)$/);
-    if (s) set[s[1].trim().toLowerCase()] = s[2].trim();
+    // "- **Set:** Due = 2026-10-30", or several on one line: "- **Set:** Due: 2026-10-24; Nudge: wake + brief".
+    const s = line.match(/^- \*\*Set:\*\*\s*(.+)$/);
+    if (s) {
+      for (const part of s[1].split(/\s*;\s*/)) {
+        const kv = part.match(/^([A-Za-z ]+?)\s*(?:=|:)\s*(.+)$/);
+        if (kv) set[kv[1].trim().toLowerCase()] = kv[2].trim();
+      }
+    }
     for (const rep of line.matchAll(/replace\s+`- \*\*([A-Za-z ]+):\*\*[^`]*`\s+with\s+`- \*\*([A-Za-z ]+):\*\*\s*([^`]*)`/gi)) {
       if (rep[1].toLowerCase() === rep[2].toLowerCase()) set[rep[1].trim().toLowerCase()] = rep[3].trim();
     }
