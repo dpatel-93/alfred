@@ -173,7 +173,11 @@ export function addEvent(brain, ev, now) {
 
 // --- CLI ---------------------------------------------------------------------------
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
-if (isMain) {
+// Not a top-level await: brain-librarian.mjs imports this file, and awaiting it here while this
+// module is still evaluating deadlocks the cycle (the CLI exited 13 doing nothing).
+if (isMain) runCli().catch((err) => { console.error(err.message); process.exitCode = 1; });
+
+async function runCli() {
   const { easternNow, sharedBrainPath } = await import('./brain-librarian.mjs');
   const brain = sharedBrainPath();
   const now = easternNow();
