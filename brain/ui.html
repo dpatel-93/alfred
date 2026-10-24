@@ -2163,6 +2163,139 @@
   .day-recent-more { align-self: flex-start; }
 
   /* ==========================================================================
+     CALENDAR (Day): the month card at the top of column 2, "Today on the
+     calendar" at the top of column 1, and the Google Calendar block in
+     Settings. Dots: mint = a brain reminder due that day, the calendar's own
+     colour (inline --accent, validated hex only) = a Google event, hollow = an
+     invitation still waiting for an answer. Tokens and color-mix() only.
+     ========================================================================== */
+  .cal { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+  .cal-head { display: flex; align-items: center; gap: var(--sp-3); }
+  .cal-month {
+    flex: 1 1 auto; min-width: 0; margin: 0; text-align: left;
+    font-family: var(--font-display); font-size: var(--fs-md); font-weight: 600;
+    letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text);
+  }
+  .btn.cal-nav { flex: none; min-width: 28px; min-height: 28px; padding: 0 var(--sp-3); line-height: 1; }
+  .btn.cal-today { flex: none; min-height: 28px; padding: 0 var(--sp-4); }
+  .btn.cal-today[hidden] { display: none; }
+  .cal-dow, .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+  .cal-dow span {
+    padding: var(--sp-1) 0; text-align: center; color: var(--text-dim);
+    font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--track-kicker); text-transform: uppercase;
+  }
+  .cal-day {
+    position: relative; min-width: 0; min-height: 44px; margin: 0;
+    padding: var(--sp-3) var(--sp-1) var(--sp-2);
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: var(--sp-2);
+    border: 1px solid transparent; border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+    color: var(--text); font: inherit; font-family: var(--font-mono); font-size: var(--fs-sm);
+    font-variant-numeric: tabular-nums; line-height: 1; cursor: pointer;
+    transition: background var(--t-fast) var(--ease-out), border-color var(--t-fast) var(--ease-out);
+  }
+  .cal-day:hover { background: color-mix(in srgb, var(--blue) 7%, var(--surface-2)); }
+  .cal-day.other { background: transparent; color: var(--text-dim); }
+  .cal-day.today { border-color: var(--mint); box-shadow: 0 0 8px -2px color-mix(in srgb, var(--mint) 55%, transparent); }
+  .cal-day.selected {
+    background: color-mix(in srgb, var(--blue) 14%, var(--surface-2));
+    box-shadow: inset 0 -2px 0 var(--blue);
+  }
+  .cal-day.today.selected { box-shadow: inset 0 -2px 0 var(--blue), 0 0 8px -2px color-mix(in srgb, var(--mint) 55%, transparent); }
+  .cal-day.selected:not(.today) { border-color: color-mix(in srgb, var(--blue) 70%, transparent); }
+  .cal-num { display: block; }
+  .cal-dots {
+    display: flex; align-items: center; justify-content: center; gap: 2px;
+    min-height: 6px; max-width: 100%; overflow: hidden;
+  }
+  .cal-dot { --accent: var(--blue); flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .cal-dot.rem { --accent: var(--mint); }
+  .cal-dot.hollow { background: transparent; box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .cal-more { flex: none; color: var(--text-dim); font-size: var(--fs-micro); line-height: 6px; letter-spacing: 0; }
+  .cal-note { display: block; }
+  .cal-note.warn { color: var(--amber); }
+  .cal-link {
+    margin: 0; padding: 0; border: 0; background: none; cursor: pointer; color: var(--blue);
+    font: inherit; text-decoration: underline; text-underline-offset: 3px;
+  }
+  .cal-link:hover { color: var(--text); }
+
+  .cal-agenda {
+    display: flex; flex-direction: column; gap: var(--sp-3);
+    margin-top: var(--sp-2); padding-top: var(--sp-5); border-top: 1px solid var(--border);
+  }
+  .cal-agenda .day-group { margin-top: 0; }
+  .cal-events { display: flex; flex-direction: column; gap: var(--sp-3); }
+  .cal-event {
+    --accent: var(--blue);
+    display: grid; grid-template-columns: minmax(4.4em, auto) minmax(0, 1fr); align-items: baseline; gap: var(--sp-1) var(--sp-4);
+    padding: var(--sp-4) var(--sp-5); border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--surface-2) 78%, transparent);
+    box-shadow: inset 3px 0 0 var(--accent);
+    color: var(--text); font-size: 12.5px; text-decoration: none;
+    transition: background var(--t-fast) var(--ease-out);
+  }
+  a.cal-event { cursor: pointer; }
+  a.cal-event:hover { background: color-mix(in srgb, var(--blue) 7%, var(--surface-2)); }
+  .cal-event .ce-time {
+    color: var(--text-dim); font-family: var(--font-mono); font-size: var(--fs-xs);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .cal-event .ce-title { min-width: 0; overflow-wrap: anywhere; }
+  .cal-event .ce-meta { grid-column: 2; display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); min-width: 0; }
+  .cal-event .ce-where { color: var(--text-dim); font-size: var(--fs-xs); min-width: 0; overflow-wrap: anywhere; }
+  .cal-chip {
+    --accent: var(--blue);
+    display: inline-flex; align-items: center; gap: var(--sp-2); max-width: 100%; min-width: 0;
+    padding: 0 var(--sp-3); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); border-radius: var(--r-xs);
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface-2)); color: var(--text-soft);
+    font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--track-kicker);
+    text-transform: uppercase; white-space: nowrap;
+  }
+  .cal-chip::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .cal-chip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+  .cal-day:focus-visible, .cal-link:focus-visible, a.cal-event:focus-visible, .btn.cal-nav:focus-visible,
+  .btn.cal-today:focus-visible, .cal-set-toggle:focus-visible {
+    outline: 2px solid var(--blue); outline-offset: 2px;
+  }
+  .cal-day:focus-visible { z-index: 1; }
+
+  /* Settings -> Google Calendar (inside the shared modal; reuses .settings-*). */
+  .cal-set { margin-top: var(--sp-9); }
+  .cal-set, .cal-set-body { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+  .cal-set-status {
+    display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--sp-2) var(--sp-6);
+    margin: 0; padding: var(--sp-4) var(--sp-5); border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--surface-2) 78%, transparent); box-shadow: inset 3px 0 0 var(--gray);
+    font-size: var(--fs-sm);
+  }
+  .cal-set-status.on { box-shadow: inset 3px 0 0 var(--mint); }
+  .cal-set-status dt { color: var(--text-dim); font-family: var(--font-mono); font-size: var(--fs-xs); letter-spacing: var(--track-ui); text-transform: uppercase; }
+  .cal-set-status dd { margin: 0; min-width: 0; overflow-wrap: anywhere; color: var(--text); }
+  .cal-set-status dd.bad { color: var(--red); }
+  .cal-set-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); }
+  .cal-set-field { display: flex; flex-direction: column; gap: var(--sp-2); }
+  .cal-set-field label { color: var(--text-dim); font-family: var(--font-mono); font-size: var(--fs-xs); letter-spacing: var(--track-ui); text-transform: uppercase; }
+  .cal-set-saved { margin: 0; color: var(--mint); font-size: var(--fs-sm); }
+  .cal-set-toggle {
+    align-self: flex-start; margin: 0; padding: var(--sp-2) 0; border: 0; background: none; cursor: pointer;
+    color: var(--blue); font: inherit; font-size: var(--fs-xs); text-decoration: underline; text-underline-offset: 3px;
+  }
+  .cal-set-help { margin: 0; padding: var(--sp-4) var(--sp-5) var(--sp-4) var(--sp-9); border-left: 2px solid var(--border-strong); color: var(--text-soft); font-size: var(--fs-xs); line-height: var(--lh-base); }
+  .cal-set-help[hidden] { display: none; }
+  .cal-set-help li + li { margin-top: var(--sp-2); }
+  .cal-set input:focus-visible, .cal-set .settings-save:focus-visible, .cal-set .settings-clear:focus-visible {
+    outline: 2px solid var(--blue); outline-offset: 2px;
+  }
+  .cal-set .settings-clear { margin-top: 0; }
+  .cal-set .settings-note, .cal-set .settings-state, .cal-set .settings-warn { margin: 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cal-day, .cal-event { transition-duration: .01ms !important; }
+  }
+
+  /* ==========================================================================
      THE GATE (#gate). Blocks the dash until Claude is signed in and Grok/Gemini
      are signed in (or the operator continues anyway). Sits at --z-landing;
      toasts are lifted above it so the "finish the sign-in" note is never hidden
@@ -3583,6 +3716,11 @@
 
   function daySummaryText(d) {
     var parts = [arr(d.today).length + ' due today'];
+    var cx = calIndex(d);   // "N events" only once Google's days have loaded, so it is never a false 0
+    if (cx.loaded) {
+      var evToday = arr(cx.ev[calTodayIso(d)]).length;
+      parts.push(evToday + (evToday === 1 ? ' event' : ' events'));
+    }
     if (arr(d.overdue).length) parts.push(d.overdue.length + ' overdue');
     if (arr(d.carryOver).length) parts.push(d.carryOver.length + ' to carry over');
     parts.push(arr(d.upcoming).length + ' this week');
@@ -3765,6 +3903,8 @@
     var cards = [];
     var overdue = arr(d.overdue), today = arr(d.today), carry = arr(d.carryOver);
     var routines = arr(d.routines && d.routines.today);
+    var onCalendar = dayCalendarTodayCard(d);
+    if (onCalendar) cards.push(onCalendar);
     if (overdue.length) {
       cards.push(dayCard('Overdue', { cls: 'overdue', count: overdue.length, body: [dayRows(overdue, function (i) {
         return { cls: 'overdue', when: 'was due ' + dayLabel(i.due), actions: 'full' };
@@ -3783,6 +3923,283 @@
         return { cls: 'routine', when: String(r.schedule || '').split(/[;(]/)[0].trim(), actions: 'none' };
       }) : dayEmpty('No routines today.')] }));
     return dayColumn('Today', cards);
+  }
+
+  // --- Calendar: dots on the days, an agenda for the picked day --------------------------
+  // Two sources share one grid. The brain's dated reminders (feed.overdue / today /
+  // upcoming / later, by `due`) are the truth and carry the Done / Tomorrow / Snooze
+  // actions; feed.calendar.days (Google, every calendar the account sees) is the
+  // second source. Events that merely mirror a reminder (brain && brainFile) are left
+  // out so nothing shows twice. Everything is built with el()/textContent; the only
+  // data that reaches a style is a Google colour, and only after it passes calColor().
+  var calSel = null;        // the picked day (ISO); null = follow today
+  var calEl = null;         // the .cal node on screen, so a click repaints just the calendar
+  var CAL_DOTS_MAX = 4;     // five or more collapse to three dots and "+N"
+  var CAL_DOW = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+  function calTodayIso(d) {
+    return d && ISO_DATE.test(String(d.date || '')) ? d.date : new Date().toISOString().slice(0, 10);
+  }
+
+  function calColor(c) { return typeof c === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(c) ? c : null; }
+
+  function calTimeText(hhmm) { // '14:05' -> '2:05 PM'
+    var m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || ''));
+    if (!m) return '';
+    var h = parseInt(m[1], 10);
+    return ((h % 12) || 12) + ':' + m[2] + ' ' + (h >= 12 ? 'PM' : 'AM');
+  }
+
+  function calMonthLabel(ym) {
+    return new Date(ym + '-01T12:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  }
+
+  function calShiftMonth(ym, n) {
+    return new Date(Date.UTC(parseInt(ym.slice(0, 4), 10), parseInt(ym.slice(5, 7), 10) - 1 + n, 1, 12)).toISOString().slice(0, 7);
+  }
+
+  // The same day-of-month n months away, clamped to the month's length (Jan 31 -> Feb 28).
+  function calSameDayIn(iso, n) {
+    var ym = calShiftMonth(iso.slice(0, 7), n);
+    var last = new Date(Date.UTC(parseInt(ym.slice(0, 4), 10), parseInt(ym.slice(5, 7), 10), 0, 12)).getUTCDate();
+    var day = Math.min(parseInt(iso.slice(8, 10), 10), last);
+    return ym + '-' + (day < 10 ? '0' : '') + day;
+  }
+
+  // reminders: iso -> [{ item, list }]; events: iso -> [Google event] with the mirrors dropped.
+  function calIndex(d) {
+    var rem = {}, listOf = {}, seen = {};
+    [['overdue', d.overdue], ['today', d.today], ['upcoming', d.upcoming], ['later', d.later]].forEach(function (p) {
+      arr(p[1]).forEach(function (i) {
+        var due = String((i && i.due) || '').slice(0, 10);
+        if (!i || !ISO_DATE.test(due) || seen[i.file]) return;
+        seen[i.file] = true;
+        listOf[i.file] = p[0];
+        (rem[due] = rem[due] || []).push(i);
+      });
+    });
+    var cal = d.calendar || {};
+    var ev = {};
+    if (cal.connected && cal.days) {
+      Object.keys(cal.days).forEach(function (k) {
+        var list = arr(cal.days[k]).filter(function (e) { return e && !(e.brain && e.brainFile); });
+        if (list.length) ev[k] = list;
+      });
+    }
+    return { rem: rem, listOf: listOf, ev: ev, cal: cal, connected: !!cal.connected, loaded: !!(cal.connected && cal.days) };
+  }
+
+  function calIsPending(e) { return !!(e && e.invite && e.response === 'needsAction'); }
+
+  // Google's own deep link for an event: eid = base64("<eventId> <calendarId>") without padding.
+  function calEventLink(ev) {
+    var given = String(ev.htmlLink || ev.link || '');
+    if (/^https:\/\/(www|calendar)\.google\.com\//.test(given)) return given;
+    if (!ev.id || !ev.calendarId) return null;
+    try {
+      return 'https://www.google.com/calendar/event?eid=' + encodeURIComponent(btoa(ev.id + ' ' + ev.calendarId).replace(/=+$/, ''));
+    } catch (e) { return null; }
+  }
+
+  // o: { compact } (compact drops the location line, for the small "today" card)
+  function calEventRow(ev, o) {
+    o = o || {};
+    var href = calEventLink(ev);
+    var color = calColor(ev.color);
+    var row = el(href ? 'a' : 'div', 'cal-event', []);
+    if (color) row.style.setProperty('--accent', color);
+    if (href) {
+      row.href = href;
+      row.target = '_blank';
+      row.rel = 'noopener noreferrer';
+      row.title = 'Open in Google Calendar';
+    }
+    row.appendChild(el('span', 'ce-time', [ev.allDay ? 'All day' : (calTimeText(ev.time) || '')]));
+    row.appendChild(el('span', 'ce-title', [ev.title || '(no title)']));
+    var meta = el('div', 'ce-meta', []);
+    var chip = el('span', 'cal-chip', [el('span', null, [ev.calendar || 'Calendar'])]);
+    if (color) chip.style.setProperty('--accent', color);
+    meta.appendChild(chip);
+    if (calIsPending(ev)) meta.appendChild(el('span', 'badge warn', ['invite · needs answer']));
+    else if (ev.invite && ev.response === 'tentative') meta.appendChild(el('span', 'badge info', ['tentative']));
+    if (ev.location && !o.compact) meta.appendChild(el('span', 'ce-where', [ev.location]));
+    row.appendChild(meta);
+    return row;
+  }
+
+  function calCell(ix, iso, today, sel, ym) {
+    var rem = ix.rem[iso] || [], evs = ix.ev[iso] || [];
+    var pending = evs.filter(calIsPending).length;
+    var cell = el('button', 'cal-day' + (iso === today ? ' today' : '') + (iso === sel ? ' selected' : '')
+      + (iso.slice(0, 7) !== ym ? ' other' : ''), []);
+    cell.type = 'button';
+    cell.setAttribute('data-date', iso);
+    cell.tabIndex = iso === sel ? 0 : -1;               // one tab stop; arrows move within the grid
+    cell.setAttribute('aria-pressed', iso === sel ? 'true' : 'false');
+    if (iso === today) cell.setAttribute('aria-current', 'date');
+    var parts = [];
+    if (rem.length) parts.push(rem.length + (rem.length === 1 ? ' reminder' : ' reminders'));
+    if (evs.length) parts.push(evs.length + (evs.length === 1 ? ' event' : ' events'));
+    if (pending) parts.push(pending + (pending === 1 ? ' invitation' : ' invitations') + ' to answer');
+    cell.setAttribute('aria-label', dayLabel(iso, true) + (iso === today ? ', today' : '') + ': '
+      + (parts.length ? parts.join(', ') : 'nothing scheduled'));
+    cell.addEventListener('click', function () { calSelect(iso, true); });
+    cell.appendChild(el('span', 'cal-num', [String(parseInt(iso.slice(8, 10), 10))]));
+    // Reminders first, then invitations waiting on an answer, then the rest of the events.
+    var dots = rem.map(function () { return { cls: 'cal-dot rem' }; });
+    evs.filter(calIsPending).forEach(function (e) { dots.push({ cls: 'cal-dot hollow', color: calColor(e.color) }); });
+    evs.filter(function (e) { return !calIsPending(e); }).forEach(function (e) { dots.push({ cls: 'cal-dot', color: calColor(e.color) }); });
+    var shown = dots.length > CAL_DOTS_MAX ? CAL_DOTS_MAX - 1 : dots.length;
+    var row = el('span', 'cal-dots', []);
+    row.setAttribute('aria-hidden', 'true');
+    dots.slice(0, shown).forEach(function (dot) {
+      var n = el('span', dot.cls, []);
+      if (dot.color) n.style.setProperty('--accent', dot.color);
+      row.appendChild(n);
+    });
+    if (dots.length > shown) row.appendChild(el('span', 'cal-more', ['+' + (dots.length - shown)]));
+    cell.appendChild(row);
+    return cell;
+  }
+
+  function calAgenda(ix, iso, today) {
+    var wrap = el('div', 'cal-agenda', []);
+    wrap.setAttribute('role', 'region');
+    wrap.setAttribute('aria-label', 'Agenda for ' + dayLabel(iso, true));
+    wrap.appendChild(el('h3', 'day-group', [dayLabel(iso, true) + (iso === today ? ' · today' : '')]));
+    var rem = ix.rem[iso] || [], evs = ix.ev[iso] || [];
+    if (rem.length) {
+      wrap.appendChild(dayRows(rem, function (i) {
+        var list = ix.listOf[i.file];
+        return { cls: list === 'overdue' ? 'overdue' : list === 'today' ? 'today' : list === 'later' ? '' : 'soon',
+          actions: list === 'later' ? 'lite' : 'full' };
+      }));
+    }
+    if (evs.length) wrap.appendChild(el('div', 'cal-events', evs.map(function (e) { return calEventRow(e); })));
+    if (!rem.length && !evs.length) wrap.appendChild(dayEmpty('Nothing scheduled.'));
+    return wrap;
+  }
+
+  function calNote(children, warn) {
+    return el('p', 'day-sub cal-note' + (warn ? ' warn' : ''), children);
+  }
+
+  function calSettingsLink(label) {
+    var b = el('button', 'cal-link', [label || 'Settings → Calendar']);
+    b.type = 'button';
+    b.addEventListener('click', function () { openSettings({ section: 'calendar' }); });
+    return b;
+  }
+
+  // Rebuilds only the calendar node. focusSel (a selector) is what gets focus afterwards,
+  // since the node that had it has just been replaced.
+  function calRepaint(focusSel) {
+    if (!calEl || !calEl.parentNode || !dayFeed) return;
+    var next = calBuild(dayFeed);
+    calEl.parentNode.replaceChild(next, calEl);
+    calEl = next;
+    var target = focusSel ? next.querySelector(focusSel) : null;
+    if (target) target.focus();
+  }
+
+  // focus: true puts focus on the picked day's cell; a string is a selector to focus instead.
+  function calSelect(iso, focus) {
+    if (!dayFeed || !ISO_DATE.test(String(iso || ''))) return;
+    calSel = iso === calTodayIso(dayFeed) ? null : iso;
+    calRepaint(focus === true ? '.cal-day[data-date="' + iso + '"]' : (focus || null));
+  }
+
+  function calGoMonth(delta) {
+    if (!dayFeed) return;
+    calSelect(calSameDayIn(calSel || calTodayIso(dayFeed), delta), delta < 0 ? '.cal-prev' : '.cal-next');
+  }
+
+  function calKey(e) {
+    var cell = e.target && e.target.closest ? e.target.closest('.cal-day') : null;
+    if (!cell || e.ctrlKey || e.metaKey || e.altKey) return;
+    var iso = cell.getAttribute('data-date'), to = null;
+    if (e.key === 'ArrowLeft') to = addDaysIso(iso, -1);
+    else if (e.key === 'ArrowRight') to = addDaysIso(iso, 1);
+    else if (e.key === 'ArrowUp') to = addDaysIso(iso, -7);
+    else if (e.key === 'ArrowDown') to = addDaysIso(iso, 7);
+    else if (e.key === 'PageUp') to = calSameDayIn(iso, -1);
+    else if (e.key === 'PageDown') to = calSameDayIn(iso, 1);
+    if (!to) return;
+    e.preventDefault();
+    e.stopPropagation();
+    calSelect(to, true);
+  }
+
+  function calNavButton(glyph, label, cls, onClick) {
+    var b = el('button', 'btn cal-nav ' + cls, [glyph]);
+    b.type = 'button';
+    b.title = label;
+    b.setAttribute('aria-label', label);
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  function calBuild(d) {
+    var ix = calIndex(d);
+    var today = calTodayIso(d);
+    var sel = calSel || today;
+    var ym = sel.slice(0, 7);
+    var root = el('div', 'cal', []);
+
+    var head = el('div', 'cal-head', []);
+    var month = el('h3', 'cal-month', [calMonthLabel(ym)]);
+    month.setAttribute('aria-live', 'polite');
+    head.appendChild(month);
+    if (sel !== today) {
+      var back = el('button', 'btn cal-today', ['Today']);
+      back.type = 'button';
+      back.title = 'Back to ' + dayLabel(today);
+      back.addEventListener('click', function () { calSelect(today, true); });
+      head.appendChild(back);
+    }
+    head.appendChild(calNavButton('‹', 'Previous month', 'cal-prev', function () { calGoMonth(-1); }));
+    head.appendChild(calNavButton('›', 'Next month', 'cal-next', function () { calGoMonth(1); }));
+    root.appendChild(head);
+
+    var dow = el('div', 'cal-dow', CAL_DOW.map(function (n) { return el('span', null, [n]); }));
+    dow.setAttribute('aria-hidden', 'true');
+    root.appendChild(dow);
+
+    var first = ym + '-01';
+    var start = addDaysIso(first, -new Date(first + 'T12:00:00Z').getUTCDay()); // the Sunday on or before the 1st
+    var grid = el('div', 'cal-grid', []);
+    grid.setAttribute('role', 'group');
+    grid.setAttribute('aria-label', calMonthLabel(ym) + ' calendar');
+    for (var i = 0; i < 42; i++) grid.appendChild(calCell(ix, addDaysIso(start, i), today, sel, ym));
+    grid.addEventListener('keydown', calKey);
+    root.appendChild(grid);
+
+    if (!ix.connected) {
+      root.appendChild(calNote(['Google Calendar not connected — ', calSettingsLink()]));
+    } else if (ix.cal.lastError) {
+      root.appendChild(calNote(['Calendar sync problem — ', calSettingsLink('see Settings → Calendar')], true));
+    } else if (!ix.loaded) {
+      root.appendChild(calNote(['Loading Google events…']));
+    } else if (ISO_DATE.test(String(ix.cal.from || '')) && ISO_DATE.test(String(ix.cal.to || ''))
+      && (start < ix.cal.from || addDaysIso(start, 41) > ix.cal.to)) {
+      root.appendChild(calNote(['Google events are loaded for ' + dayLabel(ix.cal.from) + ' to ' + dayLabel(ix.cal.to) + '.']));
+    }
+
+    root.appendChild(calAgenda(ix, sel, today));
+    return root;
+  }
+
+  function dayCalendarCard(d) {
+    calEl = calBuild(d);
+    return dayCard('Calendar', { cls: 'cal-card', body: [calEl] });
+  }
+
+  function dayCalendarTodayCard(d) {
+    var ix = calIndex(d);
+    var list = ix.ev[calTodayIso(d)] || [];
+    if (!ix.connected || !list.length) return null;
+    return dayCard('Today on the calendar', { count: list.length,
+      body: [el('div', 'cal-events', list.map(function (e) { return calEventRow(e, { compact: true }); }))] });
   }
 
   function dayBriefCard(d) {
@@ -3829,13 +4246,13 @@
       body.push(el('h3', 'day-group', [k ? dayLabel(k) : 'No date']));
       body.push(dayRows(byDay[k], { cls: 'soon', actions: 'full' }));
     });
-    if (!(d.calendar && d.calendar.connected)) body.push(el('p', 'day-sub', ['Calendar: not connected yet.']));
     return dayCard('This week', { count: upcoming.length, body: body });
   }
 
   function dayBriefColumn(d) {
     var later = arr(d.later);
-    return dayColumn("Brief and week", [
+    return dayColumn("Calendar, brief and week", [
+      dayCalendarCard(d),
       dayBriefCard(d),
       dayWeekCard(d),
       dayCard('Later', { collapsed: true, count: later.length,
@@ -4029,6 +4446,8 @@
     var cols = Array.prototype.slice.call(dayBodyEl.querySelectorAll('.day-col'));
     var colScroll = cols.map(function (c) { return c.scrollTop; });
     var bodyScroll = dayBodyEl.scrollTop;
+    var ae = document.activeElement;   // a focused calendar day survives the rebuild
+    var calFocus = ae && ae.classList && ae.classList.contains('cal-day') ? ae.getAttribute('data-date') : null;
     dayBodyEl.textContent = '';
     if (!d.brain) {
       dayBodyEl.appendChild(stateBlock('empty', 'Shared brain not found',
@@ -4050,6 +4469,10 @@
     dayBodyEl.appendChild(grid);
     Array.prototype.forEach.call(grid.querySelectorAll('.day-col'), function (c, i) { c.scrollTop = colScroll[i] || 0; });
     dayBodyEl.scrollTop = bodyScroll;
+    if (calFocus) {
+      var again = grid.querySelector('.cal-day[data-date="' + calFocus + '"]');
+      if (again) again.focus({ preventScroll: true });
+    }
   }
 
   function dayLoadFailed() {
@@ -5898,11 +6321,266 @@
     kbScrim.classList.add('open'); kbModal.classList.add('open');
   }
 
+  // --- settings: Google Calendar -----------------------------------------
+  // The client secret is write-only, like the Ollama key: it goes to the server in
+  // one POST and the input is cleared; the server only ever says "configured". The
+  // sign-in itself happens in Google's own browser tab (the server opens it), so the
+  // modal just watches /api/calendar/status for up to five minutes until it flips.
+  var CAL_WATCH_MS = 5 * 60 * 1000;
+  var CAL_WATCH_EVERY_MS = 5000;
+  var calSetWatch = null;   // { timer } while a Google sign-in is being waited on
+
+  function calStopWatch() {
+    if (calSetWatch) { clearInterval(calSetWatch.timer); calSetWatch = null; }
+  }
+
+  function calSyncText(iso) {
+    var t = Date.parse(iso);
+    if (!isFinite(t)) return String(iso);
+    return recentAgeText(Math.max(0, Math.floor((Date.now() - t) / 60000))) + ' (' + new Date(t).toLocaleString() + ')';
+  }
+
+  var CAL_HELP_STEPS = [
+    'Open the Google Cloud Console (console.cloud.google.com) and create a New project named "Alfred".',
+    'APIs & Services → Library → enable "Google Calendar API".',
+    'APIs & Services → OAuth consent screen: choose External, add dpatel.gc@gmail.com as a test user, and add the calendar scope.',
+    'Credentials → Create credentials → OAuth client ID → Application type "Desktop app".',
+    'Copy the Client ID and Client secret into the fields here, press Save, then Connect.',
+  ];
+
+  // Builds the section into `parent` and returns it. It draws from /api/calendar/status,
+  // so it needs nothing from the Settings payload.
+  function renderCalendarSettings(parent) {
+    var sec = el('div', 'cal-set', []);
+    sec.id = 'settings-gcal';
+    sec.setAttribute('role', 'group');
+    sec.setAttribute('aria-label', 'Google Calendar');
+    sec.appendChild(el('h3', 'settings-h', ['Google Calendar']));
+    sec.appendChild(el('p', 'settings-note', [
+      'Alfred mirrors your dated reminders to a "Second Brain" calendar on your Google account '
+      + 'and reads the account\'s other calendars, shared ones and invitations included.',
+    ]));
+    var body = el('div', 'cal-set-body', [el('p', 'settings-note', ['Loading…'])]);
+    sec.appendChild(body);
+    parent.appendChild(sec);
+
+    var lastSt = null;
+    var replacing = false;   // the "Replace" button has revealed the credential inputs
+    var waiting = false;     // Connect was pressed and the browser tab is open
+    var helpOpen = false;
+
+    function failToast(r, fallback) {
+      toast((r && r.data && r.data.error) || fallback, 'critical', { title: 'Google Calendar' });
+    }
+
+    function afterChange() {   // the Day view reads the calendar from the feed
+      pollAssistant();
+      setTimeout(pollAssistant, 4000);   // the server warms Google's view in the background
+    }
+
+    function startWatch() {
+      calStopWatch();
+      var until = Date.now() + CAL_WATCH_MS;
+      var timer = setInterval(function () {
+        if (Date.now() > until) {
+          calStopWatch();
+          waiting = false;
+          if (sec.isConnected && lastSt) paint(lastSt);
+          return;
+        }
+        bridgeFetch('/api/calendar/status').then(function (r) { return r.ok ? r.json() : null; }).then(function (st) {
+          if (!st) return;
+          var errChanged = !lastSt || st.lastError !== lastSt.lastError;
+          lastSt = st;
+          if (st.connected) {
+            calStopWatch();
+            waiting = false;
+            toast('Google Calendar connected.', 'success', { title: 'Google Calendar' });
+            if (sec.isConnected) paint(st);
+            afterChange();
+          } else if (errChanged && sec.isConnected) {
+            paint(st);
+          }
+        }).catch(function () { /* try again on the next tick */ });
+      }, CAL_WATCH_EVERY_MS);
+      calSetWatch = { timer: timer };
+    }
+
+    function statusBlock(st) {
+      var dl = el('dl', 'cal-set-status' + (st.connected ? ' on' : ''), []);
+      function row(k, v, bad) { dl.appendChild(el('dt', null, [k])); dl.appendChild(el('dd', bad ? 'bad' : null, [v])); }
+      row('Status', st.connected ? 'Connected' : st.configured ? 'Saved, not signed in' : 'Not set up');
+      if (st.account) row('Account', st.account);
+      row('Second Brain calendar', st.brainCalendarId ? 'found' : 'not created yet');
+      row('Last sync', st.lastSync ? calSyncText(st.lastSync) : 'never');
+      if (st.lastError) row('Last error', String(st.lastError), true);
+      return dl;
+    }
+
+    function field(id, label, type, placeholder) {
+      var input = el('input', 'settings-input', []);
+      input.id = id;
+      input.type = type;
+      input.placeholder = placeholder;
+      input.autocomplete = 'off';
+      input.spellcheck = false;
+      input.addEventListener('keydown', function (e) { e.stopPropagation(); });
+      var lab = el('label', null, [label]);
+      lab.htmlFor = id;
+      return { input: input, node: el('div', 'cal-set-field', [lab, input]) };
+    }
+
+    function credentials(st) {
+      var wrap = el('div', 'cal-set-body', []);
+      if (st.configured && !replacing) {
+        wrap.appendChild(el('p', 'cal-set-saved', ['Client ID and Client secret: saved']));
+        var rep = el('button', 'settings-save', ['Replace']);
+        rep.type = 'button';
+        rep.addEventListener('click', function () { replacing = true; paint(st); });
+        wrap.appendChild(el('div', 'cal-set-actions', [rep]));
+        return wrap;
+      }
+      var idF = field('cal-client-id', 'Client ID', 'text', '1234567890-abc….apps.googleusercontent.com');
+      var secF = field('cal-client-secret', 'Client secret', 'password', 'paste the secret…');
+      var save = el('button', 'settings-save', ['Save']);
+      save.type = 'button';
+      var actions = el('div', 'cal-set-actions', [save]);
+      if (st.configured) {
+        var cancel = el('button', 'settings-clear', ['Cancel']);
+        cancel.type = 'button';
+        cancel.addEventListener('click', function () { replacing = false; paint(st); });
+        actions.appendChild(cancel);
+      }
+      save.addEventListener('click', function () {
+        var cid = idF.input.value.trim(), secret = secF.input.value.trim();
+        if (!cid || !secret) return toast('Paste both the Client ID and the Client secret.', 'warn', { title: 'Google Calendar' });
+        save.disabled = true;
+        bridgePost('/api/calendar/config', { clientId: cid, clientSecret: secret }).then(function (r) {
+          save.disabled = false;
+          if (!r.ok) return failToast(r, 'Could not save.');
+          secF.input.value = '';
+          idF.input.value = '';
+          replacing = false;
+          toast('Saved. Now press Connect.', 'success', { title: 'Google Calendar' });
+          lastSt = r.data;
+          paint(r.data);
+        }).catch(function () { save.disabled = false; toast('Could not reach Alfred.', 'critical', { title: 'Google Calendar' }); });
+      });
+      [idF.node, secF.node, actions].forEach(function (n) { wrap.appendChild(n); });
+      return wrap;
+    }
+
+    function connectedActions(st) {
+      var sync = el('button', 'settings-save', ['Sync now']);
+      sync.type = 'button';
+      sync.addEventListener('click', function () {
+        sync.disabled = true;
+        bridgePost('/api/calendar/sync', {}).then(function (r) {
+          sync.disabled = false;
+          if (!r.ok) return failToast(r, 'Could not sync.');
+          var res = r.data && r.data.result;
+          if (!res) toast('A sync is already running, or the calendar is not connected.', 'warn', { title: 'Google Calendar' });
+          else if (res.ok === false) toast('Calendar: ' + (res.error || 'the sync failed'), 'critical', { title: 'Google Calendar' });
+          else {
+            var n = arr(res.actions).length;
+            toast('Calendar: ' + n + (n === 1 ? ' change' : ' changes'), 'success');
+          }
+          if (r.data && r.data.feed) {
+            applyDayFeed(r.data.feed);
+            if (r.data.feed.calendar) { lastSt = r.data.feed.calendar; if (sec.isConnected) paint(lastSt); }
+          }
+        }).catch(function () { sync.disabled = false; toast('Could not reach Alfred.', 'critical', { title: 'Google Calendar' }); });
+      });
+      var dis = el('button', 'settings-clear', ['Disconnect']);
+      dis.type = 'button';
+      dis.addEventListener('click', function () {
+        if (!window.confirm('Disconnect Google Calendar?\n\nAlfred stops syncing. The "Second Brain" calendar and its events stay in your Google account.')) return;
+        dis.disabled = true;
+        bridgePost('/api/calendar/disconnect', {}).then(function (r) {
+          dis.disabled = false;
+          if (!r.ok) return failToast(r, 'Could not disconnect.');
+          calStopWatch();
+          waiting = false;
+          toast('Google Calendar disconnected.', 'success', { title: 'Google Calendar' });
+          lastSt = r.data;
+          paint(r.data);
+          afterChange();
+        }).catch(function () { dis.disabled = false; toast('Could not reach Alfred.', 'critical', { title: 'Google Calendar' }); });
+      });
+      return el('div', 'cal-set-actions', [sync, dis]);
+    }
+
+    function connectAction(st) {
+      var connect = el('button', 'settings-save', ['Connect to Google']);
+      connect.type = 'button';
+      connect.disabled = !st.configured || waiting;
+      if (!st.configured) connect.title = 'Save the Client ID and Client secret first';
+      connect.addEventListener('click', function () {
+        connect.disabled = true;
+        bridgePost('/api/calendar/connect', {}).then(function (r) {
+          if (!r.ok) { connect.disabled = false; return failToast(r, 'Could not start the sign-in.'); }
+          waiting = true;
+          paint(st);
+          startWatch();
+        }).catch(function () { connect.disabled = false; toast('Could not reach Alfred.', 'critical', { title: 'Google Calendar' }); });
+      });
+      return el('div', 'cal-set-actions', [connect]);
+    }
+
+    function help() {
+      var list = el('ol', 'cal-set-help', CAL_HELP_STEPS.map(function (s) { return el('li', null, [s]); }));
+      list.id = 'cal-set-help';
+      list.hidden = !helpOpen;
+      var toggle = el('button', 'cal-set-toggle', ['How do I get a client ID?']);
+      toggle.type = 'button';
+      toggle.setAttribute('aria-expanded', helpOpen ? 'true' : 'false');
+      toggle.setAttribute('aria-controls', 'cal-set-help');
+      toggle.addEventListener('click', function () {
+        helpOpen = !helpOpen;
+        list.hidden = !helpOpen;
+        toggle.setAttribute('aria-expanded', helpOpen ? 'true' : 'false');
+      });
+      return [toggle, list];
+    }
+
+    function paint(st) {
+      body.textContent = '';
+      if (!st) {
+        body.appendChild(el('p', 'settings-warn', [
+          'This Alfred server does not answer the calendar endpoints yet. Restart Alfred so it loads the new code, then reopen Settings.',
+        ]));
+        return;
+      }
+      body.appendChild(statusBlock(st));
+      if (!st.connected) {
+        body.appendChild(credentials(st));
+        body.appendChild(connectAction(st));
+        if (waiting) {
+          var note = el('p', 'settings-note', ['Finish the sign-in in the browser tab that opened; this updates when you\'re done.']);
+          note.setAttribute('role', 'status');
+          body.appendChild(note);
+        }
+        help().forEach(function (n) { body.appendChild(n); });
+      } else {
+        body.appendChild(connectedActions(st));
+        body.appendChild(credentials(st));
+        help().forEach(function (n) { body.appendChild(n); });
+      }
+    }
+
+    bridgeFetch('/api/calendar/status')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (st) { lastSt = st; paint(st); })
+      .catch(function () { paint(null); });
+    return sec;
+  }
+
   // --- settings ---------------------------------------------------------
   // Same dialog as the Field Manual and the gauges. The key is write-only from
   // the UI's point of view: the server never sends it back, only a masked tail,
   // so a shoulder-surfer or a screenshot cannot recover it from this page.
-  function openSettings() {
+  function openSettings(opts) {
+    var wantCalendar = !!(opts && opts.section === 'calendar');   // the click handlers pass an Event, which has no .section
     document.getElementById('kb-modal-title').textContent = 'Settings';
     kbBody.textContent = '';
     var status = el('p', null, ['Loading…']);
@@ -6029,6 +6707,10 @@
           }).catch(function (err) { vaultSave.disabled = false; toast(String(err.message || err), 'critical', { title: 'Brain location' }); });
         }
         vaultSave.addEventListener('click', function () { saveVault(vaultInput.value.trim()); });
+
+        // --- Google Calendar --------------------------------------------
+        var calSection = renderCalendarSettings(kbBody);
+        if (wantCalendar) setTimeout(function () { calSection.scrollIntoView({ block: 'start' }); }, 0);
 
         // --- GitHub -----------------------------------------------------
         // Deliberately no "paste a personal access token" field. Both routes
