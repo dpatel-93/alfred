@@ -10,6 +10,7 @@ import { addDays, collectOpenItems, easternNow, readFields, runLibrarian, setFie
 import {
   DAYS, createEvent, createReminder, createRoutine, oneLine, routineDueToday, slugify, updateReminder, updateRoutine, weekdayOf,
 } from './brain-items.mjs';
+import { pendingChanges } from './brain-notes.mjs';
 
 export { sharedBrainPath, routineDueToday };
 export const easternDate = () => easternNow().date;
@@ -25,11 +26,17 @@ const plain = (s) => s.replace(/\*\*(.+?)\*\*/g, '$1').replace(/`([^`]+)`/g, '$1
 function userRoutines(brain, date) {
   const dir = path.join(brain, 'Routines');
   if (!fs.existsSync(dir)) return { today: [], other: [], paused: [] };
+  // A change Grok asked for by note but not yet written is shown as already made (brain-notes.mjs).
+  const waiting = pendingChanges(brain).routines;
   const all = fs.readdirSync(dir).filter((f) => f.endsWith('.md') && f.toLowerCase() !== 'readme.md').map((f) => {
     const text = fs.readFileSync(path.join(dir, f), 'utf8');
     const h = readFields(text);
-    return { file: `Routines/${f}`, title: titleOf(text, f).replace(/^the user:\s*/i, ''), schedule: h.schedule || '',
-      time: ((h.schedule || '').match(/\b\d{2}:\d{2}\b/) || [])[0] || null, runs: h.runs || '', status: firstWord(h.status) || 'active', today: routineDueToday(h.schedule, date) };
+    const p = waiting.get(f);
+    const schedule = p?.fields.schedule || h.schedule || '';
+    const status = p?.paused ? 'paused' : p?.resumed ? 'active' : firstWord(h.status) || 'active';
+    return { file: `Routines/${f}`, title: p?.fields.title || titleOf(text, f).replace(/^the user:\s*/i, ''), schedule,
+      time: p?.fields.time || (schedule.match(/\b\d{2}:\d{2}\b/) || [])[0] || null, runs: h.runs || '',
+      status, today: routineDueToday(schedule, date), ...(p ? { pendingNote: p.note } : {}) };
   }).filter((r) => /\bthe user\b/i.test(r.runs) && ['active', 'paused'].includes(r.status));
   const active = all.filter((r) => r.status === 'active');
   return { today: active.filter((r) => r.today === true), other: active.filter((r) => r.today !== true), paused: all.filter((r) => r.status === 'paused') };
@@ -292,10 +299,10 @@ export function assistantFeed(brain = sharedBrainPath(), now = easternNow()) {
   // for its curator) is marked so the dashboard shows "pending" instead of offering the action again.
   const pending = new Map();
   for (const s of open.signals) if (s.re && ['close', 'amend'].includes(s.type)) pending.set(path.basename(s.re), s.type);
-  const slim = ({ file, title, kind, due, time, scope, author }) => ({
+  const slim = ({ file, title, kind, due, time, scope, author, pendingNote }) => ({
     file, title, kind, due, time: time || null, scope,
     author: String(author || '').split('(')[0].trim(), ours: authorIsOurs(author),
-    pending: pending.get(path.basename(file)) || null,
+    pending: pending.get(path.basename(file)) || (pendingNote ? 'amend' : null),
   });
   const undated = open.undated.map(slim);
   return {

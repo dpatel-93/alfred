@@ -580,6 +580,30 @@ const itOdd = await post('/api/assistant/item',{op:'delete',type:'reminder',file
 chk('an unknown operation is refused (nothing is ever deleted from here)', itOdd.s===400 && ((await j('/api/assistant',{headers:{'X-Alfred-Token':TOKEN}})).d?.upcoming||[]).some((i) => i.file===itTodo.d?.saved?.file),
   JSON.stringify(itOdd.d));
 
+// --- Grok's change notes: dropped in Inbox/ the way Grok writes them from the car, the running
+// dashboard applies them within seconds, and the feed shows the result. ---
+if (process.env.ALFRED_TEST_BRAIN) {
+  const TB = process.env.ALFRED_TEST_BRAIN;
+  const tgt = await post('/api/assistant/item',{op:'create',type:'reminder',fields:{kind:'todo',title:'API note target',due:'none'}});
+  const tfile = tgt.d?.saved?.file;
+  const stampNow = new Date().toLocaleString('sv-SE', { timeZone: 'America/New_York' }).slice(0, 16) + ' ET';
+  fs.writeFileSync(path.join(TB, 'Inbox', `${inDays(0)}-0000--grok--librarian--amend--api-note.md`),
+    `# Amend: move the API note target\n\n- **Kind:** signal\n- **Type:** amend\n- **From:** grok\n- **To:** librarian\n- **Target:** ${tfile}\n`
+    + `- **Status:** open\n- **Created:** ${stampNow}\n- **Set:** Due = ${inDays(4)}\n- **Set:** Title = API note target, moved\n`, 'utf8');
+  // Before the Librarian writes it, the feed already shows the change (a waiting note counts as applied).
+  const f0 = (await j('/api/assistant',{headers:{'X-Alfred-Token':TOKEN}})).d;
+  const shown = (f0?.upcoming||[]).find((x) => x.file===tfile && x.due===inDays(4) && x.title==='API note target, moved') || null;
+  chk('a waiting change note is shown as already applied in the very next feed', !!shown, JSON.stringify(shown));
+  // The watcher runs the Librarian once its quiet window (about 8 s after the last pass) is over.
+  let written = '';
+  for (let i = 0; i < 40 && !/by grok \(change note/.test(written); i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    written = fs.existsSync(path.join(TB, tfile)) ? fs.readFileSync(path.join(TB, tfile), 'utf8') : '';
+  }
+  chk('the running dashboard writes the change into the file within seconds', new RegExp(`- \\*\\*Due:\\*\\* ${inDays(4)}`).test(written)
+    && /by grok \(change note/.test(written), written.slice(0, 400));
+}
+
 chk('the Google sign-in endpoints are gone', (await fetch(B+'/oauth2/google?code=x')).status===404
   && (await fetch(B+'/api/calendar/status',{headers:{'X-Alfred-Token':TOKEN}})).status===404
   && (await post('/api/calendar/connect',{})).s===404);

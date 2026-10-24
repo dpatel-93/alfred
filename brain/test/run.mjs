@@ -146,7 +146,9 @@ function runSuite(suite) {
       // The suites feed this straight to dynamic import(), and import() rejects
       // a bare Windows path ("Received protocol 'c:'"). Hand them a file:// URL,
       // which is valid on every platform.
-      env: { ...process.env, ALFRED_TEST_BASE: BASE, PLAYWRIGHT_INDEX: playwrightUrl() || '' },
+      // ALFRED_TEST_BRAIN: the throwaway brain the server reads, so a suite can drop a file in it
+      // the way Grok does from the car (a change note in Inbox/) and watch the dashboard react.
+      env: { ...process.env, ALFRED_TEST_BASE: BASE, ALFRED_TEST_BRAIN: BRAIN, PLAYWRIGHT_INDEX: playwrightUrl() || '' },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let out = '', err = '';

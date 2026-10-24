@@ -11,7 +11,7 @@
 // ---------------------------------------------------------------------------
 import fs from 'node:fs';
 import path from 'node:path';
-import { easternNow, readFields, setField } from './brain-librarian.mjs';
+import { easternNow, readFields, setField } from './brain-core.mjs';
 import { addEvent } from './brain-calendar.mjs';
 
 // --- Shared checks ---

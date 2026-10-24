@@ -83,22 +83,41 @@ export function readCalendar(brain) {
 
 const byStart = (a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || ''));
 
+// Which event a "cancel 2026-10-31 Dinner" means: the same date and the same title, or the
+// only one on that date whose title starts with the words given.
+const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+export function findEvent(events, { date, title }) {
+  const sameDay = events.filter((e) => e.date === date);
+  const exact = sameDay.filter((e) => norm(e.title) === norm(title));
+  if (exact.length) return exact[0];
+  const start = sameDay.filter((e) => norm(title).length >= 3 && norm(e.title).startsWith(norm(title)));
+  return start.length === 1 ? start[0] : null;
+}
+
+// Changes Grok asked for by change note but the Librarian has not written yet
+// ({add: [event], cancel: [{date, title}]}, from brain-notes.mjs) are shown as already made.
+function withPending(events, pending) {
+  if (!pending) return events;
+  const gone = new Set((pending.cancel || []).map((c) => findEvent(events, c)).filter(Boolean));
+  return [...events.filter((e) => !gone.has(e)), ...(pending.add || []).map((e) => ({ ...e, pending: true }))];
+}
+
 // Events that touch [from, to] (both inclusive), in start order. Used by the index and the
 // session-start hook.
-export function eventsBetween(brain, from, to) {
-  return readCalendar(brain).events.filter((e) => e.date <= to && (e.end || e.date) >= from).sort(byStart);
+export function eventsBetween(brain, from, to, pending = null) {
+  return withPending(readCalendar(brain).events, pending).filter((e) => e.date <= to && (e.end || e.date) >= from).sort(byStart);
 }
 
 // --- The month view the dashboard draws -----------------------------------------
 // Window: the 1st of last month through the last day of next month, so the grid's ‹ ›
 // never steps into blank weeks within one month either side of today.
-export function calendarView(brain, now, { from: fromOpt, to: toOpt } = {}) {
+export function calendarView(brain, now, { from: fromOpt, to: toOpt, pending = null } = {}) {
   const from = fromOpt || monthStart(now.date, -1);
   const to = toOpt || addDays(monthStart(now.date, 2), -1);
   const cal = readCalendar(brain);
   const days = {};
   let count = 0;
-  for (const e of cal.events.sort(byStart)) {
+  for (const e of withPending(cal.events, pending).sort(byStart)) {
     const last = e.end || e.date;
     if (e.date > to || last < from) continue;
     count++;
@@ -171,6 +190,25 @@ export function addEvent(brain, ev, now) {
   return entry;
 }
 
+// Strikes one event through (never deletes it): `- ~~2026-10-31 19:00 Dinner~~ (cancelled by
+// user via grok)`. Throws when no single event matches the date and title.
+export function cancelEvent(brain, { date, title }, { by = 'user', now }) {
+  const file = path.join(brain, CALENDAR_FILE);
+  if (!fs.existsSync(file)) throw new Error('there is no calendar file yet');
+  const text = fs.readFileSync(file, 'utf8');
+  const crlf = text.includes('\r\n');
+  const e = findEvent(parseEvents(text).events, { date, title });
+  if (!e) throw new Error(`no single event "${String(title || '').slice(0, 60)}" on ${date}`);
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  const body = formatEvent({ ...e, by: null }).replace(/^-\s+/, '');
+  const entry = `- ~~${body}~~ (cancelled by user via ${by})`;
+  lines[e.line - 1] = entry;
+  let out = lines.join('\n').replace(/^- \*\*Last updated:\*\*.*$/m, `- **Last updated:** ${now.stamp}`);
+  if (crlf) out = out.replace(/\n/g, '\r\n');
+  fs.writeFileSync(file, out, 'utf8');
+  return entry;
+}
+
 // --- CLI ---------------------------------------------------------------------------
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
 // Not a top-level await: brain-librarian.mjs imports this file, and awaiting it here while this
@@ -190,10 +228,14 @@ async function runCli() {
       const [time, endTime] = String(opt('--time') || '').split('-');
       const line = addEvent(brain, { date, end: end || null, time: time || null, endTime: endTime || null, title, location: opt('--at'), by: opt('--by') || 'claude-code' }, now);
       console.log(`added to ${CALENDAR_FILE}: ${line}`);
+    } else if (cmd === 'cancel') {
+      const i = rest.indexOf('--by');
+      console.log(`cancelled in ${CALENDAR_FILE}: ${cancelEvent(brain, { date: when, title }, { by: i >= 0 ? rest[i + 1] : 'claude-code', now })}`);
     } else if (cmd === 'view' || !cmd) {
       console.log(JSON.stringify(calendarView(brain, now), null, 2));
     } else {
-      console.log('usage: brain-calendar.mjs view | add YYYY-MM-DD[..YYYY-MM-DD] "Title" [--time HH:MM[-HH:MM]] [--at "place"] [--by <ai>]');
+      console.log('usage: brain-calendar.mjs view | add YYYY-MM-DD[..YYYY-MM-DD] "Title" [--time HH:MM[-HH:MM]] [--at "place"] [--by <ai>]'
+        + ' | cancel YYYY-MM-DD "Title" [--by <ai>]');
     }
   } catch (err) { console.error(err.message); process.exitCode = 1; }
 }

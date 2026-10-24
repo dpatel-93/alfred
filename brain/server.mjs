@@ -2082,6 +2082,9 @@ async function handleAssistantAction(req, res) {
   try { body = await readJsonBody(req); } catch { return sendJson(res, 400, { error: 'invalid JSON body' }); }
   try {
     const { applyAction, sharedBrainPath } = await import(pathToFileURL(ASSISTANT_MODULE).href);
+    // Grok's waiting change notes go in first, so a desk click lands on top of them and a
+    // note written before the click can never overwrite it afterwards (brain-notes.mjs).
+    await runLibrarianPass('before a dashboard action');
     const { status, ...result } = applyAction(sharedBrainPath(), {
       file: String(body.file || ''), action: String(body.action || ''),
       due: body.due ? String(body.due) : undefined, by: 'user',
@@ -2127,6 +2130,7 @@ async function handleAssistantItem(req, res) {
     const { easternNow } = await import(pathToFileURL(LIBRARIAN_MODULE).href);
     const brain = sharedBrainPath();
     if (!brain || !fs.existsSync(brain)) return sendJson(res, 404, { ok: false, error: 'shared brain not found' });
+    await runLibrarianPass('before a dashboard edit');  // Grok's waiting notes first (brain-notes.mjs)
     const now = easternNow();
     const who = { author: 'user (Alfred dashboard)', by: 'user (Alfred dashboard)', now };
     let saved;
@@ -2366,6 +2370,7 @@ function grokAuthAge() {
 // from the file for every feed; it is small, and the brain watcher already bumps
 // the version when it changes.
 const CALENDAR_MODULE = path.join(__dirname, '..', 'helpers', 'brain-calendar.mjs');
+const NOTES_MODULE = path.join(__dirname, '..', 'helpers', 'brain-notes.mjs');
 const calendarMod = () => import(pathToFileURL(CALENDAR_MODULE).href);
 
 // The day view's feed with the calendar folded in. Used by every handler that returns a feed.
@@ -2374,7 +2379,10 @@ async function fullFeed() {
   const feed = assistantFeed();
   try {
     const { easternNow } = await import(pathToFileURL(LIBRARIAN_MODULE).href);
-    feed.calendar = (await calendarMod()).calendarView(sharedBrainPath(), easternNow());
+    // Grok's waiting calendar notes are drawn as if already written (brain-notes.mjs).
+    const { pendingChanges } = await import(pathToFileURL(NOTES_MODULE).href);
+    const brain = sharedBrainPath();
+    feed.calendar = (await calendarMod()).calendarView(brain, easternNow(), { pending: brain ? pendingChanges(brain).calendar : null });
   } catch (err) {
     feed.calendar = { source: 'file', file: 'Calendar/events.md', exists: false, count: 0, days: {}, problems: [],
       error: String(err.message || err).slice(0, 200) };
