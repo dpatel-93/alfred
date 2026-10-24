@@ -2099,10 +2099,9 @@ async function handleAssistantAction(req, res) {
 async function handleAssistantLibrarian(req, res) {
   try {
     const { assistantFeed, sharedBrainPath } = await import(pathToFileURL(ASSISTANT_MODULE).href);
-    const { runLibrarian } = await import(pathToFileURL(LIBRARIAN_MODULE).href);
     const brain = sharedBrainPath();
     if (!brain || !fs.existsSync(brain)) return sendJson(res, 404, { error: 'shared brain not found' });
-    const actions = runLibrarian(brain);
+    const actions = await runLibrarianPass('dashboard');
     bumpBrainVersion();
     return sendJson(res, 200, { actions, feed: assistantFeed() });
   } catch (err) {
@@ -2144,6 +2143,45 @@ function brainSignature(brain) {
   return sig;
 }
 
+// --- The Librarian while the dashboard runs ---
+// MANIFESTO §9: the mechanical pass runs nightly, at desk-session start, every 10 minutes
+// while the dashboard is up, and whenever a signal lands in Inbox/. That last trigger is
+// what makes a `close` Grok leaves from the car land within seconds. The pass itself moves
+// Inbox files, which would re-trigger the watcher, so runs are serialised and a short
+// quiet window follows each one.
+const LIBRARIAN_INTERVAL_MS = 10 * 60 * 1000;
+const LIBRARIAN_QUIET_MS = 8 * 1000;
+let librarianBusy = false;
+let librarianLastRun = 0;
+let librarianTimer = null;
+
+async function runLibrarianPass(why) {
+  if (librarianBusy) return [];
+  librarianBusy = true;
+  try {
+    const { sharedBrainPath } = await import(pathToFileURL(ASSISTANT_MODULE).href);
+    const { runLibrarian } = await import(pathToFileURL(LIBRARIAN_MODULE).href);
+    const brain = sharedBrainPath();
+    if (!brain || !fs.existsSync(brain)) return [];
+    const actions = runLibrarian(brain);
+    if (actions.length) { console.log(`[librarian] ${why}: ${actions.length} action(s)`); bumpBrainVersion(); }
+    return actions;
+  } catch (err) {
+    console.log(`[librarian] ${why}: ${err.message}`);
+    return [];
+  } finally {
+    librarianLastRun = Date.now();
+    librarianBusy = false;
+  }
+}
+
+function scheduleLibrarian(why) {
+  clearTimeout(librarianTimer);
+  const wait = Math.max(2500, LIBRARIAN_QUIET_MS - (Date.now() - librarianLastRun));
+  librarianTimer = setTimeout(() => runLibrarianPass(why), wait);
+  if (librarianTimer.unref) librarianTimer.unref();
+}
+
 async function startBrainWatch() {
   let brain;
   try { brain = (await import(pathToFileURL(ASSISTANT_MODULE).href)).sharedBrainPath(); } catch { return; }
@@ -2152,7 +2190,11 @@ async function startBrainWatch() {
     const dir = path.join(brain, rel);
     if (!fs.existsSync(dir)) continue;
     try {
-      const w = fs.watch(dir, { persistent: false, recursive: rel === 'Projects' }, () => bumpBrainVersion());
+      const w = fs.watch(dir, { persistent: false, recursive: rel === 'Projects' }, (event, name) => {
+        bumpBrainVersion();
+        // A new or changed signal in Inbox/ (not Inbox/Done/) asks for a pass.
+        if (rel === 'Inbox' && name && /\.md$/i.test(String(name)) && !/readme/i.test(String(name))) scheduleLibrarian('signal landed');
+      });
       w.on('error', () => {});
     } catch { /* no watcher here; the poll below still catches up */ }
   }
@@ -2162,6 +2204,8 @@ async function startBrainWatch() {
     if (now !== last) { last = now; bumpBrainVersion(); }
   }, BRAIN_WATCH_POLL_MS);
   if (t.unref) t.unref();
+  const l = setInterval(() => runLibrarianPass('timer'), LIBRARIAN_INTERVAL_MS);
+  if (l.unref) l.unref();
 }
 
 // --- Bench: who is signed in, with a real probe for Claude and an age for Grok ---

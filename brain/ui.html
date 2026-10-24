@@ -2296,18 +2296,16 @@
        ops — see LEGACY_VIEW). Same wiring loop as .view-btn below. -->
   <nav id="dock" role="toolbar" aria-label="Sheets">
     <button class="dock-btn" data-view="library" aria-label="Library" title="Library (L)">LIB</button>
-    <button class="dock-btn" data-view="directory" aria-label="Operative Roster" title="Operative Roster (R)">ROS</button>
-    <button class="dock-btn" data-view="auto" aria-label="Protocols" title="Protocols (P)">PRO</button>
-    <button class="dock-btn" data-view="ops" aria-label="Enterprise" title="Enterprise (E)">ENT</button>
-    <button class="dock-btn" data-view="dev" aria-label="Workshop" title="Workshop (W)">WKS</button>
+    <button class="dock-btn" data-view="directory" aria-label="Agents" title="Agents (R)">AGT</button>
+    <button class="dock-btn" data-view="auto" aria-label="Instructions" title="Instructions (P)">INS</button>
+    <button class="dock-btn" data-view="ops" aria-label="Org chart" title="Org chart (E)">ORG</button>
+    <button class="dock-btn" data-view="dev" aria-label="Repos" title="Repos (W)">REP</button>
   </nav>
   <div id="utils">
     <button id="palette-btn" title="Command palette — jump to any place or sheet (Ctrl+K)">&#8981; Jump</button>
     <button id="mute-toggle">&#128266; FX Sound: On</button>
-    <!-- On demand instead of only at startup: Alfred's own status plus the dp
-         brief (a separate project's GitHub Action output), read aloud through
-         the same speaker the landing greeting uses. -->
-    <button id="morning-brief-btn" title="Alfred's status plus today's daily brief, read aloud">&#127908; Morning Brief</button>
+    <!-- The morning brief is read from the Day view's brief card (Listen) and
+         the palette; runMorningBrief() below is the one entry point. -->
     <div id="morning-brief-status" class="panel-help" hidden></div>
     <!-- Alfred is an observe surface, not a do surface: this opens a REAL
          console on the session rather than piping commands through the HUD.
@@ -2404,7 +2402,7 @@
        GLOBAL_POLLS. #flight-jobs always holds either .job rows or the
        "Nothing running" placeholder — never neither. -->
   <aside id="flight">
-    <div class="flight-head">In Flight</div>
+    <div class="flight-head">Activity</div>
     <div id="flight-jobs" class="flight-jobs">
       <div class="flight-placeholder">Nothing running</div>
     </div>
@@ -2547,7 +2545,7 @@
 <section class="sheet" id="sheet-workshop" role="dialog" aria-modal="true" aria-labelledby="sheet-workshop-title" hidden>
   <button class="icon-btn sheet-close" data-sheet-close aria-label="Close">&#10005;</button>
   <div class="stage-head">
-    <h1 id="sheet-workshop-title">Workshop</h1>
+    <h1 id="sheet-workshop-title">Repos</h1>
     <div class="filter-chips" data-filter-group="dev">
       <button class="filter-chip active" data-filter="all">All</button>
       <button class="filter-chip" data-filter="local">Cloned here</button>
@@ -2565,7 +2563,7 @@
 <section class="sheet" id="sheet-protocols" role="dialog" aria-modal="true" aria-labelledby="sheet-protocols-title" hidden>
   <button class="icon-btn sheet-close" data-sheet-close aria-label="Close">&#10005;</button>
   <div class="stage-head">
-    <h1 id="sheet-protocols-title">Protocols</h1>
+    <h1 id="sheet-protocols-title">Instructions</h1>
   </div>
   <div class="sheet-scroll"><div id="auto-body"></div></div>
 </section>
@@ -2573,7 +2571,7 @@
 <section class="sheet" id="sheet-roster" role="dialog" aria-modal="true" aria-labelledby="sheet-roster-title" hidden>
   <button class="icon-btn sheet-close" data-sheet-close aria-label="Close">&#10005;</button>
   <div class="stage-head">
-    <h1 id="sheet-roster-title">Operative Roster</h1>
+    <h1 id="sheet-roster-title">Agents</h1>
     <div class="stage-head-controls">
       <input id="directory-search" class="stage-search" type="text" placeholder="Search name, mission, skills&hellip;" autocomplete="off" />
       <div class="filter-chips" data-filter-group="directory">
@@ -2645,7 +2643,7 @@
 <div id="kb-scrim" class="scrim"></div>
 <div id="kb-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="kb-modal-title">
   <div class="modal-head">
-    <h2 id="kb-modal-title">Field Manual</h2>
+    <h2 id="kb-modal-title">Help</h2>
     <button class="icon-btn" id="kb-close" aria-label="Close">&#10005;</button>
   </div>
   <div class="modal-body" id="kb-modal-body"></div>
@@ -3810,10 +3808,7 @@
     var listen = el('button', 'btn', ['Listen']);
     listen.type = 'button';
     listen.title = 'Read the brief aloud';
-    listen.addEventListener('click', function () {
-      var mb = document.getElementById('morning-brief-btn');
-      if (mb) mb.click();
-    });
+    listen.addEventListener('click', function () { runMorningBrief(listen); });
     acts.appendChild(open);
     acts.appendChild(listen);
     body.push(acts);
@@ -4830,13 +4825,13 @@
       paletteAction('Day', '1', function () { switchView('day'); }),
       paletteAction('Brain', '2', function () { switchView('brain'); }),
       paletteAction('Library', 'L', function () { switchView('library'); }),
-      paletteAction('Operative Roster', 'R', function () { switchView('directory'); }),
-      paletteAction('Protocols', 'P', function () { switchView('auto'); }),
-      paletteAction('Enterprise', 'E', function () { switchView('ops'); }),
-      paletteAction('Workshop', 'W', function () { switchView('dev'); }),
-      paletteAction('Field Manual', '?', function () { openKbHelp(); }),
+      paletteAction('Agents', 'R', function () { switchView('directory'); }),
+      paletteAction('Instructions', 'P', function () { switchView('auto'); }),
+      paletteAction('Org chart', 'E', function () { switchView('ops'); }),
+      paletteAction('Repos', 'W', function () { switchView('dev'); }),
+      paletteAction('Help', '?', function () { openKbHelp(); }),
       paletteAction('Settings', '', function () { openSettings(); }),
-      paletteAction('Morning Brief', '', function () { var b = document.getElementById('morning-brief-btn'); if (b) b.click(); }),
+      paletteAction('Morning Brief', '', function () { runMorningBrief(null); }),
       paletteAction('Org Self-Test', '', function () { var b = document.getElementById('org-selftest-btn'); if (b) b.click(); }),
       paletteAction('Open Terminal', '', function () { var b = document.getElementById('open-terminal-btn'); if (b) b.click(); }),
       paletteAction('Toggle FX Sound', '', function () { var b = document.getElementById('mute-toggle'); if (b) b.click(); }),
@@ -5843,7 +5838,7 @@
   kbBody.appendChild(kbTable);
 
   function openKbHelp() {
-    document.getElementById('kb-modal-title').textContent = 'Field Manual';
+    document.getElementById('kb-modal-title').textContent = 'Help';
     kbBody.textContent = '';
     kbBody.appendChild(kbTable);
     kbScrim.classList.add('open'); kbModal.classList.add('open');
@@ -6203,32 +6198,29 @@
 
   // --- Morning brief ---------------------------------------------------------
   // Same content the startup greeting speaks once, on demand: Alfred's status
-  // plus the dp brief, fetched fresh from GitHub every click rather than cached,
-  // since the whole point is "what changed since I last looked".
-  (function wireMorningBrief() {
-    var btn = document.getElementById('morning-brief-btn');
+  // plus Grok's brief read from the shared brain. One entry point for the Day
+  // card's Listen button and the palette; `trigger` is the button to disable
+  // while the server builds the audio, or null.
+  function runMorningBrief(trigger) {
     var out = document.getElementById('morning-brief-status');
-    if (!btn) return;
-    function say(msg) { out.hidden = !msg; out.textContent = msg || ''; }
-    btn.addEventListener('click', function () {
-      btn.disabled = true;
-      say('fetching…');
-      bridgePost('/api/morning-brief', {}).then(function (r) {
-        btn.disabled = false;
-        say('');
-        if (!r.ok || !r.data || !r.data.text) {
-          var msg = (r.data && r.data.error) || 'could not build the morning brief';
-          say(msg);
-          return toast(msg, 'critical', { title: 'Morning Brief' });
-        }
-        // A full daily digest, plus an audio player, needs a real dialog —
-        // not the answer panel (a 12s-fade Q&A strip) and not a toast (no
-        // scrolling). The Field Manual dialog already has a scrollable body,
-        // a close button and Esc-to-dismiss, so the brief reuses it.
-        openMorningBriefModal(r.data);
-      }).catch(function () { btn.disabled = false; say('could not reach the server'); });
-    });
-  })();
+    function say(msg) { if (out) { out.hidden = !msg; out.textContent = msg || ''; } }
+    if (trigger) trigger.disabled = true;
+    say('fetching…');
+    bridgePost('/api/morning-brief', {}).then(function (r) {
+      if (trigger) trigger.disabled = false;
+      say('');
+      if (!r.ok || !r.data || !r.data.text) {
+        var msg = (r.data && r.data.error) || 'could not build the morning brief';
+        say(msg);
+        return toast(msg, 'critical', { title: 'Morning Brief' });
+      }
+      // A full daily digest, plus an audio player, needs a real dialog —
+      // not the answer panel (a 12s-fade Q&A strip) and not a toast (no
+      // scrolling). The help dialog already has a scrollable body, a close
+      // button and Esc-to-dismiss, so the brief reuses it.
+      openMorningBriefModal(r.data);
+    }).catch(function () { if (trigger) trigger.disabled = false; say('could not reach the server'); toast('could not reach the server', 'critical', { title: 'Morning Brief' }); });
+  }
 
   document.getElementById('kb-close').addEventListener('click', closeKbHelp);
   kbScrim.addEventListener('click', closeKbHelp);
@@ -7456,7 +7448,7 @@
     });
     connectedList.textContent = '';
     if (connected.length === 0) {
-      connectedList.appendChild(el('div', null, ['No linked case files.']));
+      connectedList.appendChild(el('div', null, ['No linked notes.']));
     }
     connected.forEach(function (c) {
       var cf = el('span', 'cf', [c.folder]);
