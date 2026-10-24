@@ -6549,7 +6549,7 @@
       body.textContent = '';
       if (!st) {
         body.appendChild(el('p', 'settings-warn', [
-          'This Alfred server does not answer the calendar endpoints yet. Restart Alfred so it loads the new code, then reopen Settings.',
+          'Alfred\'s server did not answer the calendar status request. If Alfred was updated after it started, restart it so it loads the new code, then reopen Settings.',
         ]));
         return;
       }
