@@ -295,6 +295,9 @@ const server = spawn(process.execPath, [path.join(HERE, '..', 'server.mjs')], {
     PORT: String(PORT),
     ALFRED_VAULT: path.join(HERE, 'fixtures', 'vault'),
     ALFRED_SHARED_BRAIN: BRAIN,
+    // The calendar module keeps its OAuth client and refresh token under this dir; the api
+    // suite writes a fake client there and must never touch the operator's ~/.alfred.
+    ALFRED_LOCAL_CONFIG_DIR: path.join(os.tmpdir(), `alfred-test-config-${PORT}`),
     // The Day view auto-opens a sign-in console for a signed-out seat; never on a test run.
     ALFRED_CC_DRY_RUN: '1',
     // Never the live token file — see TOKEN_FILE in server.mjs.

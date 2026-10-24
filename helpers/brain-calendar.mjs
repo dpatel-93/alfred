@@ -252,7 +252,13 @@ export async function syncCalendar(brain = sharedBrainPath(), now = easternNow()
       const file = reminderFileFor(ev, now);
       const dup = dated.find((i) => i.title.toLowerCase() === String(ev.summary || '').toLowerCase() && i.due === file.due);
       let rel;
-      if (dup) rel = dup.file;  // Grok wrote the file AND the event; adopt rather than duplicate
+      if (dup && byBrainFile.has(dup.file)) {
+        // The reminder already has its event; this one is a second copy (Grok wrote the file and the event).
+        await gcal('DELETE', `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(ev.id)}`);
+        actions.push(`remove  duplicate event "${ev.summary}"  (reminder ${dup.file} already has one)`);
+        continue;
+      }
+      if (dup) rel = dup.file;  // Grok wrote the file AND the event, with no event of ours yet: adopt it
       else {
         rel = `Reminders/${file.name}`;
         let full = path.join(brain, rel);
@@ -293,7 +299,10 @@ export async function syncCalendar(brain = sharedBrainPath(), now = easternNow()
     }
 
     // 2. Brain -> calendar. Every open dated reminder has an event; closed ones lose theirs.
-    for (const item of dated) {
+    //    Re-read the brain first: step 1 may have created, moved or closed files.
+    const current = collectOpenItems(brain, now).all.filter((i) => i.due);
+    const currentByFile = new Map(current.map((i) => [i.file, i]));
+    for (const item of current) {
       const ev = byBrainFile.get(item.file);
       if (!ev || ev.status === 'cancelled') {
         await gcal('POST', `/calendars/${encodeURIComponent(calendarId)}/events`, { body: eventFor(item, item.file) });
@@ -304,7 +313,7 @@ export async function syncCalendar(brain = sharedBrainPath(), now = easternNow()
       }
     }
     for (const [rel, ev] of byBrainFile) {
-      if (byFile.has(rel) || ev.status === 'cancelled') continue;
+      if (currentByFile.has(rel) || ev.status === 'cancelled') continue;
       // The file is closed, undated now, or gone: the event goes.
       await gcal('DELETE', `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(ev.id)}`);
       actions.push(`remove  event for ${rel}  (reminder closed or gone)`);

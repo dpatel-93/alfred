@@ -519,6 +519,26 @@ await new Promise((r) => setTimeout(r, 2000));  // the version bump is debounced
 const status2 = (await j('/api/status')).d;
 chk('brainVersion moved after dashboard actions', typeof status2?.brainVersion==='number' && status2.brainVersion > (status?.brainVersion ?? -1), `${status?.brainVersion} -> ${status2?.brainVersion}`);
 
+// --- Google Calendar: the date bus (no real Google in tests; run.mjs points ALFRED_LOCAL_CONFIG_DIR at a temp dir) ---
+const calNoTok = await fetch(B+'/api/calendar/status');
+chk('GET /api/calendar/status without token blocked', calNoTok.status===401||calNoTok.status===403, `got ${calNoTok.status}`);
+const calSt = await j('/api/calendar/status',{headers:{'X-Alfred-Token':TOKEN}});
+chk('GET /api/calendar/status reports unconfigured, never a secret', calSt.s===200 && calSt.d?.configured===false && calSt.d?.connected===false && !('clientSecret' in (calSt.d||{})), JSON.stringify(calSt.d));
+chk('connect before config is a clear 409', (await post('/api/calendar/connect',{})).s===409);
+chk('a malformed client ID is refused', (await post('/api/calendar/config',{clientId:'nope',clientSecret:'x'.repeat(12)})).s===400);
+const cfg = await post('/api/calendar/config',{clientId:'123-abc.apps.googleusercontent.com',clientSecret:'GOCSPX-testsecret1234'});
+chk('saving the OAuth client marks the calendar configured and returns no secret', cfg.s===200 && cfg.d?.configured===true && !JSON.stringify(cfg.d).includes('GOCSPX'), JSON.stringify(cfg.d));
+const con = await post('/api/calendar/connect',{});
+chk('connect returns the Google consent URL with a loopback redirect', con.s===200 && /accounts\.google\.com/.test(con.d?.url||'') && /oauth2%2Fgoogle/.test(con.d?.url||''), JSON.stringify(con.d).slice(0,200));
+const cb = await fetch(B+'/oauth2/google?code=x&state=bogus');
+chk('the OAuth callback refuses an unknown state', cb.status===400, `got ${cb.status}`);
+const cbErr = await fetch(B+'/oauth2/google?error=access_denied');
+chk('the OAuth callback reports a declined consent', cbErr.status===400 && /declined/i.test(await cbErr.text()), `got ${cbErr.status}`);
+const feedCal = (await j('/api/assistant',{headers:{'X-Alfred-Token':TOKEN}})).d;
+chk('the feed carries the calendar state', feedCal?.calendar && feedCal.calendar.connected===false && feedCal.calendar.configured===true, JSON.stringify(feedCal?.calendar));
+const dis = await post('/api/calendar/disconnect',{});
+chk('disconnect answers with the status', dis.s===200 && dis.d?.connected===false);
+
 // --- injection / traversal probes ---
 const trav = await j('/api/note?path=../../../etc/passwd');
 chk('/api/note rejects path traversal', trav.s!==200 || !JSON.stringify(trav.d).includes('root:'), `got ${trav.s}`);
