@@ -729,7 +729,7 @@
       grid-template-rows: auto auto 1fr;
       grid-template-areas: "left mid" "right mid" "tell mid";
     }
-    .day-col { overflow: visible; padding-right: 0; }
+    .day-col { min-height: auto; overflow: visible; padding-right: 0; }
     .tell-box { align-self: start; }
   }
   @media (max-width: 767px) {
@@ -817,7 +817,7 @@
   }
   /* A merged agenda's leading time cell. An untimed row keeps the empty cell so titles line up. */
   .day-time {
-    flex: none; min-width: 3.6em; color: var(--text-soft); font-family: var(--font-mono); font-size: var(--fs-xs);
+    flex: none; min-width: 4.4em; color: var(--text-soft); font-family: var(--font-mono); font-size: var(--fs-xs);
     font-variant-numeric: tabular-nums; white-space: nowrap;
   }
   .day-meta { flex: 0 1 auto; min-width: 0; color: var(--text-dim); font-size: var(--fs-xs); overflow-wrap: anywhere; }
@@ -4613,14 +4613,17 @@
   // --- Agendas: everything on a day in one list, timed rows first ------------------------
   // An entry is { time (the sort key: 'HH:MM' or ''), label (what its time cell shows), item, o }.
   // Events, dated reminders, chores and routines share the row shape, each with a kind chip.
+  // The time cell holds the start (24h Eastern, as the server sends it) or "all day"; the end
+  // goes with the place and the author after the title.
   function agEvent(ev) {
+    var t = !ev.allDay && IE_TIME.test(String(ev.time || '')) ? ev.time : '';
     var meta = [];
+    if (t && IE_TIME.test(String(ev.endTime || ''))) meta.push('to ' + ev.endTime);
     if (ev.end && ev.spanEnd !== true) meta.push('through ' + dayLabel(ev.end));
     if (ev.location) meta.push(ev.location);
     var by = calByLabel(ev.by);
     if (by && by !== 'You') meta.push('by ' + by);
-    var t = !ev.allDay && IE_TIME.test(String(ev.time || '')) ? ev.time : '';
-    return { time: t, label: calTimeText(ev), item: { file: CAL_FILE, title: ev.title || '(no title)' },
+    return { time: t, label: t || 'all day', item: { file: CAL_FILE, title: ev.title || '(no title)' },
       o: { kind: 'event', cls: 'event', meta: meta, open: calOpenFile, actions: 'none' } };
   }
 
@@ -4771,11 +4774,6 @@
     return d && ISO_DATE.test(String(d.date || '')) ? d.date : new Date().toISOString().slice(0, 10);
   }
 
-  // 'all day', '09:30' or '09:30–10:00' (the server sends 24h Eastern times).
-  function calTimeText(ev) {
-    if (ev.allDay || !ev.time) return 'all day';
-    return ev.endTime ? ev.time + '–' + ev.endTime : ev.time;
-  }
 
   // Who added the event: 'grok' -> 'Grok', 'claude-code' -> 'Claude', 'user' -> 'You'.
   function calByLabel(by) {
