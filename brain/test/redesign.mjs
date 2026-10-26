@@ -306,6 +306,17 @@ if (!(await up())) {
       const after = await page.evaluate(() => getComputedStyle(document.body).getPropertyValue('--accent-primary').trim());
       chk(tag('clicking a seat sets body[data-focus-seat]'), seatIdAfter.length > 0, `focusSeat="${seatIdAfter}"`);
       chk(tag('focusing a seat changes --accent-primary'), before !== after, `before="${before}" after="${after}"`);
+      // That click also opens (or focuses) the seat's console. Kill whatever is running, so the next
+      // width's page has nothing to re-attach: a late re-attach is a third tab in its tab-strip checks.
+      let left = [];
+      for (let i = 0; i < 20 && !left.length; i++) {
+        await sleep(150);
+        const d = await fetch(`${BASE}/api/terminals`, { headers: H }).then((r) => r.json()).catch(() => ({}));
+        left = (d.terminals || []).filter((t) => t.status === 'running');
+      }
+      for (const t of left) {
+        await fetch(`${BASE}/api/terminals/${t.id}/kill`, { method: 'POST', headers: H, body: '{}' }).catch(() => {});
+      }
     }
 
     // --- 6. Brain: click a node opens the panel ----------------------------
