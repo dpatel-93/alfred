@@ -18,6 +18,14 @@ describes the pre-redesign notch/gauge/starfield system it was written for** and
 has not been re-audited — read `ui.html` itself for anything below section 1,
 rather than trusting the specifics there.
 
+**Black Glass (2026-10).** Surface tokens re-pointed to near-black and a
+colourless glass layer added (`--glass-*` tokens in `:root`, "Black Glass layer"
+section at the foot of `ui.html`'s stylesheet): translucent black + top-down
+specular sheen + lit 1px top edge on panels, cards, toasts, sheets, the top bar
+and buttons. Backdrop blur stays limited to the surfaces that already had it —
+the brain graph's never-stopping rAF loop re-composites every blurred layer each
+frame. Status/seat colour contracts are unchanged.
+
 **Prime directive.** This is an instrument panel, not a poster. Glow and the aura
 wash are *set dressing around readable data*. If a decorative element competes
 with a number, the decoration loses. Every ring in this system is drawn from a real
