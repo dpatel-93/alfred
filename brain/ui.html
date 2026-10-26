@@ -622,7 +622,9 @@
     overflow: hidden;
   }
   #pane-day[hidden], #pane-projects[hidden] { display: none; }
-  body.composer-off #composer-dock { display: none; }
+  /* visibility, not display: the composer keeps its box, so its textarea's auto-grow (which
+     measures scrollHeight, possibly while Day is showing at load) still reads a real height. */
+  body.composer-off #composer-dock { visibility: hidden; }
   .day-sr {
     position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
     overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
@@ -2144,8 +2146,12 @@
   .day-date { font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
   .day-summary { font-family: var(--font-mono); font-size: var(--fs-xs); letter-spacing: var(--track-ui); }
 
-  /* --- a phone-width header: the brand mark gives way and the strip scrolls, so all four tabs,
-         the sheet icons and the utilities stay reachable. Pane gutters narrow to match. --- */
+  /* --- a narrow header: the brand mark gives way to the four tabs and the sheet icons; at phone
+         width the strip also scrolls, so the utilities stay reachable. Pane gutters narrow too. --- */
+  @media (max-width: 1180px) {
+    #mark { display: none; }
+    .view-btn { padding: 10px 16px; }
+  }
   @media (max-width: 720px) {
     #top { gap: 8px; padding: 0 8px; overflow-x: auto; }
     #mark { display: none; }

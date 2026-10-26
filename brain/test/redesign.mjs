@@ -129,10 +129,13 @@ if (!(await up())) {
     chk(tag('with no hash the app lands on the Day view'), await page.evaluate(() =>
       !document.getElementById('pane-day').hidden && document.getElementById('pane-brain').hidden
       && document.getElementById('pane-command').hidden));
-    chk(tag('the nav is Day then Brain, Day active, and there is no Command tab'), await page.evaluate(() => {
+    chk(tag('the nav is Day, Projects, Brain, Terminals, with Day active'), await page.evaluate(() => {
       const b = [...document.querySelectorAll('#views .view-btn')];
-      return b.map((x) => x.dataset.view).join(',') === 'day,brain' && b[0].classList.contains('active')
-        && b[0].getAttribute('aria-selected') === 'true' && !b[1].classList.contains('active');
+      return b.map((x) => x.dataset.view).join(',') === 'day,projects,brain,command'
+        && b.map((x) => x.textContent).join(',') === 'Day,Projects,Brain,Terminals'
+        && b.map((x) => x.getAttribute('aria-controls')).join(',') === 'pane-day,pane-projects,pane-brain,pane-command'
+        && b[0].classList.contains('active') && b[0].getAttribute('aria-selected') === 'true'
+        && b.slice(1).every((x) => !x.classList.contains('active') && x.getAttribute('aria-selected') === 'false');
     }));
 
     // --- the Command place: tab strip, grid mode, unread dot, seats -------
@@ -351,11 +354,13 @@ if (!(await up())) {
       }
     }
 
-    // The feed carries `calendar` (parsed from Calendar/events.md), and the fixture vault has no such
-    // file. Inject the shape the server sends into the real feed: one timed event today with a place
-    // and an author, plus one all-day event that spans today and tomorrow, with one unreadable line,
-    // so the calendar card and "Today on the calendar" are checked against the real feed shape
-    // rather than against a stub of the whole page.
+    // The Day cards are checked against the feed's real shape: the server's feed from the test brain
+    // with known rows injected. Calendar events (Calendar/events.md): one timed event today with a
+    // place and an author, and an all-day one spanning today and tomorrow, with one unreadable line.
+    // Weekly chores (one due today, one late, one done today, one later this week), the next 7 days,
+    // progress and Needs you. Every write below is stubbed; the real server is never written to.
+    // feedBump changes the to-dos' titles, so a refresh after bumping it is a real repaint.
+    let feedBump = 0;
     await page.route('**/api/assistant', async (route) => {
       // A poll can still be in flight when the context closes; that must not become an unhandled rejection.
       let resp, j;
@@ -363,12 +368,14 @@ if (!(await up())) {
       const iso = j.date || new Date().toISOString().slice(0, 10);
       const day = (n) => new Date(Date.parse(iso + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10);
       const [y, m] = [Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1];
+      const rem = (file, title, kind, due, time) => ({ file, title, kind, due, time, scope: 'personal', author: 'grok', ours: true, pending: null });
       j.brain = j.brain || 'test-brain';
       // The add/edit checks below need known reminder and routine rows, whatever brain the server found.
-      j.today = [{ file: 'Reminders/test-call-plumber.md', title: 'Call the plumber', kind: 'reminder', due: iso, time: '09:30',
-        scope: 'personal', author: 'grok', ours: true, pending: false }];
+      j.today = [rem('Reminders/test-call-plumber.md', 'Call the plumber', 'reminder', iso, '09:30')];
+      j.overdue = [];
+      j.carryOver = [];
       j.routines = {
-        today: [{ file: 'Routines/test-walk.md', title: 'Morning walk', schedule: 'daily', status: 'active', today: true }],
+        today: [{ file: 'Routines/test-walk.md', title: 'Morning walk', schedule: 'daily', time: '07:00', status: 'active', today: true }],
         other: [
           { file: 'Routines/test-review.md', title: 'Weekly review', schedule: 'Fridays', status: 'active', today: false },
           { file: 'Routines/test-odd.md', title: 'Deep clean', schedule: 'every other Friday', status: 'active', today: false },
@@ -376,6 +383,30 @@ if (!(await up())) {
         paused: [{ file: 'Routines/test-water.md', title: 'Water the plants', schedule: 'Mondays and Thursdays 08:00', time: '08:00',
           status: 'paused', today: false }],
       };
+      const chore = (name, title, due, extra) => ({ file: `Routines/${name}.md`, title, kind: 'chore', schedule: 'weekly', day: null,
+        due, done: false, missedLastWeek: false, closedOn: null, ...extra });
+      const dust = chore('test-dust', 'Dusting', iso);
+      const jira = chore('test-jira', 'Jira time sheet', day(-2), { day: 'monday' });
+      const bath = chore('test-bath', 'Clean the bathrooms', iso, { done: true, closedOn: iso });
+      const laundry = chore('test-laundry', 'Fold the laundry', day(3), { day: 'tuesday', missedLastWeek: true });
+      j.chores = { due: [dust], late: [jira], done: [bath], all: [jira, dust, bath, laundry] };
+      j.doneToday = [{ file: 'Reminders/Done/test-mail.md', title: 'Mail the package', kind: 'errand', status: 'done', closedOn: iso }];
+      j.progress = { done: 2, total: 6 };
+      j.needsYou = [
+        { kind: 'grok ask', title: 'Which dentist do you use?', why: 'Grok needs it to book the cleaning', ref: 'G1' },
+        { kind: 'signal', title: 'A note for you', why: 'from grok', file: 'Inbox/README.md' },
+      ];
+      const cake = rem('Reminders/test-cake.md', 'Pick up the cake', 'errand', day(1), '16:00');
+      j.upcoming = [cake];
+      j.week = { from: day(1), to: day(7), anytime: { by: day(7), chores: [dust, bath] },
+        days: [1, 2, 3, 4, 5, 6, 7].map((n) => ({ date: day(n), weekday: '', items: n === 1 ? [cake] : [], routines: [], chores: n === 3 ? [laundry] : [] })) };
+      j.todos = ['One', 'Two', 'Three', 'Four'].map((t, i) => rem(`Reminders/test-todo-${i}.md`, `To-do ${t}${feedBump ? ' v' + feedBump : ''}`, 'todo', 'none', null));
+      j.later = [rem('Reminders/test-later.md', 'Renew the passport', 'reminder', day(40), null)];
+      j.watching = [];
+      j.brief = { file: `Outputs/briefs/${iso}.md`, date: iso, isToday: true, title: 'Morning brief', updated: `${iso} 07:10`,
+        top: [{ title: 'Test headline.', text: 'Body.' }] };
+      j.projects = [{ file: 'Projects/demo/status.md', name: 'demo', title: 'Demo', status: 'Active', track: 'Personal',
+        updated: '2026-01-01', stands: '(2026-01-01) Going fine.', next: 'Ship it.' }];
       const timed = { id: 'ev-1', title: 'Test event', date: iso, end: null, time: '09:30', endTime: '10:00', allDay: false,
         location: 'Room 4', by: 'grok', line: 8 };
       const span = { id: 'ev-2', title: 'Team offsite', date: iso, end: day(1), time: null, endTime: null, allDay: true,
@@ -390,83 +421,123 @@ if (!(await up())) {
       };
       await route.fulfill({ response: resp, json: j }).catch(() => {});
     });
+    // Chore Done and Tell Alfred are stubbed too: they record what was sent and answer like the server.
+    const actionCalls = [], tellCalls = [];
+    await page.route('**/api/assistant/action', async (route) => {
+      let sent = {};
+      try { sent = JSON.parse(route.request().postData() || '{}'); } catch { /* checked below */ }
+      actionCalls.push(sent);
+      await route.fulfill({ json: { applied: true, via: 'direct', title: 'Dusting' } }).catch(() => {});
+    });
+    await page.route('**/api/assistant/tell', async (route) => {
+      let sent = {};
+      try { sent = JSON.parse(route.request().postData() || '{}'); } catch { /* checked below */ }
+      tellCalls.push(sent);
+      await route.fulfill({ json: { via: 'claude', reply: `Got it: ${sent.text}.`,
+        saved: [{ type: 'reminder', kind: 'reminder', title: 'Call the dentist', due: 'none', file: 'Reminders/x.md' }], skipped: [] } }).catch(() => {});
+    });
 
-    // --- Day: key 1 returns to it; the date header and the bench strip are mounted -------
+    // --- Day: key 1 returns to it; the date header and the sign-in banner are mounted ------
     await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
     await page.keyboard.press('1');
     await page.waitForFunction(() => !document.getElementById('pane-day').hidden, null, { timeout: 5000 }).catch(() => {});
     await page.waitForFunction(() => /,/.test(document.getElementById('day-date').textContent), null, { timeout: 8000 }).catch(() => {});
-    chk(tag('key 1 returns to Day, with the weekday date header and the bench strip mounted'), await page.evaluate(() =>
+    chk(tag('key 1 returns to Day, with the weekday date header and the sign-in banner mounted'), await page.evaluate(() =>
       !document.getElementById('pane-day').hidden
       && /^[A-Z][a-z]+day, [A-Z][a-z]+ \d{1,2}$/.test(document.getElementById('day-date').textContent)
-      && !!document.getElementById('bench') && !!document.getElementById('signin-banner')));
+      && !!document.getElementById('signin-banner')));
+    await page.waitForFunction(() => !!document.querySelector('.today-card') && /Morning walk/.test(document.querySelector('.today-card').textContent),
+      null, { timeout: 8000 }).catch(() => {});
 
-    // --- Day: the calendar (month grid, today, dots, agenda, today's events) ------------
-    await page.waitForFunction(() => !!document.querySelector('.cal-event'), null, { timeout: 8000 }).catch(() => {});
-
-    // Layout the user asked for: everything to act on on the left, the calendar alone in
-    // the middle, Grok's brief leading the right, and no "Since you last looked" card.
-    const dayLayout = await page.evaluate(() => [...document.querySelectorAll('.day-col')].map((c) =>
-      [...c.children].map((card) => {
-        const h = card.firstElementChild;
-        return card.classList.contains('cal-card') ? 'CALENDAR' : String((h && h.firstChild && h.firstChild.textContent) || '').trim();
-      })));
-    const leftTitles = dayLayout[0] || [];
-    chk(tag('Day: due today, this week and to-dos are in the left column, in that order'),
-      ['Due today', 'This week', 'To-dos'].every((t) => leftTitles.includes(t))
-        && leftTitles.indexOf('Due today') < leftTitles.indexOf('This week')
-        && leftTitles.indexOf('This week') < leftTitles.indexOf('To-dos'), JSON.stringify(dayLayout));
-    chk(tag('Day: the calendar has the middle column to itself'),
-      JSON.stringify(dayLayout[1]) === '["CALENDAR"]', JSON.stringify(dayLayout[1]));
-    chk(tag("Day: Grok's morning brief leads the right column"),
-      (dayLayout[2] || [])[0] === "Grok's morning brief", JSON.stringify(dayLayout[2]));
-    chk(tag('Day: there is no "Since you last looked" card'),
-      !dayLayout.flat().some((t) => /since you last looked/i.test(t)), JSON.stringify(dayLayout));
-
-    // --- Day: Tell Grok, the desk box. The server's answer is stubbed: Grok is never called here. ---
-    await page.route('**/api/assistant/tell-grok', async (route) => {
-      let sent = {};
-      try { sent = JSON.parse(route.request().postData() || '{}'); } catch { /* checked below */ }
-      await route.fulfill({ json: { via: 'grok', reply: `Got it: ${sent.text}.`,
-        saved: [{ type: 'reminder', kind: 'reminder', title: 'Call the plumber', due: 'none', file: 'Reminders/x.md' }], skipped: [] } }).catch(() => {});
+    // --- Day: the layout the user asked for ------------------------------------------------
+    // Left: the calendar, then the picked day. Centre: Today, then This week. Right: Needs you,
+    // Watching, Your routines, with Tell Alfred under them. Three columns on a desk, two at 1024.
+    const layout = await page.evaluate(() => {
+      const cols = [...document.querySelectorAll('#day-body > .day-col')];
+      const r = (n) => n.getBoundingClientRect();
+      const tell = document.getElementById('tell-alfred');
+      return {
+        areas: cols.map((c) => ['left', 'mid', 'right'].find((a) => c.classList.contains(a))),
+        cards: cols.map((c) => [...c.children].map((k) => k.classList.contains('cal-card') ? 'CAL' : k.classList.contains('pick-card') ? 'PICK'
+          : k.classList.contains('today-card') ? 'TODAY' : k.classList.contains('week-card') ? 'WEEK' : k.classList.contains('needs-card') ? 'NEEDS'
+          : k.classList.contains('routines-card') ? 'ROUTINES' : String((k.firstElementChild || {}).textContent || '').replace(/\d+$/, '').trim())),
+        lefts: cols.map((c) => Math.round(r(c).left)), widths: cols.map((c) => Math.round(r(c).width)),
+        rightTop: cols[2] ? Math.round(r(cols[2]).top) : 0, rightBottom: cols[2] ? Math.round(r(cols[2]).bottom) : 0,
+        tell: tell ? { left: Math.round(r(tell).left), top: Math.round(r(tell).top), inBody: document.getElementById('day-body').contains(tell) } : null,
+      };
     });
-    const tgBox = await page.evaluate(() => {
-      const f = document.getElementById('tell-grok');
-      return !!f && !!f.querySelector('input#tell-grok-input') && /Tell Grok/.test(f.textContent);
-    });
-    chk(tag('Day: the Tell Grok box sits in the Day header'), tgBox);
-    await page.fill('#tell-grok-input', 'remind me to call the plumber');
-    await page.press('#tell-grok-input', 'Enter');
-    await page.waitForFunction(() => [...document.querySelectorAll('.toast')].some((t) => /Got it: remind me to call the plumber/.test(t.textContent)),
-      null, { timeout: 6000 }).catch(() => {});
-    chk(tag("Day: sending to Grok shows Grok's reply and what was saved, and clears the box"), await page.evaluate(() =>
-      [...document.querySelectorAll('.toast')].some((t) => /Got it: remind me to call the plumber/.test(t.textContent) && /Reminder: Call the plumber/.test(t.textContent))
-      && document.getElementById('tell-grok-input').value === '' && !document.getElementById('tell-grok-input').disabled));
-    await page.unroute('**/api/assistant/tell-grok').catch(() => {});
-    chk(tag('Day: the Calendar card tops column 2 with a 6-week grid (42 day buttons)'), await page.evaluate(() => {
-      const cols = document.querySelectorAll('.day-col');
-      const card = cols[1] && cols[1].firstElementChild;
+    chk(tag('Day: left column is the calendar then the picked day; centre is Today then This week; right is Needs you, Watching, Your routines'),
+      JSON.stringify(layout.areas) === '["left","mid","right"]' && JSON.stringify(layout.cards) === JSON.stringify([['CAL', 'PICK'], ['TODAY', 'WEEK'],
+        ['NEEDS', 'Watching', 'ROUTINES']]), JSON.stringify(layout));
+    if (width >= 1200) {
+      chk(tag('Day: three columns side by side, the centre one widest'), layout.lefts[0] < layout.lefts[1] && layout.lefts[1] < layout.lefts[2]
+        && layout.widths[1] > layout.widths[0] && layout.widths[1] > layout.widths[2], JSON.stringify(layout));
+      chk(tag('Day: the Tell Alfred box sits under the right column, outside the rebuilt #day-body'), !!layout.tell && !layout.tell.inBody
+        && Math.abs(layout.tell.left - layout.lefts[2]) < 3 && layout.tell.top >= layout.rightBottom, JSON.stringify(layout));
+    } else {
+      chk(tag('Day: two columns on a narrow screen, the right column under the left one'), layout.lefts[0] < layout.lefts[1]
+        && layout.lefts[2] === layout.lefts[0], JSON.stringify(layout));
+      chk(tag('Day: the Tell Alfred box sits under the right column, outside the rebuilt #day-body'), !!layout.tell && !layout.tell.inBody
+        && Math.abs(layout.tell.left - layout.lefts[0]) < 3 && layout.tell.top >= layout.rightBottom, JSON.stringify(layout));
+    }
+    chk(tag('Day: the header has Morning brief, + Add and Refresh, and no Tell Grok box or seat strip'), await page.evaluate(() => {
+      const kids = [...document.querySelector('.day-tools').children].map((c) => c.id);
+      const pane = document.getElementById('pane-day');
+      return JSON.stringify(kids) === '["day-brief","day-add","day-refresh"]' && /Morning brief/.test(document.getElementById('day-brief').textContent)
+        && !document.getElementById('tell-grok') && !pane.querySelector('#bench') && !pane.querySelector('#cc-seats');
+    }));
+    chk(tag('Day: the old cards are gone (brief, end of day, projects, signals, due today, routines today)'), await page.evaluate(() => {
+      const titles = [...document.querySelectorAll('#pane-day .day-card-title, #pane-day details.day-card > summary')].map((t) => t.textContent);
+      return !titles.some((t) => /morning brief|end of day|^projects|signals|due today|routines today|today on the calendar/i.test(t));
+    }), await page.evaluate(() => [...document.querySelectorAll('#pane-day .day-card-title')].map((t) => t.textContent).join(' | ')));
+    chk(tag('Day: the seat chips and the Ask bar are not on the Day page'), await page.evaluate(() =>
+      getComputedStyle(document.getElementById('composer-dock')).visibility === 'hidden'
+      && document.elementFromPoint(innerWidth / 2, innerHeight - 30) !== document.getElementById('search-input')));
+
+    // --- Day: the calendar (month grid, today, dots) and the picked day ---------------------
+    chk(tag('Day: the Calendar card tops the left column with a 6-week grid (42 day buttons)'), await page.evaluate(() => {
+      const card = document.querySelector('.day-col.left').firstElementChild;
       return !!card && card.classList.contains('cal-card') && card.querySelectorAll('.cal-grid > button.cal-day').length === 42
         && /\b20\d\d\b/.test((card.querySelector('.cal-month') || {}).textContent || '');
     }));
-    chk(tag('Day: today is ringed and selected, with one roving tab stop, and its agenda is shown'), await page.evaluate(() => {
+    chk(tag('Day: today is ringed and selected, with one roving tab stop'), await page.evaluate(() => {
       const t = document.querySelectorAll('.cal-day.today');
       return t.length === 1 && t[0].classList.contains('selected') && t[0].getAttribute('aria-current') === 'date'
-        && document.querySelectorAll('.cal-day[tabindex="0"]').length === 1 && !!document.querySelector('.cal-agenda');
+        && document.querySelectorAll('.cal-day[tabindex="0"]').length === 1;
     }));
-    chk(tag("Day: today's cell shows an event dot for each of the 2 events, and none is hollow"), await page.evaluate(() => {
+    chk(tag("Day: today's cell has a blue dot per event and a mint dot per reminder and chore"), await page.evaluate(() => {
       const t = document.querySelector('.cal-day.today');
-      return t.querySelectorAll('.cal-dot:not(.rem)').length === 2 && t.querySelectorAll('.cal-dot.hollow').length === 0;
-    }));
-    chk(tag('Day: the agenda lists the timed event with its time range, place and author, and the all-day one'), await page.evaluate(() => {
-      const a = document.querySelector('.cal-agenda').textContent;
-      return /09:30–10:00/.test(a) && /Test event/.test(a) && /Room 4/.test(a) && /Grok/.test(a)
-        && /all day/.test(a) && /Team offsite/.test(a) && /Claude/.test(a);
-    }));
-    chk(tag('Day: "Today on the calendar" leads column 1 and lists the timed event'), await page.evaluate(() => {
-      const first = document.querySelector('.day-col').firstElementChild;
-      return /Today on the calendar/.test(first.textContent) && /Test event/.test(first.textContent) && /09:30–10:00/.test(first.textContent);
-    }));
+      return t.querySelectorAll('.cal-dot:not(.rem)').length === 2 && t.querySelectorAll('.cal-dot.rem').length === 2
+        && /1 reminder, 1 chore, 2 events/.test(t.getAttribute('aria-label'));
+    }), await page.evaluate(() => document.querySelector('.cal-day.today').getAttribute('aria-label')));
+    const rowsOf = (sel) => page.evaluate((sel) => [...document.querySelectorAll(sel)].map((r) => ({
+      time: (r.querySelector('.day-time') || {}).textContent, kind: (r.querySelector('.day-kind') || {}).textContent,
+      title: r.querySelector('.day-title').textContent, text: r.textContent,
+      done: !!r.querySelector('[aria-label^="Done for this week"], [aria-label^="Mark done"]') })), sel);
+    const picked = await rowsOf('.pick-card .day-item');
+    chk(tag('Day: the picked day (today) lists the routine, both events, the reminder and the chore, timed rows first by time'),
+      JSON.stringify(picked.map((r) => [r.time, r.kind, r.title])) === JSON.stringify([['07:00', 'routine', 'Morning walk'],
+        ['09:30', 'event', 'Test event'], ['09:30', 'reminder', 'Call the plumber'], ['all day', 'event', 'Team offsite'], ['', 'chore', 'Dusting']]),
+      JSON.stringify(picked.map((r) => [r.time, r.kind, r.title])));
+    chk(tag("Day: an event row shows its end time, place and author"), /to 10:00/.test(picked[1] && picked[1].text)
+      && /Room 4/.test(picked[1].text) && /by Grok/.test(picked[1].text) && /by Claude/.test(picked[3] && picked[3].text), JSON.stringify(picked));
+    chk(tag('Day: the picked day card is titled with the date and "today"'), await page.evaluate(() =>
+      / · today$/.test(document.querySelector('.pick-card .day-card-title').textContent)));
+    const tomorrow = await page.evaluate(() => {
+      const t = document.querySelector('.cal-day.today').getAttribute('data-date');
+      return new Date(Date.parse(t + 'T12:00:00Z') + 86400000).toISOString().slice(0, 10);
+    });
+    await page.click(`.cal-day[data-date="${tomorrow}"]`);
+    await page.waitForFunction(() => !/ · today$/.test(document.querySelector('.pick-card .day-card-title').textContent), null, { timeout: 4000 }).catch(() => {});
+    const pickedTomorrow = await rowsOf('.pick-card .day-item');
+    chk(tag('Day: clicking another day shows what is on it (the errand at 16:00 and the all-day event), with its actions'),
+      JSON.stringify(pickedTomorrow.map((r) => [r.time, r.title, r.done])) === JSON.stringify([['16:00', 'Pick up the cake', true], ['all day', 'Team offsite', false]])
+        && await page.evaluate((d) => document.querySelector(`.cal-day[data-date="${d}"]`).classList.contains('selected')
+          && document.activeElement.getAttribute('data-date') === d, tomorrow), JSON.stringify(pickedTomorrow));
+    await page.click('.cal-card .cal-today');
+    await page.waitForFunction(() => / · today$/.test(document.querySelector('.pick-card .day-card-title').textContent), null, { timeout: 4000 }).catch(() => {});
+    chk(tag('Day: the Today button goes back to today'), await page.evaluate(() =>
+      / · today$/.test(document.querySelector('.pick-card .day-card-title').textContent) && !document.querySelector('.cal-card .cal-today')));
     chk(tag('Day: the day summary says "2 events"'), await page.evaluate(() =>
       /\b2 events\b/.test(document.getElementById('day-summary').textContent)));
     chk(tag('Day: the note under the grid counts the month and links the events file; unreadable lines get a warning'), await page.evaluate(() => {
@@ -478,7 +549,7 @@ if (!(await up())) {
         && /^1 line in Calendar\/events\.md could not be read$/.test(warn.textContent) && /12/.test(warn.title);
     }));
     await page.evaluate(() => { document.getElementById('panel').classList.remove('open'); });
-    await page.click('.cal-agenda .cal-event');
+    await page.click('.pick-card .day-item.event .day-title');
     await page.waitForFunction(() => document.getElementById('panel').classList.contains('open'), null, { timeout: 5000 }).catch(() => {});
     chk(tag('Day: clicking an event opens Calendar/events.md in the reader'), await page.evaluate(() =>
       document.getElementById('panel').classList.contains('open') && /Calendar/.test(document.getElementById('panel-title').textContent)));
@@ -487,6 +558,159 @@ if (!(await up())) {
       const src = await fetch('/').then((r) => r.text());
       return !src.includes('/api/calendar/') && !src.includes('Google Calendar');
     }));
+
+    // --- Day: Today --------------------------------------------------------------------------
+    chk(tag('Day: Today shows "2 of 6 done" with a progress bar'), await page.evaluate(() => {
+      const card = document.querySelector('.today-card');
+      const bar = card.querySelector('.day-card-head [role="progressbar"]');
+      return /^2 of 6 done$/.test(card.querySelector('.day-progress').textContent) && !!bar && bar.getAttribute('aria-valuenow') === '2'
+        && bar.getAttribute('aria-valuemax') === '6' && bar.firstElementChild.style.width === '33%';
+    }));
+    const lateDay = await page.evaluate(() => {
+      const t = document.querySelector('.cal-day.today').getAttribute('data-date');
+      return new Date(Date.parse(t + 'T12:00:00Z') - 2 * 86400000).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
+    });
+    chk(tag('Day: "Needs attention" leads Today with the late chore, "was due <weekday>", and a Done button'), await page.evaluate((wd) => {
+      const g = document.querySelector('.today-card .day-attn');
+      const row = g && g.querySelector('.day-item');
+      return !!g && g === document.querySelector('.today-card .day-card-head').nextElementSibling
+        && /^Needs attention \(1\)$/.test(g.querySelector('.day-group').textContent) && /Jira time sheet/.test(row.textContent)
+        && row.querySelector('.day-when').textContent === 'was due ' + wd && !!row.querySelector('[aria-label="Done for this week: Jira time sheet"]');
+    }, lateDay));
+    const todayRows = await rowsOf('.today-card .day-attn + .day-list > .day-item');
+    chk(tag("Day: Today's list merges routine, events, reminder and chore, timed first, each with a kind tag"),
+      JSON.stringify(todayRows.map((r) => [r.time, r.kind, r.title])) === JSON.stringify(picked.map((r) => [r.time, r.kind, r.title])),
+      JSON.stringify(todayRows.map((r) => [r.time, r.kind, r.title])));
+    chk(tag('Day: Today\'s reminder has the full actions and the chore just Done'), await page.evaluate(() => {
+      const rem = document.querySelector('.today-card .day-item.today');
+      const cho = [...document.querySelectorAll('.today-card .day-item.chore')].find((r) => /Dusting/.test(r.textContent));
+      const labels = (r) => [...r.querySelectorAll('.day-actions button')].map((b) => b.textContent).join('|');
+      return labels(rem) === '✓ Done|→ Tomorrow|Edit|⋯' && labels(cho) === '✓ Done';
+    }));
+    chk(tag('Day: "Done today" lists what was closed and the chore done today, struck through'), await page.evaluate(() => {
+      const card = document.querySelector('.today-card');
+      const h = [...card.querySelectorAll('.day-group')].find((g) => /^Done today/.test(g.textContent));
+      const rows = h ? [...h.nextElementSibling.querySelectorAll('.day-item.done')] : [];
+      return !!h && h.textContent === 'Done today (2)' && rows.length === 2 && /Mail the package/.test(rows[0].textContent)
+        && /Clean the bathrooms/.test(rows[1].textContent) && !rows.some((r) => r.querySelector('.day-actions'))
+        && /line-through/.test(getComputedStyle(rows[0].querySelector('.day-title')).textDecorationLine);
+    }));
+    await page.click('.today-card [aria-label="Done for this week: Dusting"]');
+    { const t = Date.now(); while (!actionCalls.length && Date.now() - t < 4000) await sleep(50); }
+    await page.waitForFunction(() => [...document.querySelectorAll('.toast')].some((t) => /Done for this week: Dusting/.test(t.textContent)),
+      null, { timeout: 4000 }).catch(() => {});
+    chk(tag("Day: a chore's Done sends close for its Routines/ file and says it is done for the week"),
+      JSON.stringify(actionCalls[0] || null) === JSON.stringify({ file: 'Routines/test-dust.md', action: 'close' })
+      && await page.evaluate(() => [...document.querySelectorAll('.toast')].some((t) => /Done for this week: Dusting/.test(t.textContent))),
+      JSON.stringify(actionCalls));
+
+    // --- Day: This week ------------------------------------------------------------------------
+    const week = await page.evaluate(() => {
+      const card = document.querySelector('.week-card');
+      const groups = [...card.querySelectorAll(':scope > .day-group')].map((h) => ({ h: h.textContent,
+        rows: [...((h.nextElementSibling && h.nextElementSibling.querySelectorAll('.day-item')) || [])].map((r) => ({
+          title: r.querySelector('.day-title').textContent, done: !!r.querySelector('.day-act.done'),
+          tag: (r.querySelector('.badge') || {}).textContent || '' })) }));
+      const folds = [...card.querySelectorAll('details.day-fold')].map((f) => ({ s: f.querySelector('summary').textContent, open: f.open }));
+      return { range: (card.querySelector('.day-card-head .day-aside') || {}).textContent, groups, folds };
+    });
+    chk(tag('Day: This week shows its date range on the right'), /^[A-Z][a-z]{2} \d{1,2} – [A-Z][a-z]{2} \d{1,2}$/.test(week.range || ''), week.range);
+    chk(tag('Day: This week has one group per day with something on it (empty days skipped)'), week.groups.length === 3
+      && /^[A-Z][a-z]{2} [A-Z][a-z]{2} \d{1,2}$/.test(week.groups[0].h) && /^[A-Z][a-z]{2} [A-Z][a-z]{2} \d{1,2}$/.test(week.groups[1].h)
+      && JSON.stringify(week.groups[0].rows.map((r) => r.title)) === '["Pick up the cake","Team offsite"]'
+      && JSON.stringify(week.groups[1].rows.map((r) => [r.title, r.done])) === '[["Fold the laundry",true]]', JSON.stringify(week.groups));
+    chk(tag('Day: "Anytime this week (by …)" lists the any-day chores: Done when open, "done this week" when done'),
+      /^Anytime this week \(by [A-Z][a-z]{2} [A-Z][a-z]{2} \d{1,2}\)$/.test((week.groups[2] || {}).h || '')
+      && JSON.stringify(week.groups[2].rows.map((r) => [r.title, r.done, r.tag])) === '[["Dusting",true,""],["Clean the bathrooms",false,"done this week"]]',
+      JSON.stringify(week.groups[2]));
+    chk(tag('Day: To-dos (4) and Later (1) are collapsed groups under the week'),
+      JSON.stringify(week.folds) === '[{"s":"To-dos (4)","open":false},{"s":"Later (1)","open":false}]', JSON.stringify(week.folds));
+
+    // --- Day: Needs you, and Your routines' weekly chores --------------------------------------
+    chk(tag('Day: Needs you lists each item with why; only one with a file is a button'), await page.evaluate(() => {
+      const rows = [...document.querySelectorAll('.needs-card .day-need')];
+      return rows.length === 2 && rows[0].tagName === 'DIV' && /grok ask/.test(rows[0].textContent) && /Which dentist do you use\?/.test(rows[0].textContent)
+        && /Grok needs it to book the cleaning/.test(rows[0].textContent) && rows[1].tagName === 'BUTTON' && /A note for you/.test(rows[1].textContent)
+        && document.querySelector('.needs-card .day-count').textContent === '2';
+    }));
+    await page.evaluate(() => { document.getElementById('panel').classList.remove('open'); });
+    await page.click('.needs-card button.day-need');
+    await page.waitForFunction(() => document.getElementById('panel').classList.contains('open'), null, { timeout: 5000 }).catch(() => {});
+    chk(tag('Day: a Needs you row with a file opens it in the reader'), await page.evaluate(() =>
+      document.getElementById('panel').classList.contains('open') && /A note for you/.test(document.getElementById('panel-title').textContent)));
+    await page.evaluate(() => { document.getElementById('panel').classList.remove('open'); });
+    const chores = await page.evaluate(() => {
+      const card = document.querySelector('.routines-card');
+      const h = [...card.querySelectorAll('.day-group')].find((g) => /^Weekly chores/.test(g.textContent));
+      return { h: h && h.textContent, rows: [...card.querySelectorAll('.day-item.chore')].map((r) => [r.querySelector('.day-title').textContent,
+        r.querySelector('.day-when').textContent, (r.querySelector('.badge') || {}).textContent || '', !!r.querySelector('.day-act.done')]) };
+    });
+    chk(tag('Day: Your routines lists the weekly chores: open ones with Done, done ones "done this week", a missed week marked'),
+      chores.h === 'Weekly chores (4)' && JSON.stringify(chores.rows) === JSON.stringify([['Jira time sheet', 'open', '', true],
+        ['Dusting', 'open', '', true], ['Clean the bathrooms', 'done this week', '', false], ['Fold the laundry', 'open', 'missed last week', true]]),
+      JSON.stringify(chores));
+
+    // --- Day: the Morning brief button opens a dialog; Esc and the scrim close it ----------------
+    await page.click('#day-brief');
+    await page.waitForSelector('.brief-modal.open', { timeout: 4000 }).catch(() => {});
+    chk(tag('Day: Morning brief opens a labelled modal dialog with the brief, its actions and the end of day'), await page.evaluate(() => {
+      const d = document.querySelector('.brief-modal');
+      const label = d && document.getElementById(d.getAttribute('aria-labelledby'));
+      const text = d ? d.textContent : '';
+      return !!d && d.getAttribute('role') === 'dialog' && d.getAttribute('aria-modal') === 'true' && !!label && label.textContent === 'Morning brief'
+        && d.contains(document.activeElement) && /Test headline\./.test(text) && /Open full brief/.test(text) && /Read aloud/.test(text)
+        && /End of day/.test(text) && /Done today \(2\)/.test(text) && /Mail the package/.test(text) && /Clean the bathrooms/.test(text)
+        && /Tidy up \(run the Librarian\)/.test(text) && !!document.querySelector('.scrim.open');
+    }));
+    await page.keyboard.press('Shift+Tab');
+    chk(tag('Day: Shift+Tab from the first control in the brief wraps to its last (Tidy up)'), await page.evaluate(() =>
+      document.activeElement.textContent === 'Tidy up (run the Librarian)'));
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.brief-modal'), null, { timeout: 4000 }).catch(() => {});
+    chk(tag('Day: Esc closes the brief, leaves nothing behind and puts focus back on the button'), await page.evaluate(() =>
+      !document.querySelector('.brief-modal') && !document.querySelector('.scrim.open') && !document.body.classList.contains('brief-open')
+      && document.activeElement.id === 'day-brief' && !document.getElementById('pane-day').hidden));
+    await page.click('#day-brief');
+    await page.waitForSelector('.brief-modal.open', { timeout: 4000 }).catch(() => {});
+    await page.mouse.click(8, 890);
+    await page.waitForFunction(() => !document.querySelector('.brief-modal'), null, { timeout: 4000 }).catch(() => {});
+    chk(tag('Day: a click on the scrim closes the brief, focus back on the button'), await page.evaluate(() =>
+      !document.querySelector('.brief-modal') && !document.querySelector('.scrim.open') && document.activeElement.id === 'day-brief'));
+    await page.click('#day-brief');
+    await page.waitForSelector('.brief-modal.open', { timeout: 4000 }).catch(() => {});
+    await page.click('.brief-modal button:text-is("Open full brief")');
+    await page.waitForFunction(() => document.getElementById('panel').classList.contains('open'), null, { timeout: 5000 }).catch(() => {});
+    chk(tag('Day: "Open full brief" closes the dialog and opens the brief in the reader'), await page.evaluate(() =>
+      !document.querySelector('.brief-modal') && document.getElementById('panel').classList.contains('open')
+      && /Morning brief/.test(document.getElementById('panel-title').textContent)));
+    await page.evaluate(() => { document.getElementById('panel').classList.remove('open'); });
+
+    // --- Day: Tell Alfred keeps what is typed across a repaint, then posts to /api/assistant/tell --
+    await page.evaluate(() => { const f = [...document.querySelectorAll('.week-card details.day-fold')][0]; f.open = true; });
+    await sleep(100);
+    await page.click('#tell-alfred-input');
+    await page.fill('#tell-alfred-input', 'remind me Tuesday to call the dentist');
+    feedBump = 1;
+    await page.evaluate(() => document.getElementById('day-refresh').click());
+    await page.waitForFunction(() => /To-do One v1/.test(document.querySelector('.week-card').textContent), null, { timeout: 6000 }).catch(() => {});
+    chk(tag('Day: a feed refresh repaints the cards but keeps the typed text, the focus in the box and an opened group'), await page.evaluate(() =>
+      /To-do One v1/.test(document.querySelector('.week-card').textContent)
+      && document.getElementById('tell-alfred-input').value === 'remind me Tuesday to call the dentist'
+      && document.activeElement.id === 'tell-alfred-input' && [...document.querySelectorAll('.week-card details.day-fold')][0].open === true));
+    chk(tag('Day: the Tell Alfred box is labelled and says so'), await page.evaluate(() => {
+      const f = document.getElementById('tell-alfred');
+      return f.getAttribute('aria-label') === 'Tell Alfred' && document.querySelector('label[for="tell-alfred-input"]').textContent === 'Tell Alfred'
+        && !/Grok/.test(f.textContent);
+    }));
+    await page.press('#tell-alfred-input', 'Enter');
+    await page.waitForFunction(() => [...document.querySelectorAll('.toast')].some((t) => /Got it: remind me Tuesday to call the dentist/.test(t.textContent)),
+      null, { timeout: 6000 }).catch(() => {});
+    chk(tag("Day: Tell Alfred posts the words to /api/assistant/tell, shows the reply and what was saved, and clears the box"),
+      JSON.stringify(tellCalls[0] || null) === JSON.stringify({ text: 'remind me Tuesday to call the dentist' }) && await page.evaluate(() =>
+        [...document.querySelectorAll('.toast')].some((t) => /Got it: remind me Tuesday to call the dentist/.test(t.textContent) && /Reminder: Call the dentist/.test(t.textContent))
+        && document.getElementById('tell-alfred-input').value === '' && !document.getElementById('tell-alfred-input').disabled
+        && document.activeElement.id === 'tell-alfred-input'), JSON.stringify(tellCalls));
+    await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
 
     // --- Day: add and edit (the item editor) ---------------------------------------------
     // POST /api/assistant/item is stubbed: it records the body and answers like the server does (a
@@ -516,7 +740,7 @@ if (!(await up())) {
     chk(tag('Day: the header has a + Add button beside Refresh'), await page.evaluate(() => {
       const t = document.querySelector('.day-tools');
       const kids = t ? [...t.children].map((c) => c.id) : [];
-      return JSON.stringify(kids) === '["day-add","day-refresh"]' && /\+ Add/.test(document.getElementById('day-add').textContent);
+      return JSON.stringify(kids.slice(-2)) === '["day-add","day-refresh"]' && /\+ Add/.test(document.getElementById('day-add').textContent);
     }));
 
     // + Add opens a labelled modal dialog with focus inside; Tab stays in it; Esc closes it and focus returns.
@@ -667,12 +891,14 @@ if (!(await up())) {
     chk(tag('Day: adding an Event sends its dates, times and place'), lastCall() === JSON.stringify({ op: 'create', type: 'event',
       fields: { title: 'Team offsite', date: '2027-05-10', end: '2027-05-12', time: '09:00', endTime: '17:30', location: 'Lake house' } }), lastCall());
 
-    // Edit on a "Due today" row: prefilled from the row, and only what changed is sent.
-    chk(tag('Day: every reminder row with a Done button also has an Edit button'), await page.evaluate(() => {
-      const groups = [...document.querySelectorAll('.day-actions')].filter((g) => /Done/.test(g.textContent));
-      return groups.length > 0 && groups.every((g) => [...g.querySelectorAll('button')].some((b) => b.textContent === 'Edit'));
+    // Edit on today's reminder row: prefilled from the row, and only what changed is sent.
+    chk(tag('Day: every reminder row with a Done button also has an Edit button (a chore has Done alone)'), await page.evaluate(() => {
+      const groups = [...document.querySelectorAll('.day-actions')].filter((g) => g.querySelector('[aria-label^="Mark done"]'));
+      const chores = [...document.querySelectorAll('.day-actions')].filter((g) => g.querySelector('[aria-label^="Done for this week"]'));
+      return groups.length > 0 && groups.every((g) => [...g.querySelectorAll('button')].some((b) => b.textContent === 'Edit'))
+        && chores.length > 0 && chores.every((g) => g.querySelectorAll('button').length === 1);
     }));
-    const dueRow = '.day-card:has(> .day-card-title:text-matches("^Due today")) .day-item';
+    const dueRow = '.today-card .day-item.today';
     await page.click(dueRow + ' button:text-is("Edit")');
     await page.waitForSelector(ie, { timeout: 4000 });
     const prefill = await page.evaluate(() => ({
@@ -683,7 +909,7 @@ if (!(await up())) {
       kindShown: !!document.getElementById('ie-f-kind').offsetParent,
       focusInside: document.querySelector('.ie-modal').contains(document.activeElement),
     }));
-    chk(tag('Day: Edit on a Due today row opens the editor prefilled with that row (title, kind, date, time, scope)'),
+    chk(tag("Day: Edit on today's reminder opens the editor prefilled with that row (title, kind, date, time, scope)"),
       prefill.head === 'Edit item' && prefill.title === 'Call the plumber' && prefill.kind === 'reminder' && /^\d{4}-\d{2}-\d{2}$/.test(prefill.date)
         && prefill.time === '09:30' && prefill.scope === 'personal' && prefill.focusInside, JSON.stringify(prefill));
     chk(tag('Day: editing shows a Kind select instead of the type buttons'), prefill.kindShown && prefill.types === 0, JSON.stringify(prefill));
@@ -734,25 +960,24 @@ if (!(await up())) {
     await page.keyboard.press('Escape');
     await dialogGone();
 
-    // My routines: the card, its rows, Edit prefill, and Pause / Resume.
+    // Your routines: the card, its rows, Edit prefill, and Pause / Resume.
     const myRoutines = await page.evaluate(() => {
-      const cols = [...document.querySelectorAll('.day-col')];
-      const card = cols[2] && [...cols[2].children].find((c) => /^My routines/.test(c.firstElementChild.textContent));
+      const col = document.querySelector('.day-col.right');
+      const card = col && col.querySelector(':scope > .routines-card');
       if (!card) return null;
-      return { tag: card.tagName, open: card.open, count: card.querySelector('.day-count').textContent,
-        rows: [...card.querySelectorAll('.day-item')].map((r) => r.textContent), cardIndex: [...cols[2].children].indexOf(card) };
+      return { tag: card.tagName, title: card.querySelector('.day-card-title').firstChild.textContent, count: card.querySelector('.day-count').textContent,
+        rows: [...card.querySelectorAll('.day-item.routine')].map((r) => r.textContent) };
     });
-    chk(tag('Day: a collapsed "My routines" card sits in the right column, counting every routine'),
-      !!myRoutines && myRoutines.tag === 'DETAILS' && myRoutines.open === false && myRoutines.count === '4', JSON.stringify(myRoutines));
-    chk(tag('Day: My routines lists active and paused routines with their schedules, paused marked'),
+    chk(tag('Day: a "Your routines" card sits in the right column, counting every routine'),
+      !!myRoutines && myRoutines.tag === 'SECTION' && myRoutines.title === 'Your routines' && myRoutines.count === '4', JSON.stringify(myRoutines));
+    chk(tag('Day: Your routines lists active and paused routines with their schedules, paused marked'),
       !!myRoutines && myRoutines.rows.length === 4 && /Morning walk.*daily/.test(myRoutines.rows[0]) && /Weekly review.*Fridays/.test(myRoutines.rows[1])
         && /Water the plants.*Mondays and Thursdays.*paused/.test(myRoutines.rows[3]), JSON.stringify(myRoutines));
-    chk(tag('Day: a routine row in "Routines today" has an Edit button'), await page.evaluate(() => {
-      const card = [...document.querySelectorAll('.day-card')].find((c) => /^Routines today/.test(c.firstElementChild.textContent));
-      return !!card && [...card.querySelectorAll('.day-item button')].some((b) => b.textContent === 'Edit');
+    chk(tag("Day: today's routine row in Today has an Edit button"), await page.evaluate(() => {
+      const row = document.querySelector('.today-card .day-item.routine');
+      return !!row && [...row.querySelectorAll('button')].some((b) => b.textContent === 'Edit');
     }));
-    await page.evaluate(() => { [...document.querySelectorAll('details.day-card')].find((c) => /^My routines/.test(c.textContent)).open = true; });
-    const mine = 'details.day-card:has(> summary:text-matches("^My routines"))';
+    const mine = '.routines-card';
     await page.click(mine + ' [aria-label="Pause routine: Morning walk"]');
     await waitCalls(10);
     chk(tag('Day: Pause sends only the status'), lastCall() === JSON.stringify({ op: 'update', type: 'routine',
@@ -800,6 +1025,61 @@ if (!(await up())) {
       !document.querySelector('.ie-modal') && !document.querySelector('.scrim.open') && !document.body.classList.contains('ie-open')));
     await page.unroute('**/api/assistant/item').catch(() => {});
 
+    // --- Projects: a tab of its own ----------------------------------------------------------
+    await page.click('#views [data-view="projects"]');
+    await page.waitForFunction(() => !document.getElementById('pane-projects').hidden
+      && document.querySelectorAll('#projects-body .day-project').length > 0, null, { timeout: 8000 }).catch(() => {});
+    chk(tag('Projects: its tab shows the Projects pane (Day hidden, tab selected, no composer)'), await page.evaluate(() =>
+      !document.getElementById('pane-projects').hidden && document.getElementById('pane-day').hidden
+      && document.querySelector('#views [data-view="projects"]').getAttribute('aria-selected') === 'true' && location.hash === '#projects'
+      && getComputedStyle(document.getElementById('composer-dock')).visibility === 'hidden'));
+    chk(tag('Projects: each project shows its title, status, track, update, where it stands and next'), await page.evaluate(() => {
+      const p = document.querySelector('#projects-body .day-project');
+      return !!p && p.querySelector('.dp-name').textContent === 'Demo' && p.querySelector('.dp-meta').textContent === 'Active · Personal · updated 2026-01-01'
+        && /^Where it stands\(2026-01-01\) Going fine\.$/.test(p.querySelector('.dp-stands').textContent)
+        && /^NextShip it\.$/.test(p.querySelector('.dp-next').textContent)
+        && /^1 project in the shared brain$/.test(document.getElementById('projects-summary').textContent);
+    }));
+    await page.evaluate(() => { document.getElementById('panel').classList.remove('open'); });
+    await page.click('#projects-body .day-project');
+    await page.waitForFunction(() => document.getElementById('panel').classList.contains('open'), null, { timeout: 5000 }).catch(() => {});
+    chk(tag("Projects: clicking a project opens its status note in the reader"), await page.evaluate(() =>
+      document.getElementById('panel').classList.contains('open') && document.getElementById('panel-title').textContent === 'Demo'));
+    await page.evaluate(() => { document.getElementById('panel').classList.remove('open'); if (document.activeElement) document.activeElement.blur(); });
+
+    // --- Terminals: the seat chips, the Ask bar, Open Terminals and the seat pills -----------
+    await page.keyboard.press('4');
+    await page.waitForFunction(() => !document.getElementById('pane-command').hidden, null, { timeout: 5000 }).catch(() => {});
+    chk(tag('Terminals: key 4 opens the Terminals tab with the seat chips and the Ask bar showing'), await page.evaluate(() => {
+      const pane = document.getElementById('pane-command');
+      const seats = document.getElementById('cc-seats').getBoundingClientRect();
+      return !pane.hidden && pane.querySelector('h1').textContent === 'Terminals' && location.hash === '#command'
+        && document.querySelector('#views [data-view="command"]').getAttribute('aria-selected') === 'true'
+        && getComputedStyle(document.getElementById('composer-dock')).visibility === 'visible'
+        && document.querySelectorAll('#cc-seats .seat').length > 0 && seats.height > 0
+        && document.getElementById('search-input').getBoundingClientRect().height >= 24;
+    }));
+    chk(tag('Terminals: Open Terminals and the seat pills moved into the Terminals pane'), await page.evaluate(() => {
+      const pane = document.getElementById('pane-command');
+      return pane.contains(document.getElementById('ext-term-btn')) && pane.contains(document.getElementById('bench'))
+        && !document.getElementById('top').contains(document.getElementById('ext-term-btn'));
+    }));
+    await page.click('#ext-term-btn');
+    chk(tag('Terminals: Open Terminals still opens its seat checklist'), await page.evaluate(() =>
+      document.getElementById('ext-term-menu').classList.contains('open')
+      && document.getElementById('ext-term-btn').getAttribute('aria-expanded') === 'true'));
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
+    await page.keyboard.press('2');
+    await page.waitForFunction(() => !document.getElementById('pane-projects').hidden, null, { timeout: 5000 }).catch(() => {});
+    chk(tag('Projects: key 2 opens the Projects tab'), await page.evaluate(() => !document.getElementById('pane-projects').hidden));
+    await page.keyboard.press('1');
+    await page.waitForFunction(() => !document.getElementById('pane-day').hidden, null, { timeout: 5000 }).catch(() => {});
+    await page.keyboard.press('/');
+    chk(tag('Day: "/" opens Terminals and puts focus in the Ask bar'), await page.evaluate(() =>
+      !document.getElementById('pane-command').hidden && document.activeElement.id === 'search-input'));
+    await page.evaluate(() => { document.activeElement.blur(); });
+
     // --- Brain map regions follow the Second Brain's folders -------------------
     const regions = await page.evaluate(() => ({
       buttons: [...document.querySelectorAll('.cat-btn')].map((b) => b.dataset.folder),
@@ -815,6 +1095,8 @@ if (!(await up())) {
     chk(tag('no uncaught JS errors'), errs.length === 0, errs.slice(0, 3).join(' | '));
 
     await page.unroute('**/api/assistant').catch(() => {});
+    await page.unroute('**/api/assistant/action').catch(() => {});
+    await page.unroute('**/api/assistant/tell').catch(() => {});
     await ctx.close();
   }
 
