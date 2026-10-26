@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HOOK = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'brain-librarian.mjs');
 const OPEN = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'brain-open-items.mjs');
@@ -128,6 +128,28 @@ chk('open-items hook lists signals addressed to Claude', /capture--stale/.test(o
 chk('open-items hook offers carry-over', /Yesterday errand/.test(open.stdout), open.stdout);
 chk('open-items hook shows the calendar\'s next 7 days', /On the calendar, next 7 days[\s\S]*2026-10-27 10:00 Dentist @ clinic/.test(open.stdout)
   && !/Cancelled lunch|Too far out|Past event/.test(open.stdout), open.stdout);
+
+console.log('\nCloud Librarian in charge, PC stands by');
+const heartbeat = (stamp) => put('System/librarian-heartbeat.md', `# Librarian heartbeat\n\n- **Kind:** status\n- **Author:** librarian (cloud)\n- **Last run:** ${stamp}\n`);
+put('Reminders/2026-10-23--standby-errand.md', reminder('errand', 'open', '2026-10-23', '', 'Standby errand'));
+heartbeat('2026-10-24 08:50 ET');  // ten minutes ago
+const standby = run();
+chk('a fresh cloud heartbeat makes the PC stand by', fs.existsSync(p('Reminders/2026-10-23--standby-errand.md'))
+  && /standing by: the cloud Librarian ran at 2026-10-24 08:50 ET/.test(standby.stdout), standby.stdout);
+const forced = run(['--force']);
+chk('--force runs anyway', !fs.existsSync(p('Reminders/2026-10-23--standby-errand.md')), forced.stdout);
+put('Reminders/2026-10-22--stale-errand.md', reminder('errand', 'open', '2026-10-22', '', 'Stale errand'));
+heartbeat('2026-10-24 08:00 ET');  // an hour ago: the cloud has gone quiet
+run();
+chk('a stale heartbeat makes the PC take over', !fs.existsSync(p('Reminders/2026-10-22--stale-errand.md')));
+const lib = await import(pathToFileURL(HOOK).href);
+const at = lib.easternNow(new Date(NOW));
+put('Reminders/2026-10-21--cloud-errand.md', reminder('errand', 'open', '2026-10-21', '', 'Cloud errand'));
+const cloudActions = lib.runLibrarian(ROOT, { runner: 'cloud', now: at });
+chk('the cloud runner works even with a fresh heartbeat and leaves its own', cloudActions.some((a) => /cloud-errand/.test(a))
+  && /\*\*Last run:\*\* 2026-10-24 09:00 ET/.test(read(p('System/librarian-heartbeat.md'))), cloudActions.join('; '));
+chk('its run is logged as the cloud', /## 2026-10-24 09:00 ET · cloud/.test(read(p('System/logs/librarian-2026-10.md'))));
+chk('cloudLibrarian reports the heartbeat', lib.cloudLibrarian(ROOT, at).fresh && lib.cloudLibrarian(ROOT, at).at === '2026-10-24 09:00 ET');
 
 fs.rmSync(ROOT, { recursive: true, force: true });
 console.log(`\n${pass} passed, ${fails.length} failed`);

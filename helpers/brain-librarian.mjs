@@ -11,6 +11,7 @@
 //
 //   node brain-librarian.mjs            run
 //   node brain-librarian.mjs --dry-run  print what would change
+//   node brain-librarian.mjs --force    run even while the cloud Librarian is in charge
 //
 // Brain: ALFRED_SHARED_BRAIN, else "Shared brain path" in ~/.claude/alfred-profile.md.
 // Clock: ALFRED_NOW (ISO date-time) overrides "now" for tests.
@@ -21,7 +22,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CALENDAR_FILE, eventsBetween, formatEvent } from './brain-calendar.mjs';
-import { DAY_MS, addDays, cleanRef, easternNow, firstWord, mdFiles, readFields, setField } from './brain-core.mjs';
+import { DAY_MS, addDays, cleanRef, easternNow, firstWord, mdFiles, nowFromStamp, readFields, setField, stampOf } from './brain-core.mjs';
 import { applyChangeNotes, overlayReminders, pendingChanges, recentChanges } from './brain-notes.mjs';
 
 export { addDays, easternNow, readFields, setField };
@@ -31,6 +32,8 @@ const PROFILE_PATH = path.join(os.homedir(), '.claude', 'alfred-profile.md');
 const DONE_DAYS = 30;
 const LOG_DAYS = 90;
 const STALE_SIGNAL_DAYS = 7;
+const HEARTBEAT = path.join('System', 'librarian-heartbeat.md');
+const CLOUD_FRESH_MINUTES = 30;
 
 export function sharedBrainPath() {
   if (process.env.ALFRED_SHARED_BRAIN) return process.env.ALFRED_SHARED_BRAIN;
@@ -281,8 +284,34 @@ export function renderIndex(brain, now = easternNow()) {
   return lines.join('\n');
 }
 
+// --- Who runs (MANIFESTO §9): the cloud Librarian on Azure is in charge, the PC's stands by ---
+// When the cloud Librarian last ran, and whether that's recent enough for the PC to stand by.
+export function cloudLibrarian(brain, now = easternNow()) {
+  const file = path.join(brain, HEARTBEAT);
+  const at = fs.existsSync(file) ? stampOf(readFields(fs.readFileSync(file, 'utf8'))['last run']) : '';
+  const then = nowFromStamp(at);
+  const minutes = then ? (nowFromStamp(now.stamp).ms - then.ms) / 60000 : Infinity;
+  return { at: at || null, fresh: minutes > -5 && minutes <= CLOUD_FRESH_MINUTES };
+}
+
+function writeHeartbeat(brain, now) {
+  const file = path.join(brain, HEARTBEAT);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, [
+    '# Librarian heartbeat', '',
+    '- **Kind:** status',
+    '- **Author:** librarian (cloud)',
+    `- **Last run:** ${now.stamp}`, '',
+    'The cloud Librarian (mobile Alfred on Azure) runs every 10 minutes and after every change made on the phone.',
+    `The PC's Librarian stands by and runs only when the time above is more than ${CLOUD_FRESH_MINUTES} minutes old (MANIFESTO §9).`, '',
+  ].join('\n'), 'utf8');
+}
+
 // --- Main ---
-export function runLibrarian(brain, { dryRun = false, now = easternNow() } = {}) {
+// runner 'cloud' is the Librarian in charge and leaves the heartbeat; 'pc' (the default) skips while
+// that heartbeat is fresh, unless forced.
+export function runLibrarian(brain, { dryRun = false, now = easternNow(), runner = 'pc', force = false } = {}) {
+  if (runner !== 'cloud' && !force && cloudLibrarian(brain, now).fresh) return [];
   const run = makeRunner(brain, dryRun);
   applyChangeNotes(brain, run, now);
   expireAndFileReminders(brain, run, now);
@@ -302,8 +331,9 @@ export function runLibrarian(brain, { dryRun = false, now = easternNow() } = {})
     const head = fs.existsSync(log) ? fs.readFileSync(log, 'utf8')
       : `# Librarian log: ${now.month}\n\n- **Kind:** log\n- **Author:** librarian\n\n`;
     fs.mkdirSync(path.dirname(log), { recursive: true });
-    fs.writeFileSync(log, `${head.trimEnd()}\n\n## ${now.stamp}\n${run.actions.map((a) => `- ${a}`).join('\n')}\n`, 'utf8');
+    fs.writeFileSync(log, `${head.trimEnd()}\n\n## ${now.stamp} · ${runner}\n${run.actions.map((a) => `- ${a}`).join('\n')}\n`, 'utf8');
   }
+  if (runner === 'cloud' && !dryRun) writeHeartbeat(brain, now);
   return run.actions;
 }
 
@@ -311,10 +341,13 @@ const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve
 if (isMain) {
   const dryRun = process.argv.includes('--dry-run');
   const quiet = process.argv.includes('--quiet');
+  const force = process.argv.includes('--force');
   try {
     const brain = sharedBrainPath();
     if (!brain || !fs.existsSync(brain)) process.exit(0);
-    const actions = runLibrarian(brain, { dryRun });
+    const actions = runLibrarian(brain, { dryRun, force });
+    const cloud = cloudLibrarian(brain);
+    if (!actions.length && !force && cloud.fresh && !quiet) console.log(`[Librarian] standing by: the cloud Librarian ran at ${cloud.at} (--force runs anyway)`);
     if (!quiet || dryRun) for (const a of actions) console.log(`[Librarian]${dryRun ? ' (dry run)' : ''} ${a}`);
   } catch (err) {
     console.log(`[Librarian] error (nothing lost; next run retries): ${err.message}`);
