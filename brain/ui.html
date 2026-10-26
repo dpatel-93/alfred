@@ -7,16 +7,33 @@
   :root {
     color-scheme: dark;
 
-    /* ---------- Surfaces — Atelier's warm graphite room (names unchanged) ---------- */
-    --bg:            #131218;
-    --bg-2:          #17161d;   /* NEW — topbar/sheet ground */
-    --surface-1:     #1c1b23;
-    --surface-2:     #22212b;
-    --surface-3:     #2a2934;
-    --surface-4:     #333240;
-    --border:        #2b2a35;
-    --border-strong: #3a3947;
-    --border-focusable: #56545f;
+    /* ---------- Surfaces — Black Glass (2026-10): the graphite room re-pointed to
+       near-black so the glass layers below read as lit glass on a dark ground.
+       Names unchanged; only values moved (DESIGN-UI-SYSTEM §0 rule 1). ---------- */
+    --bg:            #050507;
+    --bg-2:          #08080b;   /* topbar/sheet ground */
+    --surface-1:     #0e0e12;
+    --surface-2:     #141419;
+    --surface-3:     #1b1b22;
+    --surface-4:     #24242d;
+    --border:        #1d1d25;
+    --border-strong: #2c2c36;
+    --border-focusable: #4a4a56;
+
+    /* ---------- Black Glass — translucent black + specular sheen. Pure white/black
+       alphas are deliberate (rule 3's scrim exception): glass light is colourless,
+       it never derives from a palette colour. Consumed by the "Black Glass layer"
+       section at the foot of this stylesheet. ---------- */
+    --glass-tint:        rgba(14, 14, 18, 0.58);
+    --glass-tint-strong: rgba(8, 8, 11, 0.78);
+    --glass-blur:        blur(14px) saturate(150%);
+    --glass-edge:        rgba(255, 255, 255, 0.08);
+    --glass-edge-top:    rgba(255, 255, 255, 0.16);
+    --glass-sheen:       linear-gradient(180deg, rgba(255, 255, 255, 0.075) 0%,
+                           rgba(255, 255, 255, 0.022) 34%, rgba(255, 255, 255, 0) 62%);
+    --glass-gloss:       inset 0 1px 0 rgba(255, 255, 255, 0.11),
+                         inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+    --glass-drop:        0 18px 48px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.4);
 
     /* ---------- Alfred's own identity is NEUTRAL. Alfred is the room, not a vendor. ---------- */
     --bone:          #f0e9dd;   /* NEW */
@@ -59,8 +76,8 @@
     --on-accent:  #15141a;
 
     /* ---------- Composed surfaces (names unchanged) ---------- */
-    --panel-bg:     color-mix(in srgb, var(--surface-1) 88%, transparent);
-    --panel-bg-2:   color-mix(in srgb, var(--surface-1) 72%, transparent);
+    --panel-bg:     var(--glass-tint);
+    --panel-bg-2:   color-mix(in srgb, var(--surface-1) 62%, transparent);
     --panel-bg-3:   var(--bg-2);
     --well-bg:      rgba(0, 0, 0, 0.28);
     --scrim-bg:     rgba(8, 7, 11, 0.62);
@@ -1887,6 +1904,82 @@
      now scrolls internally instead of clipping, the rail stays fully usable
      at its normal width at every tested viewport size, so it no longer needs
      to narrow here at all. */
+
+  /* ===================================================================
+     Black Glass layer (2026-10). Additive: every rule here re-skins an
+     existing selector — no layout, sizing or behaviour changes. Glass =
+     translucent black (--glass-tint) + backdrop blur + a top-down specular
+     sheen (--glass-sheen) + a 1px lit top edge (--glass-gloss). Status and
+     seat colours are untouched; glass is colourless by contract.
+     =================================================================== */
+  html, body {
+    background:
+      radial-gradient(ellipse 60% 45% at 18% 0%, rgba(255, 255, 255, 0.045), transparent 70%),
+      radial-gradient(ellipse 55% 50% at 100% 100%, color-mix(in srgb, var(--focus) 7%, transparent), transparent 70%),
+      var(--bg);
+  }
+  #top, #composer, #flight, #panel, .day-card, .toast, .sheet,
+  #search-results, #answer-panel {
+    background: var(--glass-sheen), var(--glass-tint);
+    border-color: var(--glass-edge);
+  }
+  /* Backdrop blur only on surfaces that already carried one before this layer.
+     #top/#flight/.sheet/#search-results stay unblurred (strong tint instead):
+     the brain graph's rAF loop never stops, and every extra blurred layer is
+     re-composited each frame — measured as a slower force-layout settle that
+     broke redesign.mjs's click-a-node check under software rendering. */
+  #composer, #panel, .day-card, .toast, #answer-panel {
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+  }
+  #flight, #search-results { background: var(--glass-sheen), var(--glass-tint-strong); }
+  #top { background: var(--glass-sheen), var(--glass-tint-strong); box-shadow: var(--glass-gloss), 0 8px 30px rgba(0, 0, 0, 0.55); }
+  #composer, .day-card, .toast, #search-results, #answer-panel {
+    border: 1px solid var(--glass-edge);
+    border-top-color: var(--glass-edge-top);
+    box-shadow: var(--glass-gloss), var(--glass-drop);
+  }
+  #composer, #search-results, #answer-panel { border-radius: var(--r-lg); }
+  .sheet {
+    background: var(--glass-sheen), var(--glass-tint-strong);
+    border-top-color: var(--glass-edge-top);
+    box-shadow: var(--glass-gloss), var(--shadow-modal);
+  }
+  #panel { box-shadow: var(--glass-gloss), var(--shadow-drawer); }
+  /* .day-card keeps its 2px status-coloured top rule; the lit edge rides on the inset gloss. */
+  .day-card { border-top: 2px solid color-mix(in srgb, var(--accent) 70%, var(--glass-edge)); }
+  .toast { border-color: color-mix(in srgb, var(--accent) 22%, var(--glass-edge)); border-top-color: color-mix(in srgb, var(--accent) 45%, var(--glass-edge-top)); }
+
+  /* Wells — inputs and list rows read as glass recessed into the panel. */
+  .composer-input, .composer-picker {
+    background: rgba(0, 0, 0, 0.42);
+    border-color: var(--glass-edge);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+  }
+  .composer-input:focus { border-color: var(--accent-primary); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6), 0 0 0 3px color-mix(in srgb, var(--accent-primary) 14%, transparent); }
+  .day-item {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01)), rgba(255, 255, 255, 0.015);
+    box-shadow: inset 3px 0 0 var(--accent), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+  .day-item:hover { background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)), rgba(255, 255, 255, 0.03); }
+
+  /* Controls — glossy pill-glass buttons. Hover keeps the existing focus-tint
+     contract and adds the sheen back on top of it. */
+  .btn, .dock-btn, .cat-btn, .filter-chip, #utils button {
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.015) 55%, rgba(0, 0, 0, 0.12));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09);
+    border-radius: var(--r-sm);
+  }
+  .btn:hover, .dock-btn:hover, .filter-chip:hover, #utils button:hover {
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.03) 55%, rgba(0, 0, 0, 0.1));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 0 14px color-mix(in srgb, var(--accent-primary) 12%, transparent);
+  }
+  .btn.primary {
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.06) 50%, rgba(0, 0, 0, 0.12));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 4px 14px color-mix(in srgb, var(--mint) 25%, transparent);
+  }
+  .cat-btn { border-radius: var(--r-pill); }
+  .toast { border-radius: var(--r-md); }
 </style>
 
 <!-- Landing/AUTHORIZE screen removed (P2): the app opens straight into the
