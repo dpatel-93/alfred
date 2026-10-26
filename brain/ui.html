@@ -4640,7 +4640,7 @@
 
   // Done is offered on the day the chore is due this week; a later week's occurrence is listed only.
   function agChore(c, iso) {
-    return { time: '', label: '', item: c, o: { cls: 'chore', actions: !c.done && c.due === iso ? 'chore' : 'none' } };
+    return { time: '', label: '', item: c, o: { cls: 'chore', actions: !c.done && !c.nextWeek && c.due === iso ? 'chore' : 'none' } };
   }
 
   function agRoutine(r) {

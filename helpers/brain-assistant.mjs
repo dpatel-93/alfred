@@ -391,8 +391,9 @@ function needsYou(brain, signals) {
 // Calendar events are added by the dashboards from feed.calendar, which both of them attach.
 function agenda(upcoming, routines, chores, now) {
   const monday = mondayOf(now.date);
-  // A later week starts fresh: the chore is open there whatever this week's state is.
-  const fresh = (c, due) => ({ ...c, due, done: false, missedLastWeek: false, closedOn: null });
+  // A later week starts fresh: the chore is open there whatever this week's state is. Done
+  // always closes this week's chore, so the dashboards offer it only on this week's rows.
+  const fresh = (c, due) => ({ ...c, due, done: false, missedLastWeek: false, closedOn: null, nextWeek: true });
   const days = [];
   for (let n = 1; n <= 7; n++) {
     const date = addDays(now.date, n);
