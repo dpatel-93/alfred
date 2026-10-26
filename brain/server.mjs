@@ -2150,81 +2150,85 @@ async function handleAssistantItem(req, res) {
   }
 }
 
-// --- POST /api/assistant/tell-grok [token]: the desk box ---
-// The user types what they would say to Grok in the car. Grok's CLI (the user's own
-// subscription, run per click, never in the background) turns it into a plan; the
-// helper checks every field and writes the reminder files and calendar lines itself.
-// If Grok cannot answer (signed out, timed out, garbled), the words go to Grok's
-// Inbox as a handoff so nothing typed is lost. The CLI runs in an empty temp folder,
-// so it has nothing of the brain to read or edit; what leaves the machine is the
-// user's sentence, today's date and the titles of the open reminders and the user's
-// routines (which Grok already reads in the Drive folder).
-// HELPERS_DIR is declared further down the file; this helper lives in the same folder.
-// Tests point ALFRED_TELL_GROK_RUNNER at a stand-in that behaves like provider-run.mjs.
-const PROVIDER_RUN = process.env.ALFRED_TELL_GROK_RUNNER || path.join(os.homedir(), '.claude', 'helpers', 'provider-run.mjs');
-const TELL_GROK_TIMEOUT_MS = Number(process.env.ALFRED_TELL_GROK_TIMEOUT_MS) || 120 * 1000;
-const TELL_GROK_MAX_CHARS = 500;
-let tellGrokBusy = false;
+// --- POST /api/assistant/tell [token]: the desk box, "Tell Alfred" ---
+// The user types a sentence. The user's own Claude Code (their subscription, run per click,
+// never in the background) turns it into a plan; the helper checks every field and writes
+// the reminder files and calendar lines itself. If Claude cannot answer (signed out, timed
+// out, garbled), the words go to Claude Code's Inbox so nothing typed is lost. The CLI runs
+// in an empty temp folder with no tools, no MCP servers and no settings (so no hooks), so it
+// can read or change nothing; what leaves the machine is the user's sentence, today's date
+// and the titles of the open reminders and the user's routines.
+// Tests point ALFRED_TELL_RUNNER at a node stand-in that takes the same arguments and stdin.
+const TELL_RUNNER = process.env.ALFRED_TELL_RUNNER || 'claude';
+const TELL_MODEL = process.env.ALFRED_TELL_MODEL || 'sonnet';
+const TELL_TIMEOUT_MS = Number(process.env.ALFRED_TELL_TIMEOUT_MS) || 90 * 1000;
+const TELL_MAX_CHARS = 500;
+const TELL_ARGS = ['-p', '--model', TELL_MODEL, '--tools', '', '--strict-mcp-config', '--setting-sources', '',
+  '--no-session-persistence', '--output-format', 'text'];
+let tellBusy = false;
 
-function runGrokOnce(prompt) {
+function runClaudeOnce(prompt) {
   return new Promise((resolve) => {
-    if (process.env.ALFRED_CC_DRY_RUN === '1' && !process.env.ALFRED_TELL_GROK_RUNNER) {
-      return resolve({ ok: false, error: 'Grok is not called in a dry run' });
+    if (process.env.ALFRED_CC_DRY_RUN === '1' && !process.env.ALFRED_TELL_RUNNER) {
+      return resolve({ ok: false, error: 'Claude is not called in a dry run' });
     }
     let cwd;
-    try { cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'alfred-tell-grok-')); } catch (err) { return resolve({ ok: false, error: err.message }); }
-    const child = execFile(process.execPath, [PROVIDER_RUN, 'grok', prompt], {
-      cwd, timeout: TELL_GROK_TIMEOUT_MS, maxBuffer: 1 << 20, windowsHide: true,
-      env: { ...process.env, ALFRED_PROVIDER_TIMEOUT_MS: String(TELL_GROK_TIMEOUT_MS - 5000) },
-    }, (err, stdout, stderr) => {
+    try { cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'alfred-tell-')); } catch (err) { return resolve({ ok: false, error: err.message }); }
+    const [cmd, args] = /\.m?js$/.test(TELL_RUNNER) ? [process.execPath, [TELL_RUNNER, ...TELL_ARGS]] : [TELL_RUNNER, TELL_ARGS];
+    // Signed in with the user's Claude subscription: an API key in the server's environment
+    // would bill the API instead, and a parent Claude Code session's marker would nest it.
+    const env = { ...process.env };
+    delete env.ANTHROPIC_API_KEY;
+    delete env.CLAUDECODE;
+    const child = execFile(cmd, args, { cwd, timeout: TELL_TIMEOUT_MS, maxBuffer: 1 << 20, windowsHide: true, env }, (err, stdout, stderr) => {
       try { fs.rmSync(cwd, { recursive: true, force: true }); } catch { /* temp */ }
       if (err) {
-        const why = String(stderr || '').trim().split('\n').filter(Boolean).pop() || (err.killed ? 'Grok took too long' : err.message);
+        const why = String(stderr || '').trim().split('\n').filter(Boolean).pop() || (err.killed ? 'Claude took too long' : err.message);
         return resolve({ ok: false, error: why.slice(0, 200) });
       }
       resolve({ ok: true, out: String(stdout || '') });
     });
-    // provider-run.mjs reads stdin to the end whenever it is not a terminal (to append piped
-    // text to the prompt). execFile hands it an open pipe, so without this it waits forever
-    // and Grok is never called: the first live test on 2026-10-23 timed out exactly that way.
-    child.stdin.end();
+    // The prompt goes on stdin (it is too long and too quote-heavy for a Windows command line),
+    // and the pipe is closed so the CLI never waits for more.
+    child.stdin.on('error', () => { /* the child exited early; its error comes through the callback */ });
+    child.stdin.end(prompt);
   });
 }
 
-async function handleTellGrok(req, res) {
+async function handleTell(req, res) {
   let body;
   try { body = await readJsonBody(req); } catch { return sendJson(res, 400, { error: 'invalid JSON body' }); }
   const text = String(body.text || '').replace(/\s+/g, ' ').trim();
-  if (!text) return sendJson(res, 400, { error: 'type what you want Grok to do' });
-  if (text.length > TELL_GROK_MAX_CHARS) return sendJson(res, 400, { error: `keep it under ${TELL_GROK_MAX_CHARS} characters` });
-  if (tellGrokBusy) return sendJson(res, 409, { error: 'Grok is still on the last one' });
-  tellGrokBusy = true;
+  if (!text) return sendJson(res, 400, { error: 'type what you want Alfred to do' });
+  if (text.length > TELL_MAX_CHARS) return sendJson(res, 400, { error: `keep it under ${TELL_MAX_CHARS} characters` });
+  if (tellBusy) return sendJson(res, 409, { error: 'Alfred is still on the last one' });
+  tellBusy = true;
   try {
     const A = await import(pathToFileURL(ASSISTANT_MODULE).href);
     const { easternNow } = await import(pathToFileURL(LIBRARIAN_MODULE).href);
     const brain = A.sharedBrainPath();
     if (!brain || !fs.existsSync(brain)) return sendJson(res, 404, { error: 'shared brain not found' });
-    // Grok gets the open items by number so "move the dentist to Friday" or "that's done" can
+    // Claude gets the open items by number so "move the dentist to Friday" or "that's done" can
     // point at one; the numbers map back to files only here, in this request.
-    const list = A.grokItemList(brain, easternNow());
-    const g = await runGrokOnce(A.tellGrokPrompt(text, easternNow(), list));
-    const plan = g.ok ? A.parseGrokPlan(g.out) : null;
+    const list = A.tellItemList(brain, easternNow());
+    const c = await runClaudeOnce(A.tellPrompt(text, easternNow(), list));
+    const plan = c.ok ? A.parsePlan(c.out) : null;
     const now = easternNow();
     let result;
     if (plan) {
-      result = { via: 'grok', ...A.applyGrokPlan(brain, plan, text, now, list.refs) };
+      result = { via: 'claude', ...A.applyPlan(brain, plan, text, now, list.refs) };
     } else {
-      const why = g.ok ? 'Grok answered, but not with a plan Alfred could read' : g.error;
-      result = { via: 'inbox', reply: null, why, saved: [A.handoffToGrok(brain, null, text, now, why)], skipped: [] };
+      const why = c.ok ? 'Claude answered, but not with a plan Alfred could read' : c.error;
+      result = { via: 'inbox', reply: null, why, saved: [A.toClaudeInbox(brain, null, text, now, why)], skipped: [] };
     }
-    console.log(`[tell-grok] via ${result.via}: ${result.saved.map((s) => `${s.type} ${s.file}`).join('; ')}${result.why ? ` (${result.why})` : ''}`);
-    await runLibrarianPass('tell grok');
+    console.log(`[tell] via ${result.via}: ${result.saved.map((s) => `${s.type} ${s.file}`).join('; ')}${result.why ? ` (${result.why})` : ''}`);
+    await runLibrarianPass('tell alfred');
     bumpBrainVersion();
     return sendJson(res, 200, { ...result, feed: await fullFeed() });
   } catch (err) {
     return sendJson(res, 500, { error: String(err.message || err).slice(0, 200) });
   } finally {
-    tellGrokBusy = false;
+    tellBusy = false;
   }
 }
 
@@ -6092,7 +6096,7 @@ async function main() {
           || url.pathname === '/api/terminals'
           || url.pathname === '/api/assistant/action'
           || url.pathname === '/api/assistant/librarian'
-          || url.pathname === '/api/assistant/tell-grok'
+          || url.pathname === '/api/assistant/tell'
           || url.pathname === '/api/assistant/item'
           || termAction
           || agentAction;
@@ -6101,7 +6105,7 @@ async function main() {
 
         if (url.pathname === '/api/assistant/action') return await handleAssistantAction(req, res);
         if (url.pathname === '/api/assistant/librarian') return await handleAssistantLibrarian(req, res);
-        if (url.pathname === '/api/assistant/tell-grok') return await handleTellGrok(req, res);
+        if (url.pathname === '/api/assistant/tell') return await handleTell(req, res);
         if (url.pathname === '/api/assistant/item') return await handleAssistantItem(req, res);
         if (url.pathname === '/api/terminals') return await handleTerminalCreate(req, res);
         if (termAction && termAction[2] === 'kill') return handleTerminalKill(req, res, termAction[1]);

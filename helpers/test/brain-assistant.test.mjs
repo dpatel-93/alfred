@@ -10,7 +10,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { applyAction, applyGrokPlan, assistantFeed, authorIsOurs, brainNote, grokItemList, latestBrief, parseGrokPlan, routineDueToday, tellGrokPrompt, writeSignal } from '../brain-assistant.mjs';
+import { applyAction, applyPlan, assistantFeed, authorIsOurs, brainNote, tellItemList, latestBrief, parsePlan, routineDueToday, tellPrompt, writeSignal } from '../brain-assistant.mjs';
 import { easternNow } from '../brain-librarian.mjs';
 
 const ROOT = path.join(os.tmpdir(), `assistant-test-${process.pid}`);
@@ -195,12 +195,12 @@ chk('items carry a short author and whether we may edit them',
   && feed.today.find((i) => i.title === 'Yesterday\'s errand')?.author === 'Claude Code' && feed.today.find((i) => i.title === 'Yesterday\'s errand')?.ours === true);
 
 // --- The desk box: "Tell Grok" ---
-console.log('\nTell Grok');
-const prompt = tellGrokPrompt('remind me to call the plumber Saturday and dentist Tuesday 3pm', NOW);
+console.log('\nTell Alfred');
+const prompt = tellPrompt('remind me to call the plumber Saturday and dentist Tuesday 3pm', NOW);
 chk('the prompt carries the user\'s words, today\'s date and weekday, and asks for JSON only',
   prompt.includes('"remind me to call the plumber Saturday and dentist Tuesday 3pm"') && prompt.includes('Monday 2026-10-26') && /ONLY one JSON object/.test(prompt));
-chk('a plan wrapped in a code fence still parses', parseGrokPlan('Sure!\n```json\n{"reply":"Done.","items":[]}\n```')?.reply === 'Done.');
-chk('an answer with no plan is null, not a crash', parseGrokPlan('I cannot help with that.') === null && parseGrokPlan('{"reply":"x"}') === null);
+chk('a plan wrapped in a code fence still parses', parsePlan('Sure!\n```json\n{"reply":"Done.","items":[]}\n```')?.reply === 'Done.');
+chk('an answer with no plan is null, not a crash', parsePlan('I cannot help with that.') === null && parsePlan('{"reply":"x"}') === null);
 const words = 'remind me to call the plumber Saturday, dentist Tuesday 3pm, and remember the wifi router is in the basement';
 const plan = { reply: 'Got it: plumber Saturday, dentist Tuesday at 3.', items: [
   { type: 'reminder', kind: 'reminder', title: 'Call the plumber', due: '2026-10-31', time: null, scope: 'personal' },
@@ -210,40 +210,40 @@ const plan = { reply: 'Got it: plumber Saturday, dentist Tuesday at 3.', items: 
   { type: 'reminder', kind: 'chore', title: 'Unknown kind' },
   { type: 'event', title: 'No date' },
 ] };
-const res = applyGrokPlan(ROOT, plan, words, NOW);
+const res = applyPlan(ROOT, plan, words, NOW);
 const rem = res.saved.find((s) => s.type === 'reminder');
 const remText = rem ? fs.readFileSync(path.join(ROOT, rem.file), 'utf8') : '';
-chk('a reminder becomes one file in Reminders/, dated by its due date, authored by Grok via the desk box',
+chk('a reminder becomes one file in Reminders/, dated by its due date, authored by the user via the Tell Alfred box',
   rem && rem.file === 'Reminders/2026-10-31--call-the-plumber.md' && /- \*\*Kind:\*\* reminder/.test(remText) && /- \*\*Status:\*\* open/.test(remText)
-  && /- \*\*Due:\*\* 2026-10-31/.test(remText) && /- \*\*Author:\*\* grok \(from the Alfred desk box\)/.test(remText) && remText.includes(words), remText);
+  && /- \*\*Due:\*\* 2026-10-31/.test(remText) && /- \*\*Author:\*\* user \(Tell Alfred box\)/.test(remText) && remText.includes(words), remText);
 chk('the new reminder shows up in the feed', assistantFeed(ROOT, NOW).upcoming.some((i) => i.title === 'Call the plumber'));
 const cal = fs.readFileSync(path.join(ROOT, 'Calendar/events.md'), 'utf8');
-chk('an event becomes a line in the shared calendar, added by Grok', cal.includes('- 2026-10-27 15:00 Dentist @ Main St clinic (added by grok)'), cal);
+chk('an event becomes a line in the shared calendar, added by the user', cal.includes('- 2026-10-27 15:00 Dentist @ Main St clinic (added by user)'), cal);
 const inbox = res.saved.find((s) => s.type === 'inbox');
-chk('anything else goes to Grok\'s inbox as a handoff in the user\'s words', inbox && /--user--grok--handoff--/.test(inbox.file)
+chk('anything else goes to Claude Code\'s inbox in the user\'s words', inbox && /--user--claude-code--capture--/.test(inbox.file)
   && fs.readFileSync(path.join(ROOT, inbox.file), 'utf8').includes(words), JSON.stringify(inbox));
 chk('a past date, an unknown kind and an event with no date are refused and reported, not written',
   res.skipped.length === 3 && !fs.readdirSync(path.join(ROOT, 'Reminders')).some((f) => /back-dated|unknown-kind/.test(f)), JSON.stringify(res.skipped));
-chk('Grok\'s one-line reply is passed back', res.reply === 'Got it: plumber Saturday, dentist Tuesday at 3.');
-const empty = applyGrokPlan(ROOT, { reply: 'Hmm.', items: [{ type: 'reminder', kind: 'nope' }] }, 'do the thing', NOW);
-chk('when nothing in the plan can be saved, the words still reach Grok\'s inbox', empty.saved.length === 1 && empty.saved[0].type === 'inbox');
-const errand = applyGrokPlan(ROOT, { items: [{ type: 'reminder', kind: 'errand', title: 'Buy milk', due: 'none' }] }, 'add milk to my errands', NOW);
+chk('the one-line reply is passed back', res.reply === 'Got it: plumber Saturday, dentist Tuesday at 3.');
+const empty = applyPlan(ROOT, { reply: 'Hmm.', items: [{ type: 'reminder', kind: 'nope' }] }, 'do the thing', NOW);
+chk('when nothing in the plan can be saved, the words still reach Claude Code\'s inbox', empty.saved.length === 1 && empty.saved[0].type === 'inbox');
+const errand = applyPlan(ROOT, { items: [{ type: 'reminder', kind: 'errand', title: 'Buy milk', due: 'none' }] }, 'add milk to my errands', NOW);
 chk('an errand with no date is due today and ends with the day', errand.saved[0]?.due === NOW.date
   && /- \*\*Until:\*\* end-of-day/.test(fs.readFileSync(path.join(ROOT, errand.saved[0].file), 'utf8')));
 
 // --- Tell Grok: routines, edits and closes by number ---
-console.log('\nTell Grok: routines and edits');
-const list = grokItemList(ROOT, NOW);
+console.log('\nTell Alfred: routines and edits');
+const list = tellItemList(ROOT, NOW);
 const plumberRef = list.refs.findIndex((r) => r.file === rem.file) + 1;
 const pausedRef = list.refs.findIndex((r) => r.file === 'Routines/user-paused.md') + 1;
 const milkRef = list.refs.findIndex((r) => r.file === errand.saved[0].file) + 1;
 chk('the list numbers open reminders and the user\'s routines, paused ones included, never AI routines',
   plumberRef > 0 && pausedRef > 0 && milkRef > 0 && !list.refs.some((r) => /grok-brief/.test(r.file))
   && list.lines[plumberRef - 1].startsWith(`#${plumberRef} reminder · Call the plumber · due 2026-10-31`), list.lines.join(' | '));
-const listed = tellGrokPrompt('move the plumber to Friday', NOW, list);
+const listed = tellPrompt('move the plumber to Friday', NOW, list);
 chk('the prompt carries the numbered list and the edit, close and routine shapes', listed.includes(list.lines[0])
   && /"type":"edit","id"/.test(listed) && /"type":"close","id"/.test(listed) && /"type":"routine"/.test(listed));
-const edits = applyGrokPlan(ROOT, { reply: 'Done.', items: [
+const edits = applyPlan(ROOT, { reply: 'Done.', items: [
   { type: 'edit', id: plumberRef, set: { due: '2026-10-30', time: '16:00', file: '../../evil.md' } },
   { type: 'edit', id: pausedRef, set: { status: 'active' } },
   { type: 'close', id: milkRef },
@@ -252,26 +252,95 @@ const edits = applyGrokPlan(ROOT, { reply: 'Done.', items: [
   { type: 'close', id: pausedRef },
   { type: 'routine', title: 'Sometimes', schedule: 'now and then' },
 ] }, 'move the plumber to Friday 4pm, restart my paused habit, milk is done, water plants Sundays at 10', NOW, list.refs);
-chk('an edit by number moves the reminder and logs it as Grok from the desk box', /- \*\*Due:\*\* 2026-10-30 16:00/.test(fs.readFileSync(path.join(ROOT, rem.file), 'utf8'))
-  && /Edited: .* by grok \(from the Alfred desk box\): due 2026-10-31 → 2026-10-30 16:00/.test(fs.readFileSync(path.join(ROOT, rem.file), 'utf8')));
+chk('an edit by number moves the reminder and logs it as the user from the Tell Alfred box', /- \*\*Due:\*\* 2026-10-30 16:00/.test(fs.readFileSync(path.join(ROOT, rem.file), 'utf8'))
+  && /Edited: .* by user \(Tell Alfred box\): due 2026-10-31 → 2026-10-30 16:00/.test(fs.readFileSync(path.join(ROOT, rem.file), 'utf8')));
 chk('a field Grok should not set (a path) is ignored', !fs.existsSync(path.join(ROOT, '..', '..', 'evil.md')));
 chk('an edit by number resumes a paused routine', /- \*\*Status:\*\* active/.test(fs.readFileSync(path.join(ROOT, 'Routines/user-paused.md'), 'utf8')));
 chk('a close by number files the reminder in Done', !fs.existsSync(path.join(ROOT, errand.saved[0].file))
   && fs.existsSync(path.join(ROOT, 'Reminders', 'Done', path.basename(errand.saved[0].file))));
 const plants = edits.saved.find((s) => s.type === 'routine' && !s.edit);
-chk('a new routine from Grok is the user\'s, with its day and time', plants && /- \*\*Schedule:\*\* Sundays 10:00/.test(fs.readFileSync(path.join(ROOT, plants.file), 'utf8'))
+chk('a new routine from the box is the user\'s, with its day and time', plants && /- \*\*Schedule:\*\* Sundays 10:00/.test(fs.readFileSync(path.join(ROOT, plants.file), 'utf8'))
   && /- \*\*Runs:\*\* the user/.test(fs.readFileSync(path.join(ROOT, plants.file), 'utf8')));
 chk('an unknown number and closing a routine are refused and reported', edits.skipped.length === 2
   && /no item #999/.test(edits.skipped[0].error) && /only a reminder can be closed/.test(edits.skipped[1].error), JSON.stringify(edits.skipped));
 chk('only the first six items of a plan are taken', !fs.readdirSync(path.join(ROOT, 'Routines')).some((f) => /sometimes/.test(f)));
-const odd = applyGrokPlan(ROOT, { items: [{ type: 'routine', title: 'Sometimes', schedule: 'now and then' }] }, 'sometimes', NOW, list.refs);
-chk('a routine whose schedule Alfred cannot read is refused, and the words go to Grok\'s inbox', /can't read the schedule/.test(odd.skipped[0]?.error)
+const odd = applyPlan(ROOT, { items: [{ type: 'routine', title: 'Sometimes', schedule: 'now and then' }] }, 'sometimes', NOW, list.refs);
+chk('a routine whose schedule Alfred cannot read is refused, and the words go to Claude Code\'s inbox', /can't read the schedule/.test(odd.skipped[0]?.error)
   && odd.saved[0]?.type === 'inbox');
 const feed2 = assistantFeed(ROOT, NOW);
 chk('the feed lists paused routines apart and gives reminders their time', Array.isArray(feed2.routines.paused)
   && !feed2.routines.paused.some((r) => r.file === 'Routines/user-paused.md')
   && feed2.upcoming.find((i) => i.file === rem.file)?.time === '16:00', JSON.stringify(feed2.routines.paused));
 chk('the feed gives a routine its time from the schedule', [...feed2.routines.today, ...feed2.routines.other].find((r) => r.file === plants?.file)?.time === '10:00');
+
+// --- Weekly chores, the 7-day agenda and progress ---
+console.log('\nWeekly chores and the week');
+const chore = (title, schedule, status, weekOf, log) => `# Weekly chore: ${title}\n\n- **Kind:** routine\n- **Type:** habit\n- **Runs:** the user\n`
+  + `- **Schedule:** ${schedule}\n- **Cadence:** weekly, Monday to Sunday\n- **Status:** ${status}\n- **Week of:** ${weekOf}\n- **Author:** grok\n`
+  + `- **Last updated:** 2026-10-24 10:00 ET\n\nA weekly chore.\n\n## Weekly log\n${log}\n\n## Changes\n- (2026-10-23 22:45 ET) Added fields · via grok\n`;
+put('Routines/weekly-laundry.md', chore('Fold the laundry', 'weekly, Tuesdays', 'open', '2026-10-26', '- 2026-10-26 week (Oct 26-Nov 1): open'));
+put('Routines/weekly-dust.md', chore('Dusting', 'weekly (Monday to Sunday)', 'done', '2026-10-19', '- 2026-10-19 week (Oct 19-25): done\n  - Closed: 2026-10-24 16:57 ET by user (via grok)'));
+put('Routines/weekly-trash.md', chore('Trash and recycling', 'weekly (Monday to Sunday)', 'open', '2026-10-19', '- 2026-10-19 week (Oct 19-25): open'));
+const wk = assistantFeed(ROOT, NOW);
+const byFile = (list, f) => list.find((c) => c.file === `Routines/${f}`);
+chk('a weekly chore is found, with its day and this week\'s due date', byFile(wk.chores.all, 'weekly-laundry.md')?.day === 'tuesday'
+  && byFile(wk.chores.all, 'weekly-laundry.md')?.due === '2026-10-27' && byFile(wk.chores.all, 'weekly-laundry.md')?.title === 'Fold the laundry',
+  JSON.stringify(wk.chores.all));
+chk('"Monday to Sunday" is not read as a Sunday chore', byFile(wk.chores.all, 'weekly-dust.md')?.day === null);
+chk('a chore Grok hasn\'t opened for the new week counts as open, and a missed week shows',
+  byFile(wk.chores.all, 'weekly-dust.md')?.done === false && byFile(wk.chores.all, 'weekly-dust.md')?.missedLastWeek === false
+  && byFile(wk.chores.all, 'weekly-trash.md')?.missedLastWeek === true);
+chk('chores are not listed again as plain routines', ![...wk.routines.today, ...wk.routines.other].some((r) => /weekly-/.test(r.file)));
+chk('the week runs the next 7 days, a day chore on its day', wk.week.days.length === 7 && wk.week.from === '2026-10-27' && wk.week.to === '2026-11-02'
+  && wk.week.days[0].chores.some((c) => c.file === 'Routines/weekly-laundry.md'));
+chk('the week lists dated reminders and routines on their days', wk.week.days.find((d) => d.date === '2026-10-28')?.items.some((i) => i.title === 'Soon thing')
+  && wk.week.days.find((d) => d.date === '2026-11-02')?.routines.some((r) => r.file === 'Routines/user-monday.md'), JSON.stringify(wk.week.days.map((d) => d.routines.length)));
+chk('chores with no day are "anytime this week", by Sunday', wk.week.anytime.by === '2026-11-01'
+  && wk.week.anytime.chores.map((c) => c.file).sort().join() === 'Routines/weekly-dust.md,Routines/weekly-trash.md');
+chk('on a Monday nothing is late yet', !wk.chores.late.length && !wk.chores.due.length);
+const total0 = wk.progress.total;
+const trash = applyAction(ROOT, { file: 'Routines/weekly-trash.md', action: 'close', by: 'user' }, NOW);
+const trashText = fs.readFileSync(path.join(ROOT, 'Routines/weekly-trash.md'), 'utf8');
+chk('Done on a chore opens the new week and marks it done', trash.status === 200 && /- \*\*Status:\*\* done/.test(trashText)
+  && /- \*\*Week of:\*\* 2026-10-26/.test(trashText) && /^- 2026-10-26 week \(Oct 26-Nov 1\): done\n {2}- Closed: 2026-10-26 09:00 ET by user \(Alfred dashboard\)/m.test(trashText),
+  trashText);
+chk('the missed week stays on the log as not done', /^- 2026-10-19 week \(Oct 19-25\): not done$/m.test(trashText)
+  && /- Edited: 2026-10-26 09:00 ET by user \(Alfred dashboard\): done for the week of 2026-10-26/.test(trashText));
+chk('the new week\'s line goes in the log, not in Changes', trashText.indexOf('2026-10-26 week') < trashText.indexOf('## Changes'));
+const lau = applyAction(ROOT, { file: 'Routines/weekly-laundry.md', action: 'close', by: 'user' }, NOW);
+const lauText = fs.readFileSync(path.join(ROOT, 'Routines/weekly-laundry.md'), 'utf8');
+chk('Done on a chore already on this week marks its line done', lau.status === 200 && /^- 2026-10-26 week \(Oct 26-Nov 1\): done\n {2}- Closed: /m.test(lauText)
+  && (lauText.match(/2026-10-26 week/g) || []).length === 1, lauText);
+chk('a chore done this week can\'t be closed again, or moved', applyAction(ROOT, { file: 'Routines/weekly-laundry.md', action: 'close' }, NOW).status === 400
+  && applyAction(ROOT, { file: 'Routines/weekly-dust.md', action: 'tomorrow' }, NOW).status === 400
+  && applyAction(ROOT, { file: 'Routines/user-monday.md', action: 'close' }, NOW).status === 400);
+const wk2 = assistantFeed(ROOT, NOW);
+chk('chores done today count toward the day\'s progress', wk2.chores.done.length === 2 && wk2.progress.done === wk.progress.done + 2
+  && wk2.progress.total === total0 + 2, JSON.stringify([wk.progress, wk2.progress]));
+chk('a chore done this week leaves the week\'s list', !wk2.week.days[0].chores.length
+  && wk2.week.anytime.chores.map((c) => c.file).join() === 'Routines/weekly-dust.md');
+
+// --- Needs you ---
+console.log('\nNeeds you');
+const NEST = path.join(os.tmpdir(), `assistant-needs-${process.pid}`);
+const NB = path.join(NEST, 'Second Brain');
+fs.rmSync(NEST, { recursive: true, force: true });
+fs.mkdirSync(path.join(NB, 'Inbox'), { recursive: true });
+fs.writeFileSync(path.join(NEST, 'handoff-claude-to-grok.md'), "# Claude → Grok handoff file\n\n## Done or answered (Grok's asks)\n\n"
+  + '### G-2026-10-25-2100 · Change the master rules\n- **Status:** needs-the-user (waits for the user at the desk)\n\n'
+  + '### G-2026-10-25-2101 · Add milk\n- **Status:** done\n\n## Asks for Grok\n', 'utf8');
+fs.writeFileSync(path.join(NB, 'Inbox', '2026-10-25-2000--grok--librarian--amend--bad-date.md'),
+  '# Amend: bad date\n\n- **Kind:** signal\n- **Type:** amend\n- **From:** grok\n- **To:** librarian\n- **Status:** needs a look (past date)\n- **Created:** 2026-10-25 20:00 ET\n', 'utf8');
+fs.writeFileSync(path.join(NB, 'Inbox', '2026-10-25-2001--grok--user--question--which-day.md'),
+  '# Question: which day?\n\n- **Kind:** signal\n- **Type:** question\n- **From:** grok\n- **To:** user\n- **Status:** open\n- **Created:** 2026-10-25 20:01 ET\n', 'utf8');
+fs.writeFileSync(path.join(NB, 'Inbox', '2026-10-25-2002--grok--claude--fyi--between-ais.md'),
+  '# Fyi\n\n- **Kind:** signal\n- **Type:** fyi\n- **From:** grok\n- **To:** claude\n- **Status:** open\n- **Created:** 2026-10-25 20:02 ET\n', 'utf8');
+const ny = assistantFeed(NB, NOW).needsYou;
+chk('a Grok ask left for the user shows, with why', ny.some((n) => n.kind === 'grok ask' && n.title === 'Change the master rules' && n.why === 'waits for the user at the desk'),
+  JSON.stringify(ny));
+chk('a refused change note and a signal to the user show', ny.some((n) => n.kind === 'refused note') && ny.some((n) => n.kind === 'signal' && /which day/i.test(n.title)));
+chk('done asks and signals between AIs do not', ny.length === 3);
+fs.rmSync(NEST, { recursive: true, force: true });
 
 fs.rmSync(ROOT, { recursive: true, force: true });
 console.log(`\n${pass} passed, ${fails.length} failed`);
