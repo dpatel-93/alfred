@@ -319,6 +319,13 @@ chk('chores done today count toward the day\'s progress', wk2.chores.done.length
   && wk2.progress.total === total0 + 2, JSON.stringify([wk.progress, wk2.progress]));
 chk('a chore done this week leaves the week\'s list', !wk2.week.days[0].chores.length
   && wk2.week.anytime.chores.map((c) => c.file).join() === 'Routines/weekly-dust.md');
+const SUN = easternNow(new Date('2026-11-01T14:00:00Z')); // Sunday 09:00 ET: the next 7 days are next week
+const wk3 = assistantFeed(ROOT, SUN);
+const nextLaundry = wk3.week.days.find((d) => d.date === '2026-11-03')?.chores.find((c) => c.file === 'Routines/weekly-laundry.md');
+chk('on a Sunday, next week\'s chores are listed fresh: open, due on their own day', nextLaundry?.done === false && nextLaundry?.due === '2026-11-03'
+  && wk3.week.anytime.by === '2026-11-08' && wk3.week.anytime.chores.length === 2 && wk3.week.anytime.chores.every((c) => !c.done && c.due === '2026-11-08'),
+  JSON.stringify({ nextLaundry, anytime: wk3.week.anytime }));
+chk('on a Sunday, this week\'s open chores with no day are due today', wk3.chores.due.map((c) => c.file).join() === 'Routines/weekly-dust.md');
 
 // --- Needs you ---
 console.log('\nNeeds you');

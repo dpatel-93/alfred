@@ -612,14 +612,17 @@
      the shared brain; this is the glass over it. Tokens only, color-mix() for every
      tint. Status colours keep their contract: red overdue, amber due-today/pending,
      blue upcoming, mint done/ready, gray idle. The bench strip's --p-* provider
-     colour tints only the seat pill's border (an identity surface), never its bulb. */
-  #pane-day {
+     colour tints only the seat pill's border (an identity surface), never its bulb.
+     The Projects tab shares the pane chrome. Neither reserves room for the composer:
+     body.composer-off hides it on both (see showStage). */
+  #pane-day, #pane-projects {
     background: transparent; pointer-events: auto;
     display: flex; flex-direction: column; gap: var(--sp-7);
-    padding: var(--sp-8) var(--sp-9) var(--composer-live-h, 260px);
+    padding: var(--sp-8) var(--sp-9);
     overflow: hidden;
   }
-  #pane-day[hidden] { display: none; }
+  #pane-day[hidden], #pane-projects[hidden] { display: none; }
+  body.composer-off #composer-dock { display: none; }
   .day-sr {
     position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
     overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
@@ -633,21 +636,29 @@
   }
   .day-summary { margin: var(--sp-2) 0 0; color: var(--text-dim); font-size: var(--fs-sm); }
   .day-summary.warn { color: var(--amber); }
-  .day-tools { display: flex; align-items: center; gap: var(--sp-4); flex: none; }
-  /* Tell Grok: the desk box. What the user would say to Grok in the car. */
-  .tell-grok { flex: 1 1 420px; min-width: 0; display: flex; align-items: center; gap: var(--sp-3); }
-  .tell-grok-label {
-    flex: none; font-family: var(--font-mono); font-size: var(--fs-micro); font-weight: 600;
-    letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--p-grok);
+  .day-tools { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-4); flex: none; }
+  /* Tell Alfred: the desk box at the foot of the right column. A sibling of #day-body, so a
+     repaint never touches what is being typed. */
+  .tell-box {
+    grid-area: tell; margin: 0; display: flex; flex-direction: column; gap: var(--sp-3);
+    padding: var(--sp-5) var(--sp-6); border: 1px solid var(--border); border-radius: var(--r-md);
+    border-top: 2px solid color-mix(in srgb, var(--blue) 60%, var(--border));
+    background: var(--panel-bg);
   }
-  .tell-grok input {
+  .tell-box-label {
+    font-family: var(--font-mono); font-size: var(--fs-micro); font-weight: 600;
+    letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--blue);
+  }
+  .tell-box-row { display: flex; align-items: center; gap: var(--sp-3); }
+  .tell-box input {
     flex: 1 1 auto; min-width: 0; height: 32px; padding: 0 var(--sp-4);
     border: 1px solid var(--border-focusable); border-radius: var(--r-sm);
     background: var(--surface-2); color: var(--text); font: inherit; font-size: var(--fs-sm);
   }
-  .tell-grok input::placeholder { color: var(--text-dim); }
-  .tell-grok input:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; border-color: var(--blue); }
-  .tell-grok.busy input { color: var(--text-dim); }
+  .tell-box input::placeholder { color: var(--text-dim); }
+  .tell-box input:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; border-color: var(--blue); }
+  .tell-box .btn { flex: none; }
+  .tell-box.busy input { color: var(--text-dim); }
 
   .bench { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); flex: none; }
   .bench-seat {
@@ -692,19 +703,37 @@
   }
   .signin-banner .sb-auto input { accent-color: var(--blue); }
 
-  .day-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  /* Three columns on a desk (calendar and the picked day | today and the week | needs you,
+     watching, routines, then Tell Alfred), two on a tablet, one on a phone. #day-body is
+     display:contents: the columns renderDay() rebuilds are this grid's cells, and the Tell
+     Alfred form beside it keeps a cell of its own. */
   .day-grid {
     flex: 1 1 auto; min-height: 0; display: grid; gap: var(--sp-7);
-    grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr);
+    grid-template-columns: minmax(0, .9fr) minmax(0, 1.4fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas: "left mid right" "left mid tell";
   }
+  .day-body { display: contents; }
+  .day-body > .state-block { grid-column: 1 / -1; grid-row: 1; }
   .day-col {
     min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
     display: flex; flex-direction: column; gap: var(--sp-6); padding-right: var(--sp-2);
   }
-  @media (max-width: 1099px) {
-    .day-body { overflow-y: auto; }
-    .day-grid { flex: none; grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
-    .day-col { overflow: visible; }
+  .day-col.left { grid-area: left; }
+  .day-col.mid { grid-area: mid; }
+  .day-col.right { grid-area: right; }
+  @media (max-width: 1199px) {
+    .day-grid {
+      overflow-y: auto; overscroll-behavior: contain; align-content: start;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+      grid-template-rows: auto auto 1fr;
+      grid-template-areas: "left mid" "right mid" "tell mid";
+    }
+    .day-col { overflow: visible; padding-right: 0; }
+    .tell-box { align-self: start; }
+  }
+  @media (max-width: 767px) {
+    .day-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "left" "mid" "right" "tell"; }
   }
 
   .day-card {
@@ -780,6 +809,44 @@
     background: var(--surface-2); color: var(--text); font-family: var(--font-mono); font-size: var(--fs-xs);
   }
   .day-item.paused { --accent: var(--gray); color: var(--text-soft); }
+  .day-item.chore { --accent: var(--orange); }
+  .day-item.event { --accent: var(--alfred-cyan); }
+  .day-item.done .day-title {
+    color: var(--text-soft); text-decoration: line-through;
+    text-decoration-color: color-mix(in srgb, var(--text-dim) 70%, transparent);
+  }
+  /* A merged agenda's leading time cell. An untimed row keeps the empty cell so titles line up. */
+  .day-time {
+    flex: none; min-width: 3.6em; color: var(--text-soft); font-family: var(--font-mono); font-size: var(--fs-xs);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .day-meta { flex: 0 1 auto; min-width: 0; color: var(--text-dim); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+
+  /* A card title with something on its right (Today's progress, This week's dates). */
+  .day-card-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--sp-2) var(--sp-5); }
+  .day-card-head > .day-card-title { flex: 1 1 auto; }
+  .day-aside {
+    flex: none; display: inline-flex; align-items: center; gap: var(--sp-4);
+    color: var(--text-soft); font-family: var(--font-mono); font-size: var(--fs-xs); font-variant-numeric: tabular-nums;
+  }
+  .day-progress-bar { flex: none; width: 72px; height: 4px; border-radius: 2px; background: var(--well-bg); overflow: hidden; }
+  .day-progress-bar > i {
+    display: block; height: 100%; background: var(--mint);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--mint) 60%, transparent);
+  }
+  /* Today's "Needs attention" group: overdue reminders, yesterday's carry-overs and late chores. */
+  .day-attn {
+    display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4);
+    border: 1px solid color-mix(in srgb, var(--red) 38%, transparent); border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--red) 5%, transparent);
+  }
+  .day-attn > .day-group { margin: 0; color: var(--red); }
+  details.day-fold > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: var(--sp-2); }
+  details.day-fold > summary::-webkit-details-marker { display: none; }
+  details.day-fold > summary::before { content: "\25B8"; }
+  details.day-fold[open] > summary::before { content: "\25BE"; }
+  details.day-fold[open] > summary { margin-bottom: var(--sp-3); }
+  .day-card.needs-card.has { --accent: var(--amber); --hl: var(--amber); }
 
   /* --- ITEM EDITOR (Day: add and edit; DESIGN-UI-SYSTEM §9) ---------------------------
      A .modal/.scrim dialog built on demand by openItemEditor(). Inputs share the Tell Grok
@@ -837,32 +904,54 @@
   .day-brief-item strong { font-size: var(--fs-base); font-weight: 600; color: var(--text); }
   .day-brief-item span { color: var(--text-soft); font-size: var(--fs-sm); line-height: var(--lh-base); }
 
-  .day-project, .day-signal {
+  .day-project, .day-need {
     display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-1); width: 100%;
     padding: var(--sp-4) var(--sp-5); border: 0; border-radius: var(--r-sm);
     background: color-mix(in srgb, var(--surface-2) 78%, transparent);
     color: var(--text); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer;
     transition: background var(--t-fast) var(--ease-out);
   }
-  .day-project:hover, .day-signal:hover { background: color-mix(in srgb, var(--surface-3) 85%, transparent); }
+  .day-project:hover, button.day-need:hover { background: color-mix(in srgb, var(--surface-3) 85%, transparent); }
+  div.day-need { cursor: default; }
   .day-project { box-shadow: inset 3px 0 0 var(--blue); }
-  .day-signal { box-shadow: inset 3px 0 0 var(--amber); }
-  .day-project .dp-name { font-weight: 600; }
-  .day-project .dp-meta, .day-signal .ds-meta {
+  .day-need { box-shadow: inset 3px 0 0 var(--amber); }
+  .day-project .dp-name { font-size: var(--fs-base); font-weight: 600; }
+  .day-project .dp-meta {
     color: var(--text-dim); font-family: var(--font-mono); font-size: var(--fs-xs);
   }
   .day-project .dp-stands, .day-project .dp-next {
     color: var(--text-soft); font-size: var(--fs-sm); line-height: var(--lh-base);
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
   .day-project .dp-next { color: var(--text-dim); }
+  .day-project .dp-label {
+    display: block; margin-top: var(--sp-3); color: var(--text-dim); font-family: var(--font-mono);
+    font-size: var(--fs-micro); letter-spacing: var(--track-kicker); text-transform: uppercase;
+  }
+  .day-need .dn-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--sp-3); }
+  .day-need .dn-title { font-weight: 600; overflow-wrap: anywhere; }
+  .day-need .dn-why { color: var(--text-dim); font-size: var(--fs-xs); line-height: var(--lh-base); }
 
-  .day-title:focus-visible, .day-act:focus-visible, .day-project:focus-visible, .day-signal:focus-visible,
-  details.day-card > summary:focus-visible, .day-date-input:focus-visible, .signin-banner .sb-auto input:focus-visible {
+  /* --- PROJECTS tab: one card per project status note --- */
+  .projects-body {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; align-content: start;
+    display: grid; gap: var(--sp-6); grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
+  }
+  .projects-body .day-project { padding: var(--sp-6) var(--sp-7); gap: var(--sp-2); }
+
+  /* --- Morning brief dialog (the Day header's button): the brief, then the end of day --- */
+  body.brief-open .toast-stack { z-index: 120; }
+  .modal.brief-modal { width: min(560px, calc(100vw - 32px)); max-height: 86vh; }
+  .brief-modal .modal-body { display: flex; flex-direction: column; gap: var(--sp-4); font-size: var(--fs-sm); }
+  .brief-modal .day-group { margin-top: var(--sp-5); }
+  .brief-modal .day-group:first-child { margin-top: 0; }
+
+  .day-title:focus-visible, .day-act:focus-visible, .day-project:focus-visible, button.day-need:focus-visible,
+  details.day-card > summary:focus-visible, details.day-fold > summary:focus-visible,
+  .day-date-input:focus-visible, .signin-banner .sb-auto input:focus-visible {
     outline: 2px solid var(--blue); outline-offset: 2px;
   }
   @media (prefers-reduced-motion: reduce) {
-    .bench-seat, .day-item, .day-project, .day-signal { transition-duration: .01ms !important; }
+    .bench-seat, .day-item, .day-project, .day-need { transition-duration: .01ms !important; }
   }
   /* #pane-command has no such race (nothing here does P4's coordinate math),
      so it gets a live reserve instead of a guessed static one — the actual
@@ -986,7 +1075,7 @@
   #seat-popover .cc-lane-foot { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   #seat-popover .cc-lane-foot .btn.big { flex: 1 1 100%; min-height: 34px; }
 
-  /* --- External terminal dock (top-left, beside #mark): a dedicated
+  /* --- External terminal dock (the Terminals tab's head): a dedicated
        checklist independent of the council ticks (#cc-seats) — picking
        seats here only decides what "Open Terminals" launches side-by-side
        in a real Windows Terminal window, and never opens an in-page tab or
@@ -1504,6 +1593,9 @@
      instead, so the terminal always renders at a real, usable height. */
   .cc-term-stage { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-height: 300px; }
   .cc-term-stage[hidden] { display: none; }
+  .cc-term-empty { margin: 0; color: var(--text-dim); font-size: var(--fs-sm); line-height: var(--lh-base); }
+  .cc-term-stage:not([hidden]) + .cc-term-empty { display: none; }
+  #pane-command .stage-head { align-items: center; }
   .cc-tabstrip { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--hairline); }
   .cc-tabs { display: flex; align-items: flex-end; gap: 3px; overflow-x: auto; flex: 1 1 auto; min-width: 0; }
   .cc-tab {
@@ -2052,6 +2144,15 @@
   .day-date { font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
   .day-summary { font-family: var(--font-mono); font-size: var(--fs-xs); letter-spacing: var(--track-ui); }
 
+  /* --- a phone-width header: the brand mark gives way and the strip scrolls, so all four tabs,
+         the sheet icons and the utilities stay reachable. Pane gutters narrow to match. --- */
+  @media (max-width: 720px) {
+    #top { gap: 8px; padding: 0 8px; overflow-x: auto; }
+    #mark { display: none; }
+    .view-btn { padding: 10px 14px; }
+    #pane-day, #pane-projects { padding: var(--sp-6) var(--sp-5); }
+  }
+
   /* --- bench pills: bulbs glow in their state colour --- */
   .bench-seat {
     border-radius: var(--r-sm); font-family: var(--font-mono); text-transform: uppercase;
@@ -2107,8 +2208,14 @@
   .day-kind[data-kind="reminder"] { --kc: var(--blue); }
   .day-kind[data-kind="todo"]     { --kc: var(--mint); }
   .day-kind[data-kind="watch"]    { --kc: var(--violet); }
-  .day-project, .day-signal { border-radius: var(--r-sm); }
-  .day-project:hover, .day-signal:hover { background: color-mix(in srgb, var(--blue) 7%, var(--surface-2)); }
+  .day-kind[data-kind="event"]    { --kc: var(--alfred-cyan); }
+  .day-kind[data-kind="chore"]    { --kc: var(--orange); }
+  .day-kind[data-kind="routine"]  { --kc: var(--gray); }
+  .day-kind[data-kind="grok ask"] { --kc: var(--amber); }
+  .day-kind[data-kind="refused note"] { --kc: var(--red); }
+  .day-kind[data-kind="signal"]   { --kc: var(--blue); }
+  .day-project, .day-need { border-radius: var(--r-sm); }
+  .day-project:hover, button.day-need:hover { background: color-mix(in srgb, var(--blue) 7%, var(--surface-2)); }
 
   /* --- buttons: primary = mint outline, secondary = ghost, danger = red outline --- */
   .btn {
@@ -2192,11 +2299,11 @@
   #tooltip { border-radius: var(--r-sm); }
 
   /* ==========================================================================
-     CALENDAR (Day): the month card at the top of column 2 and "Today on the
-     calendar" at the top of column 1. Events come from one Markdown file in the
-     shared brain (Calendar/events.md). Dots: mint = a brain reminder due that
-     day, blue = an event from the file (one fixed colour, no per-calendar
-     colours). Tokens and color-mix() only.
+     CALENDAR (Day): the compact month card at the top of the left column; the
+     picked day's agenda is its own card beneath it. Events come from one
+     Markdown file in the shared brain (Calendar/events.md). Dots: mint = a
+     reminder or chore due that day, blue = an event from the file (one fixed
+     colour, no per-calendar colours). Tokens and color-mix() only.
      ========================================================================== */
   .cal { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
   .cal-head { display: flex; align-items: center; gap: var(--sp-3); }
@@ -2214,12 +2321,12 @@
     font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--track-kicker); text-transform: uppercase;
   }
   .cal-day {
-    position: relative; min-width: 0; min-height: 44px; margin: 0;
-    padding: var(--sp-3) var(--sp-1) var(--sp-2);
-    display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: var(--sp-2);
+    position: relative; min-width: 0; min-height: 34px; margin: 0;
+    padding: var(--sp-2) 0 var(--sp-1);
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 3px;
     border: 1px solid transparent; border-radius: var(--r-sm);
     background: color-mix(in srgb, var(--surface-2) 70%, transparent);
-    color: var(--text); font: inherit; font-family: var(--font-mono); font-size: var(--fs-sm);
+    color: var(--text); font: inherit; font-family: var(--font-mono); font-size: var(--fs-xs);
     font-variant-numeric: tabular-nums; line-height: 1; cursor: pointer;
     transition: background var(--t-fast) var(--ease-out), border-color var(--t-fast) var(--ease-out);
   }
@@ -2235,11 +2342,11 @@
   .cal-num { display: block; }
   .cal-dots {
     display: flex; align-items: center; justify-content: center; gap: 2px;
-    min-height: 6px; max-width: 100%; overflow: hidden;
+    min-height: 5px; max-width: 100%; overflow: hidden;
   }
-  .cal-dot { --accent: var(--blue); flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .cal-dot { --accent: var(--blue); flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
   .cal-dot.rem { --accent: var(--mint); }
-  .cal-more { flex: none; color: var(--text-dim); font-size: var(--fs-micro); line-height: 6px; letter-spacing: 0; }
+  .cal-more { flex: none; color: var(--text-dim); font-size: var(--fs-micro); line-height: 5px; letter-spacing: 0; }
   .cal-note { display: block; }
   .cal-note.warn { color: var(--amber); }
   .cal-link {
@@ -2248,45 +2355,13 @@
   }
   .cal-link:hover { color: var(--text); }
 
-  .cal-agenda {
-    display: flex; flex-direction: column; gap: var(--sp-3);
-    margin-top: var(--sp-2); padding-top: var(--sp-5); border-top: 1px solid var(--border);
-  }
-  .cal-agenda .day-group { margin-top: 0; }
-  .cal-events { display: flex; flex-direction: column; gap: var(--sp-3); }
-  .cal-event {
-    --accent: var(--blue);
-    display: grid; grid-template-columns: minmax(4.4em, auto) minmax(0, 1fr); align-items: baseline; gap: var(--sp-1) var(--sp-4);
-    padding: var(--sp-4) var(--sp-5); border-radius: var(--r-sm);
-    background: color-mix(in srgb, var(--surface-2) 78%, transparent);
-    box-shadow: inset 3px 0 0 var(--accent);
-    color: var(--text); font-size: 12.5px; text-decoration: none;
-    transition: background var(--t-fast) var(--ease-out);
-  }
-  button.cal-event {
-    width: 100%; margin: 0; border: 0; font: inherit; font-size: 12.5px; text-align: left; cursor: pointer;
-  }
-  button.cal-event:hover { background: color-mix(in srgb, var(--blue) 7%, var(--surface-2)); }
-  .cal-event .ce-time {
-    color: var(--text-dim); font-family: var(--font-mono); font-size: var(--fs-xs);
-    font-variant-numeric: tabular-nums; white-space: nowrap;
-  }
-  .cal-event .ce-title { min-width: 0; overflow-wrap: anywhere; }
-  .cal-event .ce-meta { grid-column: 2; display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); min-width: 0; }
-  .cal-event .ce-where { color: var(--text-dim); font-size: var(--fs-xs); min-width: 0; overflow-wrap: anywhere; }
-  .cal-event .ce-by {
-    color: var(--text-dim); font-family: var(--font-mono); font-size: var(--fs-micro);
-    letter-spacing: var(--track-kicker); text-transform: uppercase; white-space: nowrap;
-  }
-
-  .cal-day:focus-visible, .cal-link:focus-visible, button.cal-event:focus-visible, .btn.cal-nav:focus-visible,
-  .btn.cal-today:focus-visible {
+  .cal-day:focus-visible, .cal-link:focus-visible, .btn.cal-nav:focus-visible, .btn.cal-today:focus-visible {
     outline: 2px solid var(--blue); outline-offset: 2px;
   }
   .cal-day:focus-visible { z-index: 1; }
 
   @media (prefers-reduced-motion: reduce) {
-    .cal-day, .cal-event { transition-duration: .01ms !important; }
+    .cal-day { transition-duration: .01ms !important; }
   }
 
   /* ==========================================================================
@@ -2370,7 +2445,7 @@
          renderDay), the gate panel's rise, and nothing else. --- */
   @media (prefers-reduced-motion: no-preference) {
     @keyframes cyberRise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-    .day-grid.enter .day-card { animation: cyberRise var(--t-slow) var(--ease-out) both; }
+    .day-col.enter .day-card { animation: cyberRise var(--t-slow) var(--ease-out) both; }
     .gate-panel { animation: cyberRise var(--t-slow) var(--ease-out) both; }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -2405,18 +2480,14 @@
 
 <header id="top">
   <div id="mark" aria-hidden="true"><span class="mark-glyph">&#9670;</span> ALFRED</div>
-  <!-- Pick any combo of seats — 1, several, or all — and open them side by
-       side in a real Windows Terminal window. Independent of the council
-       ticks on the composer's seat strip below: this checklist only decides
-       what "Open Terminals" launches externally. -->
-  <div id="ext-term-dock">
-    <button id="ext-term-btn" type="button" aria-haspopup="true" aria-expanded="false" title="Pick seats to open side by side in a new Windows Terminal window">&#9002; Open Terminals</button>
-  </div>
   <nav id="views" role="tablist" aria-label="Views">
-    <!-- Day is the default landing; the Command view still exists (hash #command, key 3) but is
-         no longer a tab: Alfred now opens real console windows instead of hosting terminals here. -->
+    <!-- Day is the default landing. Terminals is the Command view (hash #command): the seat
+         chips, the Ask bar, Open Terminals and any in-page consoles live there, not on Day.
+         Keys 1-4 follow this order. -->
     <button class="view-btn active" data-view="day" role="tab" aria-selected="true" aria-controls="pane-day">Day</button>
+    <button class="view-btn" data-view="projects" role="tab" aria-selected="false" aria-controls="pane-projects">Projects</button>
     <button class="view-btn" data-view="brain" role="tab" aria-selected="false" aria-controls="pane-brain">Brain</button>
+    <button class="view-btn" data-view="command" role="tab" aria-selected="false" aria-controls="pane-command">Terminals</button>
   </nav>
   <!-- Sheet launchers (plan §2.1/P7): each opens its named sheet via
        switchView's existing internal view name (dev/auto/directory/library/
@@ -2431,8 +2502,8 @@
   <div id="utils">
     <button id="palette-btn" title="Command palette — jump to any place or sheet (Ctrl+K)">&#8981; Jump</button>
     <button id="mute-toggle">&#128266; FX Sound: On</button>
-    <!-- The morning brief is read from the Day view's brief card (Listen) and
-         the palette; runMorningBrief() below is the one entry point. -->
+    <!-- The morning brief is read aloud from the Day view's Morning brief dialog
+         and the palette; runMorningBrief() below is the one entry point. -->
     <div id="morning-brief-status" class="panel-help" hidden></div>
     <!-- Alfred is an observe surface, not a do surface: this opens a REAL
          console on the session rather than piping commands through the HUD.
@@ -2459,31 +2530,52 @@
        the foot of the Deck (see #cc-seats/#composer-tools there). -->
 
   <main id="deck">
-    <!-- Day pane (the default landing): the shared brain's day-to-day view — Grok's
-         brief, what is due, the week, projects, and the end-of-day wrap-up — with
-         the bench strip (who is signed in) beside the date. Filled by renderDay()
-         and renderBench(); every node is built with el()/textContent. -->
+    <!-- Day pane (the default landing): the shared brain's day-to-day view. Left: the month
+         calendar and the picked day's agenda. Centre: today and the next 7 days. Right: what
+         needs the user, what is watched, their routines and weekly chores, and the Tell Alfred
+         box. Grok's brief and the end-of-day wrap-up open from the Morning brief button.
+         Filled by renderDay(); every node is built with el()/textContent. -->
     <section id="pane-day" class="pane day" hidden aria-label="Day">
       <div class="day-head">
         <div class="day-headline">
           <h1 id="day-date" class="day-date">Today</h1>
           <p id="day-summary" class="day-summary" aria-live="polite">Loading&hellip;</p>
         </div>
-        <form id="tell-grok" class="tell-grok" autocomplete="off" aria-label="Tell Grok">
-          <label for="tell-grok-input" class="tell-grok-label">Tell Grok</label>
-          <input id="tell-grok-input" type="text" maxlength="500" enterkeyhint="send"
-                 placeholder="remind me to… · dentist Tuesday 3pm · add milk to my errands">
-          <button id="tell-grok-send" class="btn" type="submit">Send</button>
-        </form>
         <div class="day-tools">
+          <button id="day-brief" class="btn" type="button" aria-haspopup="dialog"
+                  title="Grok's morning brief and the end-of-day wrap-up">Morning brief</button>
           <button id="day-add" class="btn primary" type="button" aria-haspopup="dialog"
                   title="Add a to-do, reminder, errand, routine or event">+ Add</button>
           <button id="day-refresh" class="btn" type="button" title="Re-read the shared brain now">Refresh</button>
         </div>
-        <div id="bench" class="bench" role="group" aria-label="AI seats"></div>
       </div>
       <div id="signin-banner" class="signin-banner" role="status" hidden></div>
-      <div id="day-body" class="day-body"></div>
+      <!-- #day-body is rebuilt on every feed change and is display:contents, so its columns are
+           this grid's cells. The Tell Alfred form is not inside it: a repaint never touches what
+           the user is typing. -->
+      <div id="day-grid" class="day-grid">
+        <div id="day-body" class="day-body"></div>
+        <form id="tell-alfred" class="tell-box" autocomplete="off" aria-label="Tell Alfred">
+          <label for="tell-alfred-input" class="tell-box-label">Tell Alfred</label>
+          <div class="tell-box-row">
+            <input id="tell-alfred-input" type="text" maxlength="500" enterkeyhint="send"
+                   placeholder="remind me Tuesday to call the dentist">
+            <button id="tell-alfred-send" class="btn" type="submit">Send</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- Projects pane: one card per project status note in the shared brain (the day feed's
+         projects list); a card opens its status.md in the reader. Filled by renderProjects(). -->
+    <section id="pane-projects" class="pane" hidden aria-label="Projects">
+      <div class="day-head">
+        <div class="day-headline">
+          <h1 class="day-date">Projects</h1>
+          <p id="projects-summary" class="day-summary" aria-live="polite">Loading&hellip;</p>
+        </div>
+      </div>
+      <div id="projects-body" class="projects-body"></div>
     </section>
 
     <!-- Brain pane: #graph is contained here now (P4), inside .brain-canvas,
@@ -2512,9 +2604,20 @@
          would from a shell. The #cc-term-stage subtree below (tabs + xterm
          mounts) is relocated here as one static block — every WebSocket,
          ResizeObserver and ccFitTerm path is untouched (plan §2.2/§4 P3). -->
-    <section id="pane-command" class="pane" hidden>
+    <section id="pane-command" class="pane" hidden aria-label="Terminals">
   <div class="stage-head">
-    <h1>Command Center</h1>
+    <h1>Terminals</h1>
+    <div class="stage-head-controls">
+      <!-- Who is signed in, one pill per seat (renderBench); a signed-out seat has its Sign in here. -->
+      <div id="bench" class="bench" role="group" aria-label="AI seats"></div>
+      <!-- Pick any combo of seats — 1, several, or all — and open them side by
+           side in a real Windows Terminal window. Independent of the council
+           ticks on the composer's seat strip below: this checklist only decides
+           what "Open Terminals" launches externally. -->
+      <div id="ext-term-dock">
+        <button id="ext-term-btn" type="button" aria-haspopup="true" aria-expanded="false" title="Pick seats to open side by side in a new Windows Terminal window">&#9002; Open Terminals</button>
+      </div>
+    </div>
   </div>
   <!-- The seat list itself now lives on the Bench (#cc-seats, plan §2.2 P5
        row) — every seat is visible on every place, not just Command. -->
@@ -2530,6 +2633,7 @@
     </div>
     <div id="cc-terms" class="cc-terms"></div>
   </div>
+  <p class="cc-term-empty">Click a seat in the bar below to open its terminal here, or use Open Terminals to launch seats side by side in Windows Terminal. The Ask bar sends to the focused seat.</p>
     </section>
   </main>
 
@@ -2770,7 +2874,7 @@
      Bench's own overflow-y:auto never clips it. -->
 <div id="seat-popover" role="dialog" aria-label="Seat controls"></div>
 
-<!-- External terminal checklist (top-left #ext-term-btn): its own selection
+<!-- External terminal checklist (the Terminals tab's #ext-term-btn): its own selection
      state, independent of the council's #cc-seats ticks. -->
 <div id="ext-term-menu" role="dialog" aria-label="Choose seats to open externally"></div>
 
@@ -3656,8 +3760,9 @@
   // DAY view (the default landing): the shared brain's day-to-day view, the
   // thing the operator opens to start and to end the day. Grok's automations
   // write the brain (synced through Google Drive); this is the glass over it:
-  // Grok's brief, what is due, the week, projects, the end-of-day wrap-up, and
-  // beside the date the bench strip (is Claude / Grok signed in?).
+  // the calendar and the picked day, today and the next 7 days, what needs the
+  // user, their routines and chores, and the Tell Alfred box; Grok's brief and
+  // the end-of-day wrap-up open from the header's Morning brief button.
   // The brain's files are the truth. A row action goes through
   // /api/assistant/action and the reply carries the fresh feed, so the page
   // re-renders from one round trip; /api/status carries a brainVersion that
@@ -3675,8 +3780,11 @@
   var ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
   var dayBodyEl = document.getElementById('day-body');
+  var dayGridEl = document.getElementById('day-grid');
   var daySummaryEl = document.getElementById('day-summary');
   var dayDateEl = document.getElementById('day-date');
+  var projectsBodyEl = document.getElementById('projects-body');
+  var projectsSummaryEl = document.getElementById('projects-summary');
   var benchEl = document.getElementById('bench');
   var bannerEl = document.getElementById('signin-banner');
 
@@ -3686,14 +3794,14 @@
   var dayApplied = 0;
   var dayEntered = false;   // the Day cards have had their one entrance stagger
   var dayBusy = {};         // file -> true while an action on it is in flight
-  var dayOpen = {};         // collapsed cards the operator has opened, by title
+  var dayOpen = {};         // collapsed cards and groups the operator has opened or closed, by title
   var lastBrainVersion = null;
 
   // First paint: placeholder cards until the feed arrives, so the pane is never blank.
   if (dayBodyEl) {
-    dayBodyEl.appendChild(el('div', 'day-grid', [1, 2, 3].map(function () {
-      return el('div', 'day-col', [skeletonCard(), skeletonCard()]);
-    })));
+    ['left', 'mid', 'right'].forEach(function (area) {
+      dayBodyEl.appendChild(el('div', 'day-col ' + area, [skeletonCard(), skeletonCard()]));
+    });
   }
 
   function arr(x) { return Array.isArray(x) ? x : []; }
@@ -3743,6 +3851,7 @@
 
   function dayActionMessage(action, d, item) {
     var title = d.title || item.title;
+    if (action === 'close' && item.kind === 'chore') return 'Done for this week: ' + title;
     if (action === 'close') {
       if (d.via === 'signal') return d.applied ? 'Closed via signal: ' + title : 'Sent to Grok: close ' + title;
       return 'Closed: ' + title;
@@ -3789,49 +3898,55 @@
     });
   }
 
-  // --- Tell Grok: the desk box ------------------------------------------------------------
-  // What the user would say to Grok in the car. The server asks Grok for a plan and saves it
-  // itself (Reminders/, Calendar/events.md, or Grok's Inbox when Grok cannot answer); the
-  // reply carries the fresh feed, so the new item is on the page when the toast appears.
+  // --- Tell Alfred: the desk box ----------------------------------------------------------
+  // What the user would say in passing. The server has the user's own Claude turn it into a
+  // plan and saves it itself (Reminders/, Routines/, Calendar/events.md, or Claude Code's Inbox
+  // when Claude cannot answer); the reply carries the fresh feed, so the new item is on the page
+  // when the toast appears. The form is not inside #day-body, so a repaint never touches it.
   (function () {
-    var form = document.getElementById('tell-grok');
+    var form = document.getElementById('tell-alfred');
     if (!form) return;
-    var input = document.getElementById('tell-grok-input');
-    var send = document.getElementById('tell-grok-send');
+    var input = document.getElementById('tell-alfred-input');
+    var send = document.getElementById('tell-alfred-send');
     function savedLine(s) {
-      if (s.type === 'event') return 'Calendar: ' + s.title + ' (' + dayLabel(s.date) + ')';
+      var title = s.title || s.file || '';
+      if (s.edit) return 'Changed: ' + title;
+      if (s.type === 'event') return 'Calendar: ' + title + (s.date ? ' (' + dayLabel(s.date) + ')' : '');
       if (s.type === 'reminder') {
-        var k = s.kind === 'todo' ? 'To-do' : s.kind.charAt(0).toUpperCase() + s.kind.slice(1);
-        return k + ': ' + s.title + (s.due && s.due !== 'none' ? ' (' + dayLabel(s.due) + ')' : '');
+        var k = String(s.kind || 'reminder');
+        k = k === 'todo' ? 'To-do' : k.charAt(0).toUpperCase() + k.slice(1);
+        return k + ': ' + title + (s.due && s.due !== 'none' ? ' (' + dayLabel(s.due) + ')' : '');
       }
-      return "Grok's inbox: " + s.title;
+      if (s.type === 'routine') return 'Routine: ' + title + (s.schedule ? ' (' + s.schedule + ')' : '');
+      if (s.type === 'close') return 'Done: ' + title;
+      return "Claude Code's inbox: " + title;
     }
     function setBusy(on) {
       form.classList.toggle('busy', on);
       input.disabled = on;
       send.disabled = on;
-      send.textContent = on ? 'Grok is on it…' : 'Send';
+      send.textContent = on ? 'Alfred is on it…' : 'Send';
     }
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var text = input.value.trim();
       if (!text || form.classList.contains('busy')) return;
       setBusy(true);
-      bridgePost('/api/assistant/tell-grok', { text: text }).then(function (r) {
+      bridgePost('/api/assistant/tell', { text: text }).then(function (r) {
         var d = r.data || {};
-        if (!r.ok) { toast(d.error || 'Grok could not take that.', 'critical', { title: 'Tell Grok' }); return; }
+        if (!r.ok) { toast(d.error || 'Alfred could not take that.', 'critical', { title: 'Tell Alfred' }); return; }
         input.value = '';
         if (d.via === 'inbox') {
-          toast("Grok didn't answer (" + (d.why || 'no reason given') + "). It's waiting in Grok's inbox for its next sync.",
-            'warn', { title: 'Tell Grok' });
+          toast("Alfred couldn't turn that into a plan (" + (d.why || 'no reason given')
+            + "). It's saved in Claude Code's inbox, so nothing is lost.", 'warn', { title: 'Tell Alfred' });
         } else {
-          var lines = (d.saved || []).map(savedLine);
+          var lines = arr(d.saved).map(savedLine);
           if (d.skipped && d.skipped.length) lines.push(d.skipped.length + ' not saved: ' + d.skipped.map(function (s) { return s.error; }).join('; '));
-          toast((d.reply ? d.reply + ' ' : '') + lines.join(' · '), d.skipped && d.skipped.length ? 'warn' : 'success', { title: 'Grok' });
+          toast((d.reply ? d.reply + ' ' : '') + lines.join(' · '), d.skipped && d.skipped.length ? 'warn' : 'success', { title: 'Alfred' });
         }
         if (d.feed) applyDayFeed(d.feed); else pollAssistant();
       }).catch(function () {
-        toast('Could not reach Alfred.', 'critical', { title: 'Tell Grok' });
+        toast('Could not reach Alfred.', 'critical', { title: 'Tell Alfred' });
       }).then(function () {
         setBusy(false);
         input.focus();
@@ -4335,8 +4450,8 @@
   }
 
   // mode: 'full' = Done / Tomorrow / Edit / Snooze, 'lite' = Done / Edit / Snooze, 'carry' = Carry over / Edit,
-  // 'routine' = Edit, 'routine-manage' = Edit / Pause (or Resume). Appends the button group (and, when
-  // snoozing is offered, its date line) to the row.
+  // 'chore' = Done (for this week), 'routine' = Edit, 'routine-manage' = Edit / Pause (or Resume). Appends
+  // the button group (and, when snoozing is offered, its date line) to the row.
   function dayActions(item, row, mode) {
     var wrap = el('div', 'day-actions', []);
     if (mode === 'routine' || mode === 'routine-manage') {
@@ -4349,6 +4464,12 @@
         flip.setAttribute('data-file', item.file);
         wrap.appendChild(flip);
       }
+      row.appendChild(wrap);
+      return;
+    }
+    if (mode === 'chore') {
+      wrap.appendChild(dayButton('✓ Done', 'done', 'Done for this week', item,
+        function () { dayAct(item, 'close', null, row); }));
       row.appendChild(wrap);
       return;
     }
@@ -4401,21 +4522,27 @@
     row.appendChild(snooze);
   }
 
-  // o: { cls, when, actions: 'full' | 'lite' | 'carry' | 'none' }
+  // o: { cls, when, tag, time, kind, meta, open, actions: a dayActions mode or 'none' }
+  // time puts a leading time cell on the row ('' keeps an empty one, so a list's titles line up);
+  // kind replaces the item's own chip (false drops it); meta is quiet text after the title; open
+  // replaces what a click on the title does (open the item's file).
   function dayItemRow(item, o) {
     o = o || {};
     var row = el('div', 'day-item' + (o.cls ? ' ' + o.cls : ''), []);
-    if (item.kind) {
-      var kindChip = el('span', 'day-kind', [item.kind]);
-      kindChip.setAttribute('data-kind', String(item.kind).toLowerCase());
+    if (o.time != null) row.appendChild(el('span', 'day-time', [o.time]));
+    var kind = o.kind === false ? '' : o.kind || item.kind;
+    if (kind) {
+      var kindChip = el('span', 'day-kind', [kind]);
+      kindChip.setAttribute('data-kind', String(kind).toLowerCase());
       row.appendChild(kindChip);
     }
     var title = el('button', 'day-title', [item.title || item.file]);
     title.type = 'button';
     title.title = 'Open ' + item.file;
-    title.addEventListener('click', function () { dayOpenFile(item.file, item.title); });
+    title.addEventListener('click', o.open || function () { dayOpenFile(item.file, item.title); });
     row.appendChild(title);
     if (item.scope === 'work') row.appendChild(el('span', 'badge info', ['work']));
+    arr(o.meta).forEach(function (m) { if (m) row.appendChild(el('span', 'day-meta', [m])); });
     if (o.when) row.appendChild(el('span', 'day-when', [o.when]));
     if (o.tag) row.appendChild(el('span', 'badge idle', [o.tag]));
     if (item.pending) {
@@ -4437,12 +4564,13 @@
 
   function dayEmpty(text) { return el('p', 'day-empty', [text]); }
 
-  // opts: { cls, count, collapsed, body: [nodes] }
+  // opts: { cls, count, collapsed, aside, body: [nodes] } (aside: a node at the title's right end)
   function dayCard(title, opts) {
     opts = opts || {};
     var head = [title, opts.count != null ? el('span', 'day-count', [String(opts.count)]) : null];
+    var titleEl = el(opts.collapsed ? 'summary' : 'h2', opts.collapsed ? null : 'day-card-title', head);
     var card = el(opts.collapsed ? 'details' : 'section', 'day-card' + (opts.cls ? ' ' + opts.cls : ''),
-      [el(opts.collapsed ? 'summary' : 'h2', opts.collapsed ? null : 'day-card-title', head)]);
+      [opts.aside && !opts.collapsed ? el('div', 'day-card-head', [titleEl, opts.aside]) : titleEl]);
     if (opts.collapsed) {
       card.open = !!dayOpen[title];
       card.addEventListener('toggle', function () { dayOpen[title] = card.open; });
@@ -4451,59 +4579,191 @@
     return card;
   }
 
-  function dayColumn(label, cards) {
-    var col = el('div', 'day-col', cards);
+  // area: 'left' | 'mid' | 'right', the column's cell in .day-grid.
+  function dayColumn(label, area, cards) {
+    var col = el('div', 'day-col ' + area, cards);
     col.setAttribute('role', 'region');
     col.setAttribute('aria-label', label);
     return col;
   }
 
-  function dayTodayColumn(d) {
-    var cards = [];
-    var overdue = arr(d.overdue), today = arr(d.today), carry = arr(d.carryOver);
-    var routines = arr(d.routines && d.routines.today);
-    var onCalendar = dayCalendarTodayCard(d);
-    if (onCalendar) cards.push(onCalendar);
-    if (overdue.length) {
-      cards.push(dayCard('Overdue', { cls: 'overdue', count: overdue.length, body: [dayRows(overdue, function (i) {
-        return { cls: 'overdue', when: 'was due ' + dayLabel(i.due), actions: 'full' };
-      })] }));
-    }
-    cards.push(dayCard('Due today', { count: today.length,
-      body: [today.length ? dayRows(today, { cls: 'today', actions: 'full' }) : dayEmpty('Nothing due today.')] }));
-    if (carry.length) {
-      cards.push(dayCard('Carry over', { count: carry.length, body: [
-        el('p', 'day-sub', ["Yesterday's errands that expired. Bring them into today, or let them go."]),
-        dayRows(carry, { cls: 'overdue', when: 'missed yesterday', actions: 'carry' }),
-      ] }));
-    }
-    cards.push(dayCard('Routines today', { count: routines.length,
-      body: [routines.length ? dayRows(routines, function (r) {
-        return { cls: 'routine', when: String(r.schedule || '').split(/[;(]/)[0].trim(), actions: 'routine' };
-      }) : dayEmpty('No routines today.')] }));
-    // Everything to act on lives in this one column: today, then the week, then the open to-dos.
-    var todos = arr(d.todos), later = arr(d.later);
-    cards.push(dayWeekCard(d));
-    cards.push(dayCard('To-dos', { count: todos.length,
-      body: [todos.length ? dayRows(todos, { actions: 'lite' }) : dayEmpty('No open to-dos.')] }));
-    cards.push(dayCard('Later', { collapsed: true, count: later.length,
-      body: [later.length ? dayRows(later, function (i) {
-        return { when: dayLabel(i.due), actions: 'lite' };
-      }) : dayEmpty('Nothing scheduled further out.')] }));
-    return dayColumn('Today, this week and to-dos', cards);
+  // A collapsible group inside a card. It opens as the user last left it, else as `closed` says.
+  function dayFold(label, count, closed, body) {
+    var key = 'fold:' + label;
+    var det = el('details', 'day-fold', [el('summary', 'day-group', [label + ' (' + count + ')'])]);
+    var initial = dayOpen.hasOwnProperty(key) ? dayOpen[key] : !closed;
+    det.open = initial;
+    det.addEventListener('toggle', function () {
+      if (det.open === initial && !dayOpen.hasOwnProperty(key)) return; // the open set above, not the user
+      dayOpen[key] = det.open;
+    });
+    arr(body).forEach(function (n) { if (n) det.appendChild(n); });
+    return det;
   }
 
-  // --- Calendar: dots on the days, an agenda for the picked day --------------------------
+  function dayWeekdayName(iso) { // '2026-10-19' -> 'Monday'
+    if (!ISO_DATE.test(String(iso || ''))) return String(iso || '');
+    return new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
+  }
+
+  function dayShortDate(iso) { // '2026-11-01' -> 'Nov 1'
+    return new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  }
+
+  // --- Agendas: everything on a day in one list, timed rows first ------------------------
+  // An entry is { time (the sort key: 'HH:MM' or ''), label (what its time cell shows), item, o }.
+  // Events, dated reminders, chores and routines share the row shape, each with a kind chip.
+  function agEvent(ev) {
+    var meta = [];
+    if (ev.end && ev.spanEnd !== true) meta.push('through ' + dayLabel(ev.end));
+    if (ev.location) meta.push(ev.location);
+    var by = calByLabel(ev.by);
+    if (by && by !== 'You') meta.push('by ' + by);
+    var t = !ev.allDay && IE_TIME.test(String(ev.time || '')) ? ev.time : '';
+    return { time: t, label: calTimeText(ev), item: { file: CAL_FILE, title: ev.title || '(no title)' },
+      o: { kind: 'event', cls: 'event', meta: meta, open: calOpenFile, actions: 'none' } };
+  }
+
+  function agItem(i, o) {
+    var t = IE_TIME.test(String(i.time || '')) ? i.time : '';
+    return { time: t, label: t, item: i, o: o };
+  }
+
+  // Done is offered on the day the chore is due this week; a later week's occurrence is listed only.
+  function agChore(c, iso) {
+    return { time: '', label: '', item: c, o: { cls: 'chore', actions: !c.done && c.due === iso ? 'chore' : 'none' } };
+  }
+
+  function agRoutine(r) {
+    var t = IE_TIME.test(String(r.time || '')) ? r.time : '';
+    return { time: t, label: t, item: r, o: { kind: 'routine', cls: 'routine',
+      when: String(r.schedule || '').split(/[;(]/)[0].trim(), actions: 'routine' } };
+  }
+
+  function dayAgenda(entries) {
+    var timed = entries.some(function (e) { return !!e.label; });
+    var sorted = entries.map(function (e, i) { return { e: e, i: i }; }).sort(function (a, b) {
+      if (a.e.time && b.e.time && a.e.time !== b.e.time) return a.e.time < b.e.time ? -1 : 1;
+      if (!a.e.time !== !b.e.time) return a.e.time ? -1 : 1;
+      return a.i - b.i;
+    });
+    return el('div', 'day-list', sorted.map(function (x) {
+      var o = {};
+      Object.keys(x.e.o).forEach(function (k) { o[k] = x.e.o[k]; });
+      if (timed) o.time = x.e.label;
+      return dayItemRow(x.e.item, o);
+    }));
+  }
+
+  function dayWeekDay(d, iso) {
+    return arr(d.week && d.week.days).filter(function (w) { return w && w.date === iso; })[0] || null;
+  }
+
+  // Everything on one date: its events, dated reminders, chores and routines. Today reads the
+  // feed's today lists, the next 7 days read feed.week, and any other date has its events,
+  // reminders and (this week) chores.
+  function dayEntries(d, iso, ix) {
+    var today = calTodayIso(d), wk = dayWeekDay(d, iso), out = [];
+    arr(ix.ev[iso]).forEach(function (ev) { out.push(agEvent(ev)); });
+    if (iso === today) {
+      arr(d.today).forEach(function (i) { out.push(agItem(i, { cls: 'today', actions: 'full' })); });
+    } else if (wk) {
+      arr(wk.items).forEach(function (i) { out.push(agItem(i, { cls: 'soon', actions: 'full' })); });
+    } else {
+      arr(ix.rem[iso]).forEach(function (i) {
+        var list = ix.listOf[i.file];
+        out.push(agItem(i, { cls: list === 'overdue' ? 'overdue' : list === 'today' ? 'today' : list === 'later' ? '' : 'soon',
+          actions: list === 'later' ? 'lite' : 'full' }));
+      });
+    }
+    arr(ix.cho[iso]).forEach(function (c) { out.push(agChore(c, iso)); });
+    arr(iso === today ? d.routines && d.routines.today : wk && wk.routines).forEach(function (r) { out.push(agRoutine(r)); });
+    return out;
+  }
+
+  // "2 of 6 done" and a slim bar, from feed.progress; nothing at all when there is nothing to do.
+  function dayProgress(p) {
+    p = p || {};
+    var total = Math.max(0, Number(p.total) || 0), done = Math.min(Math.max(0, Number(p.done) || 0), total);
+    if (!total) return null;
+    var fill = el('i', null, []);
+    fill.style.width = Math.round(done / total * 100) + '%';
+    var bar = el('span', 'day-progress-bar', [fill]);
+    bar.setAttribute('role', 'progressbar');
+    bar.setAttribute('aria-label', 'Done today');
+    bar.setAttribute('aria-valuemin', '0');
+    bar.setAttribute('aria-valuemax', String(total));
+    bar.setAttribute('aria-valuenow', String(done));
+    return el('span', 'day-aside day-progress', [el('span', null, [done + ' of ' + total + ' done']), bar]);
+  }
+
+  // Today: what needs attention (overdue, carry-overs, late chores), then the day in time order,
+  // then what is already done.
+  function dayTodayCard(d) {
+    var ch = d.chores || {}, body = [];
+    var attn = arr(d.overdue).map(function (i) {
+      return dayItemRow(i, { cls: 'overdue', when: 'was due ' + dayLabel(i.due), actions: 'full' });
+    }).concat(arr(d.carryOver).map(function (i) {
+      return dayItemRow(i, { cls: 'overdue', when: 'missed yesterday', actions: 'carry' });
+    }), arr(ch.late).map(function (c) {
+      return dayItemRow(c, { cls: 'overdue', when: 'was due ' + dayWeekdayName(c.due), actions: 'chore' });
+    }));
+    if (attn.length) {
+      body.push(el('div', 'day-attn', [el('h3', 'day-group', ['Needs attention (' + attn.length + ')']),
+        el('div', 'day-list', attn)]));
+    }
+    var entries = dayEntries(d, calTodayIso(d), calIndex(d));
+    body.push(entries.length ? dayAgenda(entries) : dayEmpty('Nothing else on today.'));
+    var done = arr(d.doneToday).concat(arr(ch.done));
+    if (done.length) {
+      body.push(el('h3', 'day-group', ['Done today (' + done.length + ')']));
+      body.push(dayRows(done, { cls: 'done', actions: 'none' }));
+    }
+    return dayCard('Today', { cls: 'today-card', aside: dayProgress(d.progress), body: body });
+  }
+
+  // This week: the next 7 days, one group per day that has anything on it, then the chores that
+  // can be done any day this week, then the open to-dos and what is further out.
+  function dayWeekCard(d) {
+    var w = d.week || {}, ix = calIndex(d), body = [];
+    arr(w.days).forEach(function (wd) {
+      if (!wd || !ISO_DATE.test(String(wd.date || ''))) return;
+      var entries = dayEntries(d, wd.date, ix);
+      if (!entries.length) return;
+      body.push(el('h3', 'day-group', [dayLabel(wd.date)]));
+      body.push(dayAgenda(entries));
+    });
+    if (!body.length) body.push(dayEmpty('Nothing in the next 7 days.'));
+    var any = w.anytime || {}, anyChores = arr(any.chores);
+    if (anyChores.length) {
+      body.push(el('h3', 'day-group', ['Anytime this week' + (ISO_DATE.test(String(any.by || '')) ? ' (by ' + dayLabel(any.by) + ')' : '')]));
+      body.push(dayRows(anyChores, function (c) {
+        return c.done ? { cls: 'chore done', tag: 'done this week', actions: 'none' } : { cls: 'chore', actions: 'chore' };
+      }));
+    }
+    var todos = arr(d.todos), later = arr(d.later);
+    body.push(dayFold('To-dos', todos.length, todos.length > 3,
+      [todos.length ? dayRows(todos, { actions: 'lite' }) : dayEmpty('No open to-dos.')]));
+    body.push(dayFold('Later', later.length, true, [later.length ? dayRows(later, function (i) {
+      return { when: dayLabel(i.due), actions: 'lite' };
+    }) : dayEmpty('Nothing scheduled further out.')]));
+    var range = ISO_DATE.test(String(w.from || '')) && ISO_DATE.test(String(w.to || ''))
+      ? el('span', 'day-aside', [dayShortDate(w.from) + ' – ' + dayShortDate(w.to)]) : null;
+    return dayCard('This week', { cls: 'week-card', aside: range, body: body });
+  }
+
+  // --- Calendar: dots on the days; the picked day's agenda is the card beneath -------------
   // Two sources share one grid. The brain's dated reminders (feed.overdue / today /
-  // upcoming / later, by `due`) are the truth and carry the Done / Tomorrow / Snooze
-  // actions; feed.calendar.days (parsed server-side from Calendar/events.md in the
-  // shared brain, which Grok and Claude both add to) is the second source. Events are
+  // upcoming / later, by `due`) and the weekly chores are the truth and carry the Done /
+  // Tomorrow / Snooze actions; feed.calendar.days (parsed server-side from Calendar/events.md
+  // in the shared brain, which Grok and Claude both add to) is the second source. Events are
   // plain data with one fixed dot colour, so nothing from the file ever reaches a style.
   // Everything is built with el()/textContent. A click on an event opens the events file
   // in the reader.
   var CAL_FILE = 'Calendar/events.md';
   var calSel = null;        // the picked day (ISO); null = follow today
-  var calEl = null;         // the .cal node on screen, so a click repaints just the calendar
+  var calEl = null;         // the .cal node on screen, so a click repaints just the calendar...
+  var pickEl = null;        // ...and the picked day's card beneath it
   var CAL_DOTS_MAX = 4;     // five or more collapse to three dots and "+N"
   var CAL_DOW = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
@@ -4542,7 +4802,8 @@
     return ym + '-' + (day < 10 ? '0' : '') + day;
   }
 
-  // reminders: iso -> [{ item, list }]; events: iso -> [event from the events file].
+  // reminders: iso -> [item]; events: iso -> [event from the events file]; chores: iso -> [chore due
+  // that day] (open ones from this week, and every chore the feed puts on one of the next 7 days).
   function calIndex(d) {
     var rem = {}, listOf = {}, seen = {};
     [['overdue', d.overdue], ['today', d.today], ['upcoming', d.upcoming], ['later', d.later]].forEach(function (p) {
@@ -4560,37 +4821,25 @@
       var list = arr(cal.days[k]).filter(Boolean);
       if (list.length) ev[k] = list;
     });
-    return { rem: rem, listOf: listOf, ev: ev, cal: cal, has: !!d.calendar, exists: cal.exists === true,
+    var cho = {}, choSeen = {}, ch = d.chores || {};
+    function addCho(iso, c, any) {
+      if (!c || !ISO_DATE.test(String(iso || '')) || (c.done && !any) || choSeen[iso + '|' + c.file]) return;
+      choSeen[iso + '|' + c.file] = true;
+      (cho[iso] = cho[iso] || []).push(c);
+    }
+    arr(ch.due).concat(arr(ch.late), arr(ch.all)).forEach(function (c) { addCho(c && c.due, c, false); });
+    arr(d.week && d.week.days).forEach(function (w) {
+      arr(w && w.chores).forEach(function (c) { addCho(w.date, c, true); });
+    });
+    return { rem: rem, listOf: listOf, ev: ev, cho: cho, cal: cal, has: !!d.calendar, exists: cal.exists === true,
       problems: arr(cal.problems) };
   }
 
   // Opens the events file in the reader: the place to add or fix an event.
   function calOpenFile() { dayOpenFile(CAL_FILE, 'Calendar'); }
 
-  // o: { compact } (compact drops the location line, for the small "today" card)
-  function calEventRow(ev, o) {
-    o = o || {};
-    var row = el('button', 'cal-event', []);
-    row.type = 'button';
-    row.title = 'Open ' + CAL_FILE;
-    row.addEventListener('click', calOpenFile);
-    row.appendChild(el('span', 'ce-time', [calTimeText(ev)]));
-    row.appendChild(el('span', 'ce-title', [ev.title || '(no title)']));
-    var meta = el('span', 'ce-meta', []);
-    if (ev.end && ev.spanEnd !== true) meta.appendChild(el('span', 'ce-where', ['through ' + dayLabel(ev.end)]));
-    if (ev.location && !o.compact) meta.appendChild(el('span', 'ce-where', [ev.location]));
-    var by = calByLabel(ev.by);
-    if (by) {
-      var tag = el('span', 'ce-by', [by]);
-      tag.title = 'Added by ' + by;
-      meta.appendChild(tag);
-    }
-    if (meta.childNodes.length) row.appendChild(meta);
-    return row;
-  }
-
   function calCell(ix, iso, today, sel, ym) {
-    var rem = ix.rem[iso] || [], evs = ix.ev[iso] || [];
+    var rem = ix.rem[iso] || [], evs = ix.ev[iso] || [], cho = ix.cho[iso] || [];
     var cell = el('button', 'cal-day' + (iso === today ? ' today' : '') + (iso === sel ? ' selected' : '')
       + (iso.slice(0, 7) !== ym ? ' other' : ''), []);
     cell.type = 'button';
@@ -4600,13 +4849,14 @@
     if (iso === today) cell.setAttribute('aria-current', 'date');
     var parts = [];
     if (rem.length) parts.push(rem.length + (rem.length === 1 ? ' reminder' : ' reminders'));
+    if (cho.length) parts.push(cho.length + (cho.length === 1 ? ' chore' : ' chores'));
     if (evs.length) parts.push(evs.length + (evs.length === 1 ? ' event' : ' events'));
     cell.setAttribute('aria-label', dayLabel(iso, true) + (iso === today ? ', today' : '') + ': '
       + (parts.length ? parts.join(', ') : 'nothing scheduled'));
     cell.addEventListener('click', function () { calSelect(iso, true); });
     cell.appendChild(el('span', 'cal-num', [String(parseInt(iso.slice(8, 10), 10))]));
-    // Reminders first (mint), then one blue dot per event.
-    var dots = rem.map(function () { return 'cal-dot rem'; }).concat(evs.map(function () { return 'cal-dot ev'; }));
+    // Reminders and chores first (mint), then one blue dot per event.
+    var dots = rem.concat(cho).map(function () { return 'cal-dot rem'; }).concat(evs.map(function () { return 'cal-dot ev'; }));
     var shown = dots.length > CAL_DOTS_MAX ? CAL_DOTS_MAX - 1 : dots.length;
     var row = el('span', 'cal-dots', []);
     row.setAttribute('aria-hidden', 'true');
@@ -4614,24 +4864,6 @@
     if (dots.length > shown) row.appendChild(el('span', 'cal-more', ['+' + (dots.length - shown)]));
     cell.appendChild(row);
     return cell;
-  }
-
-  function calAgenda(ix, iso, today) {
-    var wrap = el('div', 'cal-agenda', []);
-    wrap.setAttribute('role', 'region');
-    wrap.setAttribute('aria-label', 'Agenda for ' + dayLabel(iso, true));
-    wrap.appendChild(el('h3', 'day-group', [dayLabel(iso, true) + (iso === today ? ' · today' : '')]));
-    var rem = ix.rem[iso] || [], evs = ix.ev[iso] || [];
-    if (rem.length) {
-      wrap.appendChild(dayRows(rem, function (i) {
-        var list = ix.listOf[i.file];
-        return { cls: list === 'overdue' ? 'overdue' : list === 'today' ? 'today' : list === 'later' ? '' : 'soon',
-          actions: list === 'later' ? 'lite' : 'full' };
-      }));
-    }
-    if (evs.length) wrap.appendChild(el('div', 'cal-events', evs.map(function (e) { return calEventRow(e); })));
-    if (!rem.length && !evs.length) wrap.appendChild(dayEmpty('Nothing scheduled.'));
-    return wrap;
   }
 
   function calNote(children, warn) {
@@ -4660,13 +4892,15 @@
     return n;
   }
 
-  // Rebuilds only the calendar node. focusSel (a selector) is what gets focus afterwards,
-  // since the node that had it has just been replaced.
+  // Rebuilds only the calendar node and the picked day's card. focusSel (a selector) is what gets
+  // focus afterwards, since the node that had it has just been replaced.
   function calRepaint(focusSel) {
     if (!calEl || !calEl.parentNode || !dayFeed) return;
     var next = calBuild(dayFeed);
     calEl.parentNode.replaceChild(next, calEl);
     calEl = next;
+    var oldPick = pickEl;
+    if (oldPick && oldPick.parentNode) oldPick.parentNode.replaceChild(dayPickedCard(dayFeed), oldPick);
     var target = focusSel ? next.querySelector(focusSel) : null;
     if (target) target.focus();
   }
@@ -4762,8 +4996,6 @@
         root.appendChild(bad);
       }
     }
-
-    root.appendChild(calAgenda(ix, sel, today));
     return root;
   }
 
@@ -4772,86 +5004,175 @@
     return dayCard('Calendar', { cls: 'cal-card', body: [calEl] });
   }
 
-  function dayCalendarTodayCard(d) {
-    var ix = calIndex(d);
-    var list = ix.ev[calTodayIso(d)] || [];
-    if (!list.length) return null;
-    return dayCard('Today on the calendar', { count: list.length,
-      body: [el('div', 'cal-events', list.map(function (e) { return calEventRow(e, { compact: true }); }))] });
+  // The picked day (today until another day is clicked): everything on it, in time order.
+  function dayPickedCard(d) {
+    var today = calTodayIso(d), iso = calSel || today;
+    var entries = dayEntries(d, iso, calIndex(d));
+    var body = [entries.length ? dayAgenda(entries) : dayEmpty('Nothing scheduled.')];
+    var to = d.week && d.week.to;
+    if (iso > today && ISO_DATE.test(String(to || '')) && iso > to) {
+      body.push(el('p', 'day-sub', ['Chores and routines are listed for the next 7 days only.']));
+    }
+    var card = dayCard(dayLabel(iso, true) + (iso === today ? ' · today' : ''), { cls: 'pick-card', body: body });
+    card.setAttribute('aria-label', 'Agenda for ' + dayLabel(iso, true));
+    pickEl = card;
+    return card;
   }
 
-  function dayBriefCard(d) {
-    var b = d.brief;
-    var body = [];
+  // --- Morning brief: the dialog behind the Day header's button ----------------------------
+  // Grok's brief (its top items, the full note, read aloud), then the end of day: what was done
+  // today and the Librarian's tidy-up. Built on demand on the same .modal/.scrim chrome as the
+  // item editor; Esc or a click on the scrim closes it and focus goes back to the button.
+  var briefDlg = null;   // { modal, scrim, opener } while open
+
+  function briefFocusables() {
+    return Array.prototype.filter.call(briefDlg.modal.querySelectorAll('button, input, select, textarea'), function (c) {
+      return !c.disabled && c.getClientRects().length > 0;
+    });
+  }
+
+  // Esc closes; Tab and Shift+Tab cycle inside the dialog (capture phase, ahead of the page's Esc ladder).
+  function briefKeydown(e) {
+    if (!briefDlg) return;
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeBriefModal(); return; }
+    if (e.key !== 'Tab') return;
+    var list = briefFocusables();
+    if (!list.length) return;
+    var first = list[0], last = list[list.length - 1], a = document.activeElement;
+    if (!briefDlg.modal.contains(a)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+    else if (e.shiftKey && a === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && a === last) { e.preventDefault(); first.focus(); }
+  }
+
+  function briefFocusIn(e) {
+    if (!briefDlg || briefDlg.modal.contains(e.target)) return;
+    if (e.target.closest && e.target.closest('#toast-stack')) return; // a toast's own buttons stay usable
+    var list = briefFocusables();
+    if (list.length) list[0].focus({ preventScroll: true });
+  }
+
+  function closeBriefModal() {
+    var st = briefDlg;
+    if (!st) return;
+    briefDlg = null;
+    document.removeEventListener('keydown', briefKeydown, true);
+    document.removeEventListener('focusin', briefFocusIn);
+    document.body.classList.remove('brief-open');
+    [st.modal, st.scrim].forEach(function (n) { if (n.parentNode) n.parentNode.removeChild(n); });
+    if (st.opener && st.opener.isConnected) st.opener.focus({ preventScroll: true });
+  }
+
+  function openBriefModal(opener) {
+    if (briefDlg || itemEditor) return;
+    var d = dayFeed || {}, b = d.brief, body = [];
+    function closeThen(fn) { return function () { closeBriefModal(); fn(); }; }
+    body.push(el('h3', 'day-group', ["Grok's brief"]));
     if (!b) {
       body.push(dayEmpty('No brief yet.'));
-      return dayCard("Grok's morning brief", { body: body });
-    }
-    if (!b.isToday) body.push(el('p', 'day-sub', ['From ' + dayLabel(b.date) + '. Nothing newer yet.']));
-    var top = arr(b.top);
-    if (top.length) {
+    } else {
+      body.push(el('p', 'day-sub', [b.isToday ? 'Today' + (briefTime(b.updated) ? ', ' + briefTime(b.updated) : '')
+        : 'From ' + dayLabel(b.date) + '. Nothing newer yet.']));
+      var top = arr(b.top);
+      if (!top.length) body.push(dayEmpty('The brief has no top items.'));
       top.forEach(function (t) {
         body.push(el('div', 'day-brief-item', [el('strong', null, [t.title || '']), t.text ? el('span', null, [t.text]) : null]));
       });
-    } else {
-      body.push(dayEmpty('The brief has no top items.'));
+      var open = el('button', 'btn', ['Open full brief']);
+      open.type = 'button';
+      open.addEventListener('click', closeThen(function () { dayOpenFile(b.file, b.title || "Grok's morning brief"); }));
+      var listen = el('button', 'btn', ['Read aloud']);
+      listen.type = 'button';
+      listen.title = 'Read the brief aloud';
+      listen.addEventListener('click', function () { runMorningBrief(listen, closeBriefModal); });
+      body.push(el('div', 'day-card-actions', [open, listen]));
     }
-    var acts = el('div', 'day-card-actions', []);
-    var open = el('button', 'btn', ['Open full brief']);
-    open.type = 'button';
-    open.addEventListener('click', function () { dayOpenFile(b.file, b.title || "Grok's morning brief"); });
-    var listen = el('button', 'btn', ['Listen']);
-    listen.type = 'button';
-    listen.title = 'Read the brief aloud';
-    listen.addEventListener('click', function () { runMorningBrief(listen); });
-    acts.appendChild(open);
-    acts.appendChild(listen);
-    body.push(acts);
-    return dayCard("Grok's morning brief", { body: body });
+    var done = arr(d.doneToday).concat(arr(d.chores && d.chores.done));
+    body.push(el('h3', 'day-group', ['End of day']));
+    body.push(el('p', 'day-sub', ['Done today (' + done.length + ')']));
+    body.push(done.length ? dayRows(done, function (i) {
+      return { cls: 'done', actions: 'none', open: closeThen(function () { dayOpenFile(i.file, i.title); }) };
+    }) : dayEmpty('Nothing closed yet today.'));
+    var tidy = el('button', 'btn', ['Tidy up (run the Librarian)']);
+    tidy.type = 'button';
+    tidy.title = 'Close what is done, file expired errands and refresh the index';
+    tidy.addEventListener('click', function () { tidyUp(tidy); });
+    body.push(el('div', 'day-card-actions', [tidy]));
+
+    var heading = el('h2', null, ['Morning brief']);
+    heading.id = 'brief-title';
+    var closeX = el('button', 'icon-btn', ['✕']);
+    closeX.type = 'button';
+    closeX.setAttribute('aria-label', 'Close');
+    closeX.addEventListener('click', function () { closeBriefModal(); });
+    var modal = el('div', 'modal brief-modal', [el('div', 'modal-head', [heading, closeX]), el('div', 'modal-body', body)]);
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'brief-title');
+    // Keys typed in the dialog are for the dialog; the page's one-key shortcuts must not fire.
+    modal.addEventListener('keydown', function (e) { if (e.key !== 'Escape') e.stopPropagation(); });
+    var scrim = el('div', 'scrim', []);
+    scrim.addEventListener('click', function () { closeBriefModal(); });
+    briefDlg = { modal: modal, scrim: scrim, opener: opener || null };
+    document.body.classList.add('brief-open');
+    document.body.appendChild(scrim);
+    document.body.appendChild(modal);
+    void modal.offsetWidth; // so the fade-in runs
+    scrim.classList.add('open');
+    modal.classList.add('open');
+    document.addEventListener('keydown', briefKeydown, true);
+    document.addEventListener('focusin', briefFocusIn);
+    closeX.focus({ preventScroll: true });
   }
 
-  function dayWeekCard(d) {
-    var upcoming = arr(d.upcoming);
-    var body = [];
-    if (!upcoming.length) body.push(dayEmpty('Nothing in the next 7 days.'));
-    var order = [], byDay = {};
-    upcoming.forEach(function (i) {
-      var k = i.due || '';
-      if (!byDay[k]) { byDay[k] = []; order.push(k); }
-      byDay[k].push(i);
-    });
-    order.sort().forEach(function (k) {
-      body.push(el('h3', 'day-group', [k ? dayLabel(k) : 'No date']));
-      body.push(dayRows(byDay[k], { cls: 'soon', actions: 'full' }));
-    });
-    return dayCard('This week', { count: upcoming.length, body: body });
-  }
+  (function wireDayBrief() {
+    var btn = document.getElementById('day-brief');
+    if (!btn) return;
+    btn.addEventListener('click', function () { openBriefModal(btn); });
+  })();
 
-  // The calendar is the centrepiece and gets the middle column to itself.
-  function dayCalendarColumn(d) {
-    return dayColumn('Calendar', [dayCalendarCard(d)]);
-  }
-
+  // --- Projects: the tab of its own -------------------------------------------------------
+  // A project's status note as a card: its name, status, track and last update, where it stands
+  // and what is next. A click opens the note in the reader.
   function dayProjectRow(p) {
-    var b = el('button', 'day-project', [el('span', 'dp-name', [p.name || p.title])]);
+    var b = el('button', 'day-project', [el('span', 'dp-name', [p.title || p.name || p.file])]);
     b.type = 'button';
-    var meta = [p.status, p.track].filter(Boolean).join(' · ');
+    b.setAttribute('data-file', p.file);
+    var meta = [p.status, p.track, p.updated ? 'updated ' + p.updated : ''].filter(Boolean).join(' · ');
     if (meta) b.appendChild(el('span', 'dp-meta', [meta]));
-    if (p.stands) b.appendChild(el('span', 'dp-stands', [p.stands]));
-    if (p.next) b.appendChild(el('span', 'dp-next', ['Next: ' + p.next]));
+    if (p.stands) b.appendChild(el('span', 'dp-stands', [el('span', 'dp-label', ['Where it stands']), p.stands]));
+    if (p.next) b.appendChild(el('span', 'dp-next', [el('span', 'dp-label', ['Next']), p.next]));
     b.title = 'Open ' + p.file;
     b.addEventListener('click', function () { dayOpenFile(p.file, p.title || p.name); });
     return b;
   }
 
-  function daySignalRow(s) {
-    var b = el('button', 'day-signal', [el('span', null, [s.title || s.file])]);
-    b.type = 'button';
-    b.appendChild(el('span', 'ds-meta', [(s.type || 'signal') + ' ' + (s.from || '?') + '→' + (s.to || '?')
-      + (s.ageDays != null ? ' · ' + s.ageDays + 'd' : '')]));
-    b.title = 'Open ' + s.file;
-    b.addEventListener('click', function () { dayOpenFile(s.file, s.title); });
-    return b;
+  function renderProjects(d) {
+    if (!projectsBodyEl) return;
+    var list = arr(d.projects), scroll = projectsBodyEl.scrollTop;
+    var ae = document.activeElement;   // a focused card survives the rebuild
+    var focusFile = ae && ae.classList && ae.classList.contains('day-project') ? ae.getAttribute('data-file') : null;
+    projectsSummaryEl.classList.remove('warn');
+    projectsSummaryEl.textContent = d.brain ? list.length + (list.length === 1 ? ' project' : ' projects') + ' in the shared brain'
+      : 'Shared brain not found';
+    projectsBodyEl.textContent = '';
+    if (!d.brain) {
+      projectsBodyEl.appendChild(stateBlock('empty', 'Shared brain not found',
+        'Set "Shared brain path" in alfred-profile.md to the Google Drive "Second Brain" folder.'));
+      return;
+    }
+    if (!list.length) {
+      projectsBodyEl.appendChild(stateBlock('empty', 'No projects yet', 'A project is a status.md under Projects/ in the shared brain.'));
+      return;
+    }
+    list.forEach(function (p) { projectsBodyEl.appendChild(dayProjectRow(p)); });
+    projectsBodyEl.scrollTop = scroll;
+    if (focusFile) {
+      Array.prototype.some.call(projectsBodyEl.querySelectorAll('.day-project'), function (c) {
+        if (c.getAttribute('data-file') !== focusFile) return false;
+        c.focus({ preventScroll: true });
+        return true;
+      });
+    }
   }
 
   function tidyUp(btn) {
@@ -4868,23 +5189,32 @@
     });
   }
 
-  function dayEndOfDayCard(d) {
-    var done = arr(d.doneToday), open = arr(d.today);
-    var body = [el('h3', 'day-group', ['Done today (' + done.length + ')'])];
-    body.push(done.length ? dayRows(done, { cls: 'done', actions: 'none' }) : dayEmpty('Nothing closed yet today.'));
-    body.push(el('h3', 'day-group', ['Still open today (' + open.length + ')']));
-    body.push(open.length ? dayRows(open, { cls: 'today', actions: 'full' }) : dayEmpty('Nothing left due today.'));
-    var tidy = el('button', 'btn', ['Tidy up (run the Librarian)']);
-    tidy.type = 'button';
-    tidy.title = 'Close what is done, file expired errands and refresh the index';
-    tidy.addEventListener('click', function () { tidyUp(tidy); });
-    body.push(el('div', 'day-card-actions', [tidy]));
-    return dayCard('End of day', { body: body });
+  // --- The right column: what needs the user, what is watched, their routines and chores ---
+  // Needs you: Grok's asks, change notes the Librarian refused, and signals addressed to the
+  // user. AI-to-AI signals are not shown: they are not the user's business.
+  function dayNeedRow(n) {
+    var row = el(n.file ? 'button' : 'div', 'day-need', []);
+    var chip = el('span', 'day-kind', [n.kind || 'note']);
+    chip.setAttribute('data-kind', String(n.kind || 'note').toLowerCase());
+    row.appendChild(el('span', 'dn-head', [chip, el('span', 'dn-title', [n.title || n.file || ''])]));
+    if (n.why) row.appendChild(el('span', 'dn-why', [n.why]));
+    if (n.file) {
+      row.type = 'button';
+      row.title = 'Open ' + n.file;
+      row.addEventListener('click', function () { dayOpenFile(n.file, n.title); });
+    }
+    return row;
   }
 
-  // Every routine, whether or not it runs today: active ones (today's first), then paused ones.
-  // Each can be edited and paused or resumed; "+ Add routine" opens the editor on a new one.
-  function dayMyRoutinesCard(d) {
+  function dayNeedsYouCard(d) {
+    var list = arr(d.needsYou);
+    return dayCard('Needs you', { cls: 'needs-card' + (list.length ? ' has' : ''), count: list.length,
+      body: [list.length ? el('div', 'day-list', list.map(dayNeedRow)) : dayEmpty('Nothing waiting on you.')] });
+  }
+
+  // Every routine, whether or not it runs today: active ones (today's first), then paused ones,
+  // each with Edit and Pause or Resume. Then the weekly chores, each done this week or open.
+  function dayRoutinesCard(d) {
     var rt = d.routines || {};
     var seen = {}, list = [];
     function take(items, paused) {
@@ -4900,35 +5230,25 @@
     take(rt.today, false);
     take(rt.other, false);
     take(rt.paused, true);
+    var chores = arr(d.chores && d.chores.all);
     var add = el('button', 'btn', ['+ Add routine']);
     add.type = 'button';
     add.setAttribute('data-act', 'add-routine');
     add.addEventListener('click', function () { openItemEditor({ type: 'routine', opener: add }); });
-    return dayCard('My routines', { collapsed: true, count: list.length, body: [
-      list.length ? dayRows(list, function (r) {
-        var paused = r.status === 'paused';
-        return { cls: 'routine' + (paused ? ' paused' : ''), when: String(r.schedule || ''),
-          tag: paused ? 'paused' : null, actions: 'routine-manage' };
-      }) : dayEmpty('No routines yet.'),
-      el('div', 'day-card-actions', [add]),
-    ] });
-  }
-
-  // Right column: what to read, not what to do. Grok's brief leads; the things to
-  // act on (due, week, to-dos) all live in the left column.
-  function dayOpenColumn(d) {
-    var watching = arr(d.watching), projects = arr(d.projects), signals = arr(d.signals);
-    var cards = [
-      dayBriefCard(d),
-      dayCard('Watching', { collapsed: true, count: watching.length,
-        body: [watching.length ? dayRows(watching, { actions: 'lite' }) : dayEmpty('Nothing being watched.')] }),
-      dayMyRoutinesCard(d),
-      dayCard('Projects', { count: projects.length,
-        body: projects.length ? projects.map(dayProjectRow) : [dayEmpty('No active projects.')] }),
-    ];
-    if (signals.length) cards.push(dayCard('Signals waiting', { count: signals.length, body: signals.map(daySignalRow) }));
-    cards.push(dayEndOfDayCard(d));
-    return dayColumn('Brief and wrap-up', cards);
+    var body = [list.length ? dayRows(list, function (r) {
+      var paused = r.status === 'paused';
+      return { cls: 'routine' + (paused ? ' paused' : ''), when: String(r.schedule || ''),
+        tag: paused ? 'paused' : null, actions: 'routine-manage' };
+    }) : dayEmpty('No routines yet.')];
+    if (chores.length) {
+      body.push(el('h3', 'day-group', ['Weekly chores (' + chores.length + ')']));
+      body.push(dayRows(chores, function (c) {
+        return { cls: 'chore' + (c.done ? ' done' : ''), kind: false, when: c.done ? 'done this week' : 'open',
+          tag: c.missedLastWeek ? 'missed last week' : null, actions: c.done ? 'none' : 'chore' };
+      }));
+    }
+    body.push(el('div', 'day-card-actions', [add]));
+    return dayCard('Your routines', { cls: 'routines-card', count: list.length, body: body });
   }
 
   function renderDay(d, force) {
@@ -4944,49 +5264,69 @@
       + '|' + Math.floor(Date.now() / 300000);
     if (!force && sig === daySig) return;
     daySig = sig;
+    renderProjects(d);
 
-    var cols = Array.prototype.slice.call(dayBodyEl.querySelectorAll('.day-col'));
-    var colScroll = cols.map(function (c) { return c.scrollTop; });
-    var bodyScroll = dayBodyEl.scrollTop;
+    var colScroll = Array.prototype.map.call(dayBodyEl.querySelectorAll('.day-col'), function (c) { return c.scrollTop; });
+    var gridScroll = dayGridEl ? dayGridEl.scrollTop : 0;
     var ae = document.activeElement;   // a focused calendar day survives the rebuild
     var calFocus = ae && ae.classList && ae.classList.contains('cal-day') ? ae.getAttribute('data-date') : null;
     dayBodyEl.textContent = '';
+    calEl = null;
+    pickEl = null;
     if (!d.brain) {
       dayBodyEl.appendChild(stateBlock('empty', 'Shared brain not found',
         'Set "Shared brain path" in alfred-profile.md to the Google Drive "Second Brain" folder.'));
       return;
     }
-    var grid = el('div', 'day-grid', [dayTodayColumn(d), dayCalendarColumn(d), dayOpenColumn(d)]);
+    var watching = arr(d.watching);
+    var cols = [
+      dayColumn('Calendar and the picked day', 'left', [dayCalendarCard(d), dayPickedCard(d)]),
+      dayColumn('Today and this week', 'mid', [dayTodayCard(d), dayWeekCard(d)]),
+      dayColumn('Needs you, watching and your routines', 'right', [dayNeedsYouCard(d),
+        dayCard('Watching', { collapsed: true, count: watching.length,
+          body: [watching.length ? dayRows(watching, { actions: 'lite' }) : dayEmpty('Nothing being watched.')] }),
+        dayRoutinesCard(d)]),
+    ];
     if (!dayEntered) { // one entrance stagger, on first mount only (never on a data poll)
       dayEntered = true;
-      grid.classList.add('enter');
       var stagger = 0;
-      for (var row = 0; row < 6; row++) {
-        Array.prototype.forEach.call(grid.children, function (col) {
+      cols.forEach(function (col) { col.classList.add('enter'); });
+      for (var row = 0; row < 3; row++) {
+        cols.forEach(function (col) {
           var card = col.children[row];
           if (card) card.style.animationDelay = Math.min(stagger++, 9) * 45 + 'ms';
         });
       }
     }
-    dayBodyEl.appendChild(grid);
-    Array.prototype.forEach.call(grid.querySelectorAll('.day-col'), function (c, i) { c.scrollTop = colScroll[i] || 0; });
-    dayBodyEl.scrollTop = bodyScroll;
+    cols.forEach(function (col, i) {
+      dayBodyEl.appendChild(col);
+      col.scrollTop = colScroll[i] || 0;
+    });
+    if (dayGridEl) dayGridEl.scrollTop = gridScroll;
     if (calFocus) {
-      var again = grid.querySelector('.cal-day[data-date="' + calFocus + '"]');
+      var again = dayBodyEl.querySelector('.cal-day[data-date="' + calFocus + '"]');
       if (again) again.focus({ preventScroll: true });
     }
   }
 
   function dayLoadFailed() {
     daySummaryEl.classList.add('warn');
+    if (projectsSummaryEl) projectsSummaryEl.classList.add('warn');
     if (dayFeed) {
       daySummaryEl.textContent = 'Could not reach the shared brain; showing the last read.';
+      if (projectsSummaryEl) projectsSummaryEl.textContent = daySummaryEl.textContent;
       return;
     }
     daySummaryEl.textContent = 'Could not reach the shared brain.';
     dayBodyEl.textContent = '';
     dayBodyEl.appendChild(stateBlock('error', 'Could not load your day',
       'Alfred could not read the shared brain. It will try again shortly.', pollAssistant));
+    if (projectsBodyEl) {
+      projectsSummaryEl.textContent = daySummaryEl.textContent;
+      projectsBodyEl.textContent = '';
+      projectsBodyEl.appendChild(stateBlock('error', 'Could not load your projects',
+        'Alfred could not read the shared brain. It will try again shortly.', pollAssistant));
+    }
   }
 
   function pollAssistant() {
@@ -5003,13 +5343,13 @@
   }
 
   // /api/status (every 10s) carries a counter that moves when the brain changes on
-  // disk. Recorded on every view; re-read right away only when the Day pane is the
-  // one on screen, since entering Day always polls immediately anyway.
+  // disk. Recorded on every view; re-read right away only when the Day or Projects pane
+  // is the one on screen, since entering either always polls immediately anyway.
   function noteBrainVersion(v) {
     if (typeof v !== 'number') return;
     var changed = lastBrainVersion !== null && v !== lastBrainVersion;
     lastBrainVersion = v;
-    if (changed && currentView === 'day') pollAssistant();
+    if (changed && (currentView === 'day' || currentView === 'projects')) pollAssistant();
   }
 
   // --- The bench strip and the sign-in banner --------------------------------
@@ -5509,7 +5849,7 @@
   // "Command" for all of them (switchView's navActive computation below) —
   // the redirect this phase is a nav-highlight, not a real sheet-open (P7).
   var LEGACY_VIEW = { dev: 'workshop', auto: 'protocols', ops: 'enterprise', directory: 'roster', library: 'library' };
-  var VALID_VIEWS = ['day', 'brain', 'command'].concat(Object.keys(LEGACY_VIEW));
+  var VALID_VIEWS = ['day', 'projects', 'brain', 'command'].concat(Object.keys(LEGACY_VIEW));
   var viewGeneration = 0;
   var activePollTimers = [];
 
@@ -5543,13 +5883,14 @@
 
   var POLLS = {
     day:   [{ fn: pollAssistant, ms: DAY_POLL_MS }, { fn: pollBenchTick, ms: BENCH_POLL_MS }],
+    projects: [{ fn: pollAssistant, ms: DAY_POLL_MS }],
     brain: [],
     dev:   [{ fn: pollWorkshop, ms: 120000 }],
     auto:  [{ fn: pollProtocols, ms: 30000 }],
     ops:   [{ fn: pollUsage, ms: 60000 }],
     directory: [{ fn: pollDirectory, ms: 60000 }],
     library: [{ fn: pollLibrary, ms: 60000 }],
-    command: [],
+    command: [{ fn: pollBenchTick, ms: BENCH_POLL_MS }],
   };
 
   // Skipping ticks while hidden is right — a background tab should not poll —
@@ -5602,7 +5943,7 @@
   // 0.12 opacity and stops accepting pointer events so the new content grid
   // reads as the surface, not a canvas the user could still drag underneath.
   function applyCanvasPersistence(view) {
-    canvas.classList.toggle('canvas-ghost', view === 'dev' || view === 'auto' || view === 'directory' || view === 'library' || view === 'command' || view === 'day');
+    canvas.classList.toggle('canvas-ghost', view === 'dev' || view === 'auto' || view === 'directory' || view === 'library' || view === 'command' || view === 'day' || view === 'projects');
   }
 
   // dev/auto/directory/library now show as a floating .sheet over #sheet-scrim
@@ -5636,7 +5977,9 @@
     var paneCommand = document.getElementById('pane-command');
     var paneBrain = document.getElementById('pane-brain');
     var paneDay = document.getElementById('pane-day');
+    var paneProjects = document.getElementById('pane-projects');
     if (paneDay) paneDay.hidden = (view !== 'day');
+    if (paneProjects) paneProjects.hidden = (view !== 'projects');
     if (paneCommand) paneCommand.hidden = (view !== 'command');
     // 'ops' also shows this pane — it hosts the same #graph canvas, just with
     // .brain-head hidden (CSS) until Enterprise gets a real surface of its own.
@@ -5647,7 +5990,10 @@
     // (plan §4 P4, Atelier's reasoning). 'ops' already gets this via
     // ops-canvas above; kept separate since the two views hide different
     // reasons for the same rail collapse.
-    document.body.classList.toggle('no-flight', view === 'brain' || view === 'day');
+    document.body.classList.toggle('no-flight', view === 'brain' || view === 'day' || view === 'projects');
+    // The seat chips, the Ask bar and the consoles belong to the Terminals tab, and stay over the
+    // Brain and the sheets, where search is global. Day and Projects are the user's own pages.
+    document.body.classList.toggle('composer-off', view === 'day' || view === 'projects');
     // Dock icons highlight their own sheet (not navActive's command-collapse —
     // Library/Roster/Protocols/Enterprise/Workshop each get their own icon).
     document.querySelectorAll('.dock-btn').forEach(function (b) {
@@ -5669,13 +6015,13 @@
     // Recorded BEFORE currentView is overwritten below, and only when leaving
     // a real place (not another sheet) — closing a sheet must return to
     // Brain/Command, never to whichever sheet happened to be open before it.
-    if (currentView === 'day' || currentView === 'brain' || currentView === 'command') lastPlace = currentView;
+    if (currentView === 'day' || currentView === 'projects' || currentView === 'brain' || currentView === 'command') lastPlace = currentView;
     currentView = view;
     folderFilter = null; // a BRAIN-view folder filter has no meaning against org tiers or the new stages
     hoveredNode = null;
-    // The #top nav has two tabs (Day/Brain); the sheets and the Command view have no tab of
-    // their own, so a sheet lights up the place it floats over (lastPlace) rather than
-    // leaving the nav with nothing active.
+    // The #top nav has four tabs (Day/Projects/Brain/Terminals, the last being the Command
+    // view); the sheets have no tab of their own, so a sheet lights up the place it floats
+    // over (lastPlace) rather than leaving the nav with nothing active.
     var navActive = LEGACY_VIEW.hasOwnProperty(view) ? lastPlace : view;
     document.querySelectorAll('.view-btn').forEach(function (b) {
       var active = b.dataset.view === navActive;
@@ -5748,7 +6094,9 @@
   function getPaletteItems() {
     return [
       paletteAction('Day', '1', function () { switchView('day'); }),
-      paletteAction('Brain', '2', function () { switchView('brain'); }),
+      paletteAction('Projects', '2', function () { switchView('projects'); }),
+      paletteAction('Brain', '3', function () { switchView('brain'); }),
+      paletteAction('Terminals', '4', function () { switchView('command'); }),
       paletteAction('Library', 'L', function () { switchView('library'); }),
       paletteAction('Agents', 'R', function () { switchView('directory'); }),
       paletteAction('Instructions', 'P', function () { switchView('auto'); }),
@@ -6737,18 +7085,18 @@
   // focus is in a text input (except Esc, which always applies).
   // ============================================================
   var KB_MAP = [
-    ['1 / 2', 'Day / Brain'],
+    ['1 / 2 / 3 / 4', 'Day / Projects / Brain / Terminals'],
     ['L / R / P / E / W', 'Open the Library / Roster / Protocols / Enterprise / Workshop sheet'],
     ['Ctrl+K', 'Command palette — jump to any place, sheet or action'],
-    ['/', 'Focus the composer'],
+    ['/', 'Focus the Ask bar (from Day or Projects, opens Terminals first)'],
     ['[', 'Collapse/expand the Bench'],
     ['\\', 'Collapse/expand the In Flight rail'],
     ['Shift+Enter', 'New line in the composer (Enter sends)'],
     ['f', "Focus the active sheet's filter chips"],
     ['Esc', 'Close: dialog -> palette -> sheet -> panel -> toast -> blur, in that order'],
     ['?', 'This help overlay'],
-    ['Ctrl+1-9', 'Command Center: focus the Nth open console tab'],
-    ['Ctrl+\\', 'Command Center: toggle grid view of every open console'],
+    ['Ctrl+1-9', 'Terminals: focus the Nth open console tab'],
+    ['Ctrl+\\', 'Terminals: toggle grid view of every open console'],
   ];
   var kbScrim = document.getElementById('kb-scrim');
   var kbModal = document.getElementById('kb-modal');
@@ -7126,7 +7474,8 @@
   // plus Grok's brief read from the shared brain. One entry point for the Day
   // card's Listen button and the palette; `trigger` is the button to disable
   // while the server builds the audio, or null.
-  function runMorningBrief(trigger) {
+  // beforeOpen: called just before the brief's dialog opens (the Day view's own brief dialog closes then).
+  function runMorningBrief(trigger, beforeOpen) {
     var out = document.getElementById('morning-brief-status');
     function say(msg) { if (out) { out.hidden = !msg; out.textContent = msg || ''; } }
     if (trigger) trigger.disabled = true;
@@ -7143,6 +7492,7 @@
       // not the answer panel (a 12s-fade Q&A strip) and not a toast (no
       // scrolling). The help dialog already has a scrollable body, a close
       // button and Esc-to-dismiss, so the brief reuses it.
+      if (beforeOpen) beforeOpen();
       openMorningBriefModal(r.data);
     }).catch(function () { if (trigger) trigger.disabled = false; say('could not reach the server'); toast('could not reach the server', 'critical', { title: 'Morning Brief' }); });
   }
@@ -7215,12 +7565,18 @@
     if (e.key === '?') { e.preventDefault(); openKbHelp(); return; }
     if (!e.ctrlKey && !e.metaKey && !e.altKey) {
       if (e.key === '1') { switchView('day'); return; }
-      if (e.key === '2') { switchView('brain'); return; }
-      if (e.key === '3') { switchView('command'); return; } // not in the nav or the help: still reachable
+      if (e.key === '2') { switchView('projects'); return; }
+      if (e.key === '3') { switchView('brain'); return; }
+      if (e.key === '4') { switchView('command'); return; }
       var sheetKey = SHEET_KEY[e.key.toLowerCase()];
       if (sheetKey) { switchView(sheetKey); return; }
     }
-    if (e.key === '/') { e.preventDefault(); document.getElementById('search-input').focus(); return; }
+    if (e.key === '/') {
+      e.preventDefault();
+      if (document.body.classList.contains('composer-off')) switchView('command');
+      document.getElementById('search-input').focus();
+      return;
+    }
     if (e.key === '[') { e.preventDefault(); toggleBenchCollapsed(); return; }
     // Plain \ only — Ctrl+\ is ccHandleGlobalShortcut's grid-mode toggle
     // (checked above) and must never fall through to this even when it
@@ -9217,7 +9573,7 @@
   });
   window.addEventListener('resize', function () { closeSeatPopover(); });
 
-  // --- External terminal checklist (top-left #ext-term-btn) --------------
+  // --- External terminal checklist (the Terminals tab's #ext-term-btn) ----
   // Pick any combo — one seat, several, or all of them — and open exactly
   // those side by side in a fresh Windows Terminal window via the same
   // /api/command-center/open the old bottom-bar "Open all" button used, just

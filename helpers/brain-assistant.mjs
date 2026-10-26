@@ -391,6 +391,8 @@ function needsYou(brain, signals) {
 // Calendar events are added by the dashboards from feed.calendar, which both of them attach.
 function agenda(upcoming, routines, chores, now) {
   const monday = mondayOf(now.date);
+  // A later week starts fresh: the chore is open there whatever this week's state is.
+  const fresh = (c, due) => ({ ...c, due, done: false, missedLastWeek: false, closedOn: null });
   const days = [];
   for (let n = 1; n <= 7; n++) {
     const date = addDays(now.date, n);
@@ -399,9 +401,11 @@ function agenda(upcoming, routines, chores, now) {
     days.push({ date, weekday: wd,
       items: upcoming.filter((i) => i.due === date),
       routines: routines.filter((r) => routineDueToday(r.schedule, date) === true),
-      chores: chores.filter((c) => c.day === wd && !(sameWeek && c.done)) });
+      chores: chores.filter((c) => c.day === wd && !(sameWeek && c.done)).map((c) => (sameWeek ? c : fresh(c, date))) });
   }
   const nextMonday = mondayOf(addDays(now.date, 1));
+  const by = addDays(nextMonday, 6);
+  const anytime = chores.filter((c) => !c.day);
   return {
     chores: {
       due: chores.filter((c) => !c.done && c.due === now.date),
@@ -409,7 +413,7 @@ function agenda(upcoming, routines, chores, now) {
       done: chores.filter((c) => c.done && c.closedOn === now.date),
     },
     week: { from: addDays(now.date, 1), to: addDays(now.date, 7), days,
-      anytime: { by: addDays(nextMonday, 6), chores: chores.filter((c) => !c.day && !(nextMonday === monday && c.done)) } },
+      anytime: { by, chores: nextMonday === monday ? anytime.filter((c) => !c.done) : anytime.map((c) => fresh(c, by)) } },
   };
 }
 
