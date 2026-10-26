@@ -2718,7 +2718,7 @@
          wrapper and default-collapsed state changed. -->
     <div id="composer-tools" class="composer-tools">
       <span id="cc-summary" class="panel-help"></span>
-      <!-- "Open all" moved to the top-left #ext-term-btn checklist (its own
+      <!-- "Open all" moved to the Terminals tab's #ext-term-btn checklist (its own
            seat selection, independent of the council ticks below) so opening
            a side-by-side external window is never tangled with council
            membership. -->
@@ -9456,7 +9456,7 @@
   // per-use approval providers.json demands for seats that leave the machine.
   var ccSeats = [];
   var ccChecked = {};
-  // Separate selection for the top-left "Open Terminals" checklist — which
+  // Separate selection for the Terminals tab's "Open Terminals" checklist — which
   // seats to launch side by side in an external Windows Terminal window.
   // Deliberately its own state, not ccChecked: ticking a seat into the
   // council should never also queue it for an external window, or vice
@@ -10360,7 +10360,7 @@
 
   document.getElementById('cc-refresh').addEventListener('click', function () { refreshCommandCenter(true); });
   // "Open all" (this same /api/command-center/open call, driven by ccSelected()
-  // i.e. the council ticks) moved to the top-left #ext-term-btn checklist,
+  // i.e. the council ticks) moved to the Terminals tab's #ext-term-btn checklist,
   // which drives the same endpoint off its own ccExtChecked selection instead
   // — see renderExtTermMenu() above.
 
