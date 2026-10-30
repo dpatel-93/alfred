@@ -2,13 +2,17 @@
 
 Alfred as a Windows app: the dashboard in its own window, and, when that window is minimised
 or closed, a floating brain you can drag anywhere — the same brain as the dashboard's Brain
-tab, animated. Its badge counts what is left today; it pulses rose when something is late or
-waiting on you. Click it to bring the dashboard back.
+tab, animated. Its badge counts what is left today and turns rose (and the pulses quicken)
+when something is late or waiting on you. Click it to bring the dashboard back.
 
 - **Right-click the brain** (or the tray icon): Open Alfred, Tell Alfred…, Morning brief,
-  Keep on top of other windows (on/off), Size (small to extra large), Put the brain back in
-  the corner, Start with Windows (installed app only), Quit Alfred.
-- **Resize**: drag the grip in the brain's bottom-right corner, or pick a size.
+  Keep on top of other windows (on/off), Size (small to extra large), Save this spot and
+  size, Go back to the saved spot, Clear the saved spot and size, Start with Windows
+  (installed app only), Quit Alfred.
+- **Resize**: drag the grip in the brain's bottom-right corner (120 to 800 px), or pick a size.
+- **Saved spot**: dragging and resizing are not remembered on their own. "Save this spot
+  and size" makes the brain come back there every time (it falls back to the corner if that
+  screen is gone); "Clear" forgets it and puts the brain back in the corner at the default size.
 - **The engine**: the app uses Alfred's engine (`brain/server.mjs`, local to this PC on
   127.0.0.1) if it is already running, and starts it otherwise; quitting stops only an
   engine the app started. Sign-ins (Claude, Grok, Gemini, Drive for Desktop) are unchanged:
