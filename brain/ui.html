@@ -340,8 +340,8 @@
   .composer-picker-empty { padding: 6px 8px; font-size: 11px; color: var(--text-dim); }
   .composer-hint { font-size: 10px; letter-spacing: .04em; color: var(--text-dim); opacity: .8; }
 
-  /* Results surface — search hits, the spoken answer, and the Council's
-     output all render here, stacked directly above the composer. Grown out
+  /* Results surface — search hits and the spoken answer
+     render here, stacked directly above the composer. Grown out
      of the old left-edge #ask-drawer (contents/ids untouched); it now sits
      in normal flow inside #composer-dock and collapses to ~0 height when
      every child is hidden, rather than sliding in from off-screen. */
@@ -1517,10 +1517,10 @@
   .btn:disabled { opacity: .4; cursor: not-allowed; }
   /* Focus-visible rings (plan P9) — the DESIGN-UI-SYSTEM §0 pattern
      (:focus-visible only, 2px solid var(--blue)) applied to every control
-     introduced across P1-P8: dock/view tabs, seats, sheet close, filter and
-     route chips, the composer, and generic buttons. --blue is used rather
+     introduced across P1-P8: dock/view tabs, sheet close, filter chips,
+     the composer, and generic buttons. --blue is used rather
      than --accent-primary/--focus so the ring never blends into whatever
-     seat colour the app is currently tinted to. Rows/tabs use a -2px inset
+     accent colour the app is currently tinted to. Rows/tabs use a -2px inset
      offset (they sit flush against a strip edge); free-standing controls use
      the standard +2px outward offset. */
   .btn:focus-visible, .icon-btn:focus-visible, .dock-btn:focus-visible,
@@ -8830,8 +8830,8 @@
   // ============================================================
   // The terminal panel that used to front this bridge is gone, and so is the
   // Claude session channel it fed. What remains is agents, interns, settings,
-  // reindex, and one button that opens a REAL console. Nothing here pipes a
-  // command or a message through the HUD any more.
+  // reindex, and one button that opens a REAL console (Open AI terminal below).
+  // Nothing here pipes a command or a message through the HUD any more.
   // The server template-injects the real token into this placeholder when it
   // serves the page. Opening ui.html straight off disk leaves the placeholder
   // in place and every bridge call 403s — the correct, safe failure.
