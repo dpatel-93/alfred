@@ -332,14 +332,15 @@ if (!app.requestSingleInstanceLock()) {
     createWidget();
     createTray();
     if (STARTED_HIDDEN) toWidget(); else main.show();
-    try {
-      await ensureEngine();
-      await main.loadURL(`${ENGINE_URL}/`);
-    } catch (err) {
-      await main.loadFile(path.join(HERE, 'loading.html'), { query: { error: err.message } });
-    }
     // Every 30 seconds; every few while the engine isn't answering yet (it is still starting).
     const loop = async () => { await poll(); setTimeout(loop, status.online ? POLL_MS : RETRY_MS); };
-    loop();
+    try {
+      await ensureEngine();
+      loop();   // the brain lights up as soon as the engine answers, not after the dashboard has loaded
+      await main.loadURL(`${ENGINE_URL}/`);
+    } catch (err) {
+      loop();
+      await main.loadFile(path.join(HERE, 'loading.html'), { query: { error: err.message } });
+    }
   });
 }

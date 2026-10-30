@@ -171,8 +171,11 @@ async function secondRun() {
       win.setAlwaysOnTop(true, 'floating');
       return win.isAlwaysOnTop();
     }));
-    await until(up, 60000);
-    await sleep(1500);
+    chk('the brain lights up once the engine answers (not left grey)', await until(() => v.widgetPage().evaluate(() => {
+      const b = document.getElementById('badge');
+      return !b.hidden && b.textContent === '1';
+    }), 60000), await v.widgetPage().evaluate(() => document.body.title));
+    await sleep(800);
     await v.widgetPage().screenshot({ path: path.join(SHOTS, 'desktop-widget-large.png'), omitBackground: true });
 
     await v.widgetPage().evaluate(() => window.alfred.send('widget:clear-home'));
