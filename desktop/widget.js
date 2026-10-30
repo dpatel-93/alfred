@@ -2,8 +2,8 @@
 // The floating brain: the same brain as the dashboard's Brain tab (the outline, the folds
 // and the six regions of the Second Brain, in their colours), alive: each region breathes
 // on its own beat, a region whose notes changed recently ripples, neurons twinkle and
-// signals run between them. The outline pulses rose when something is late or waiting on
-// the user, and the badge says how much is left today. Grey when the engine is away.
+// signals run between them, faster when something is late or waiting on the user (the
+// badge turns rose then, and says how much is left today). Grey when the engine is away.
 // Gestures: drag to move, drag the corner grip to resize, click to open Alfred,
 // right-click for the menu. widget.html?size=512&still=1 draws one still frame (the icon).
 // ---------------------------------------------------------------------------
@@ -41,7 +41,6 @@
     { key: 'System', folders: ['System', '(root)', 'Claude-Code'], x: -0.22, y: 0.62, r: 0.36, color: '#ff7a3d' },
   ];
   const WIRE = '130,217,255';   // the page's wire colour: its ice pulled toward its cyan
-  const ROSE = '255,77,109';
   const rgb = (hex) => { const v = parseInt(hex.slice(1), 16); return `${(v >> 16) & 255},${(v >> 8) & 255},${v & 255}`; };
   LOBES.forEach((L) => { L.rgb = rgb(L.color); });
 
@@ -129,7 +128,6 @@
     const R = size * 0.41;                 // the brain's radius in pixels
     const cx = size / 2, cy = size / 2 + R * 0.02;
     const off = mood === 'offline';
-    const alertBeat = mood === 'alert' ? 0.5 + 0.5 * Math.sin(t / 420) : 0;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, size, size);
 
@@ -213,11 +211,10 @@
     ctx.lineWidth = Math.max(0.8, size / 180) * px;
     ctx.strokeStyle = `rgba(${WIRE},0.26)`;
     ctx.stroke(folds);
-    const edge = alertBeat ? ROSE : WIRE;
-    ctx.lineWidth = Math.max(1.4, size / 110) * px;
-    ctx.strokeStyle = `rgba(${edge},${(0.5 + 0.35 * alertBeat).toFixed(3)})`;
-    ctx.shadowColor = `rgba(${edge},${(0.55 + 0.4 * alertBeat).toFixed(3)})`;
-    ctx.shadowBlur = Math.max(8, size / 14);
+    ctx.lineWidth = Math.max(1.2, size / 140) * px;
+    ctx.strokeStyle = `rgba(${WIRE},0.42)`;
+    ctx.shadowColor = `rgba(${WIRE},0.45)`;
+    ctx.shadowBlur = Math.max(6, size / 18);
     ctx.stroke(outline);
     ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;

@@ -23,9 +23,11 @@ const ENGINE_LOG = path.join(app.getPath('userData'), 'engine.log');
 const ICON = path.join(HERE, 'build', 'icon.png');
 const SIZES = [['Small', 160], ['Medium', 220], ['Large', 320], ['Extra large', 440]];
 const MIN_SIZE = 120;
-const MAX_SIZE = 560;
+const MAX_SIZE = 800;
+const DEFAULT_SIZE = 220;
 const EDGE = 24;
 const POLL_MS = 30 * 1000;
+const RETRY_MS = 4 * 1000;
 const ENGINE_WAIT_MS = 90 * 1000;
 const STARTED_HIDDEN = process.argv.includes('--hidden');
 
@@ -41,7 +43,17 @@ function readState() {
   try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch { return {}; }
 }
 let state = readState();
-const widgetSize = () => Math.min(MAX_SIZE, Math.max(MIN_SIZE, Number(state.widgetSize) || 220));
+// The brain's saved spot ("home"): where it opens, and where "Go back" takes it. Moving or
+// resizing it doesn't change home until the user saves from the menu. The first version
+// saved every move (widget, widgetSize); that last spot becomes the home once.
+if (!state.home && state.widget) {
+  state = { ...state, home: { x: state.widget.x, y: state.widget.y, size: Number(state.widgetSize) || DEFAULT_SIZE } };
+  delete state.widget;
+  delete state.widgetSize;
+}
+const clampSize = (s) => Math.round(Math.min(MAX_SIZE, Math.max(MIN_SIZE, Number(s) || DEFAULT_SIZE)));
+const homeSize = () => clampSize(state.home?.size);
+const currentSize = () => (widget ? widget.getBounds().width : homeSize());
 const pinned = () => state.pinned !== false;   // on top of other windows unless the user turned it off
 let saveTimer = null;
 function saveState(patch) {
@@ -154,15 +166,21 @@ async function onDayPage(script) {
 // --- The floating brain ---
 // A square window drawn edge to edge by widget.js. It sizes itself (the grip in its corner,
 // or the Size menu) rather than through Windows' frame, which a transparent window lacks.
-function defaultSpot(size = widgetSize()) {
+function defaultSpot(size = DEFAULT_SIZE) {
   const wa = screen.getPrimaryDisplay().workArea;
   return { x: wa.x + wa.width - size - EDGE, y: wa.y + wa.height - size - EDGE };
 }
 
+// Home if it is saved and still on a connected screen; the primary screen's corner otherwise.
+function homeSpot() {
+  const size = homeSize();
+  const h = state.home;
+  return h && onScreen({ x: h.x, y: h.y, width: size, height: size }) ? { x: h.x, y: h.y, size } : { ...defaultSpot(size), size };
+}
+
 function createWidget() {
-  const size = widgetSize();
-  const saved = state.widget;
-  const spot = saved && onScreen({ ...saved, width: size, height: size }) ? saved : defaultSpot(size);
+  const { x, y, size } = homeSpot();
+  const spot = { x, y };
   widget = new BrowserWindow({
     x: spot.x, y: spot.y, width: size, height: size, show: false,
     frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: false, resizable: false,
@@ -176,14 +194,30 @@ function createWidget() {
   widget.on('close', (e) => { if (!quitting) { e.preventDefault(); widget.hide(); } });
 }
 
-function setWidgetSize(size, keepCentre = true) {
+function setWidgetSize(size) {
   if (!widget) return;
-  const s = Math.round(Math.min(MAX_SIZE, Math.max(MIN_SIZE, size)));
+  const s = clampSize(size);
   const b = widget.getBounds();
-  const x = keepCentre ? Math.round(b.x + (b.width - s) / 2) : b.x;
-  const y = keepCentre ? Math.round(b.y + (b.height - s) / 2) : b.y;
-  widget.setBounds({ x, y, width: s, height: s });
-  saveState({ widgetSize: s, widget: { x, y } });
+  widget.setBounds({ x: Math.round(b.x + (b.width - s) / 2), y: Math.round(b.y + (b.height - s) / 2), width: s, height: s });
+}
+
+const atHome = () => {
+  const b = widget?.getBounds();
+  return !!(b && state.home && b.x === state.home.x && b.y === state.home.y && b.width === homeSize());
+};
+function saveHome() {
+  if (!widget) return;
+  const b = widget.getBounds();
+  saveState({ home: { x: b.x, y: b.y, size: b.width } });
+}
+function clearHome() {
+  saveState({ home: undefined });
+  const spot = defaultSpot(DEFAULT_SIZE);
+  widget?.setBounds({ ...spot, width: DEFAULT_SIZE, height: DEFAULT_SIZE });
+}
+function goHome() {
+  const { x, y, size } = homeSpot();
+  widget?.setBounds({ x, y, width: size, height: size });
 }
 
 function setPinned(on) {
@@ -201,12 +235,7 @@ ipcMain.on('widget:drag', () => {
   const now = screen.getCursorScreenPoint();
   widget.setBounds({ x: drag.x + now.x - drag.from.x, y: drag.y + now.y - drag.from.y, width: drag.width, height: drag.height });
 });
-ipcMain.on('widget:drag-end', () => {
-  if (!widget || !drag) return;
-  drag = null;
-  const [x, y] = widget.getPosition();
-  saveState({ widget: { x, y } });
-});
+ipcMain.on('widget:drag-end', () => { drag = null; });
 
 // The grip resizes from the top-left corner, keeping the window square.
 let sizing = null;
@@ -221,12 +250,9 @@ ipcMain.on('widget:resize', () => {
   const s = Math.round(Math.min(MAX_SIZE, Math.max(MIN_SIZE, sizing.width + grow)));
   widget.setBounds({ x: sizing.x, y: sizing.y, width: s, height: s });
 });
-ipcMain.on('widget:resize-end', () => {
-  if (!widget || !sizing) return;
-  sizing = null;
-  const b = widget.getBounds();
-  saveState({ widgetSize: b.width, widget: { x: b.x, y: b.y } });
-});
+ipcMain.on('widget:resize-end', () => { sizing = null; });
+ipcMain.on('widget:save-home', () => saveHome());
+ipcMain.on('widget:clear-home', () => clearHome());
 ipcMain.on('widget:open', () => showMain());
 ipcMain.on('widget:menu', () => menu().popup({ window: widget }));
 
@@ -243,9 +269,12 @@ function menu() {
     { type: 'separator' },
     { label: 'Keep on top of other windows', type: 'checkbox', checked: pinned(), click: (item) => setPinned(item.checked) },
     { label: 'Size', submenu: SIZES.map(([label, px]) => ({
-      label, type: 'radio', checked: widgetSize() === px, click: () => setWidgetSize(px),
+      label, type: 'radio', checked: currentSize() === px, click: () => setWidgetSize(px),
     })) },
-    { label: 'Put the brain back in the corner', click: () => { const s = defaultSpot(); widget?.setPosition(s.x, s.y); saveState({ widget: s }); } },
+    { type: 'separator' },
+    atHome() ? { label: 'This spot and size are saved', enabled: false } : { label: 'Save this spot and size', click: () => saveHome() },
+    { label: state.home ? 'Go back to the saved spot' : 'Put the brain back in the corner', click: () => goHome() },
+    { label: 'Clear the saved spot and size', enabled: !!state.home, click: () => clearHome() },
     ...login,
     { type: 'separator' },
     { label: 'Quit Alfred', click: () => { quitting = true; app.quit(); } },
@@ -309,7 +338,8 @@ if (!app.requestSingleInstanceLock()) {
     } catch (err) {
       await main.loadFile(path.join(HERE, 'loading.html'), { query: { error: err.message } });
     }
-    await poll();
-    setInterval(poll, POLL_MS);
+    // Every 30 seconds; every few while the engine isn't answering yet (it is still starting).
+    const loop = async () => { await poll(); setTimeout(loop, status.online ? POLL_MS : RETRY_MS); };
+    loop();
   });
 }

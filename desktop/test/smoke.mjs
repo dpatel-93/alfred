@@ -149,19 +149,22 @@ async function firstRun() {
   }
 }
 
-// --- Run 2: started with Windows (hidden), a saved size, "keep on top" off ---
+// --- Run 2: started with Windows (hidden), the first version's saved spot, "keep on top" off ---
 async function secondRun() {
   const userData = path.join(TMP, 'userData2');
+  const stateFile = path.join(userData, 'state.json');
   fs.mkdirSync(userData, { recursive: true });
-  fs.writeFileSync(path.join(userData, 'state.json'), JSON.stringify({ widgetSize: 320, pinned: false }));
+  fs.writeFileSync(stateFile, JSON.stringify({ widget: { x: 100, y: 100 }, widgetSize: 320, pinned: false }));
   const app = await launch(userData, ['--hidden']);
   const v = views(app);
+  const saved = () => { try { return JSON.parse(fs.readFileSync(stateFile, 'utf8')); } catch { return {}; } };
   try {
-    console.log('\nSaved size and pin');
+    console.log('\nSaved spot, size and pin');
     chk('started with Windows, only the brain shows', await until(async () => (await v.widget())?.visible && !(await v.main())?.visible, 15000),
       JSON.stringify(await v.windows()));
     const w = await v.widget();
-    chk('the saved size is used (320 px)', w.bounds.width === 320 && w.bounds.height === 320, JSON.stringify(w.bounds));
+    chk('the spot and size saved by the first version are kept (320 px at 100,100)',
+      w.bounds.width === 320 && w.bounds.height === 320 && w.bounds.x === 100 && w.bounds.y === 100, JSON.stringify(w.bounds));
     chk('"keep on top" off: the brain sits among other windows', w.onTop === false, JSON.stringify(w));
     chk('turning "keep on top" back on applies at once', await app.evaluate(({ BrowserWindow }) => {
       const win = BrowserWindow.getAllWindows().find((x) => /widget\.html/.test(x.webContents.getURL()));
@@ -171,6 +174,21 @@ async function secondRun() {
     await until(up, 60000);
     await sleep(1500);
     await v.widgetPage().screenshot({ path: path.join(SHOTS, 'desktop-widget-large.png'), omitBackground: true });
+
+    await v.widgetPage().evaluate(() => window.alfred.send('widget:clear-home'));
+    chk('clearing the saved spot puts the brain back in the corner at the default size, and forgets it',
+      await until(async () => {
+        const b = (await v.widget()).bounds;
+        return b.width === 220 && b.x > 300 && !saved().home;
+      }, 5000), JSON.stringify({ bounds: (await v.widget()).bounds, state: saved() }));
+    await app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows().find((x) => /widget\.html/.test(x.webContents.getURL())).setBounds({ x: 140, y: 120, width: 260, height: 260 });
+    });
+    await v.widgetPage().evaluate(() => window.alfred.send('widget:save-home'));
+    chk('saving keeps this spot and size for next time', await until(() => {
+      const h = saved().home;
+      return !!h && h.x === 140 && h.y === 120 && h.size === 260;
+    }, 5000), JSON.stringify(saved()));
     await quit(app);
     await until(async () => !(await up()), 15000);
   } catch (err) {
