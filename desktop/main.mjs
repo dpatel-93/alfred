@@ -21,7 +21,9 @@ const TOKEN_FILE = process.env.ALFRED_TOKEN_FILE || path.join(os.homedir(), '.cl
 const STATE_FILE = path.join(app.getPath('userData'), 'state.json');
 const ENGINE_LOG = path.join(app.getPath('userData'), 'engine.log');
 const ICON = path.join(HERE, 'build', 'icon.png');
-const WIDGET_SIZE = 132;
+const SIZES = [['Small', 160], ['Medium', 220], ['Large', 320], ['Extra large', 440]];
+const MIN_SIZE = 120;
+const MAX_SIZE = 560;
 const EDGE = 24;
 const POLL_MS = 30 * 1000;
 const ENGINE_WAIT_MS = 90 * 1000;
@@ -39,6 +41,8 @@ function readState() {
   try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch { return {}; }
 }
 let state = readState();
+const widgetSize = () => Math.min(MAX_SIZE, Math.max(MIN_SIZE, Number(state.widgetSize) || 220));
+const pinned = () => state.pinned !== false;   // on top of other windows unless the user turned it off
 let saveTimer = null;
 function saveState(patch) {
   state = { ...state, ...patch };
@@ -136,7 +140,7 @@ function showMain() {
 
 function toWidget() {
   main?.hide();
-  if (widget) { widget.showInactive(); widget.setAlwaysOnTop(true, 'floating'); }
+  if (widget) { widget.setAlwaysOnTop(pinned(), 'floating'); widget.showInactive(); }
 }
 
 // Runs a step on the dashboard's Day page once it is showing.
@@ -148,43 +152,80 @@ async function onDayPage(script) {
 }
 
 // --- The floating brain ---
-function defaultSpot() {
+// A square window drawn edge to edge by widget.js. It sizes itself (the grip in its corner,
+// or the Size menu) rather than through Windows' frame, which a transparent window lacks.
+function defaultSpot(size = widgetSize()) {
   const wa = screen.getPrimaryDisplay().workArea;
-  return { x: wa.x + wa.width - WIDGET_SIZE - EDGE, y: wa.y + wa.height - WIDGET_SIZE - EDGE };
+  return { x: wa.x + wa.width - size - EDGE, y: wa.y + wa.height - size - EDGE };
 }
 
 function createWidget() {
+  const size = widgetSize();
   const saved = state.widget;
-  const spot = saved && onScreen({ ...saved, width: WIDGET_SIZE, height: WIDGET_SIZE }) ? saved : defaultSpot();
+  const spot = saved && onScreen({ ...saved, width: size, height: size }) ? saved : defaultSpot(size);
   widget = new BrowserWindow({
-    x: spot.x, y: spot.y, width: WIDGET_SIZE, height: WIDGET_SIZE, show: false,
+    x: spot.x, y: spot.y, width: size, height: size, show: false,
     frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: false, resizable: false,
-    minimizable: false, maximizable: false, fullscreenable: false, skipTaskbar: true, alwaysOnTop: true,
+    minimizable: false, maximizable: false, fullscreenable: false, skipTaskbar: true, alwaysOnTop: pinned(),
     title: 'Alfred', icon: ICON,
     webPreferences: { preload: path.join(HERE, 'preload.cjs'), contextIsolation: true, sandbox: true },
   });
-  widget.setAlwaysOnTop(true, 'floating');
+  widget.setAlwaysOnTop(pinned(), 'floating');
   widget.loadFile(path.join(HERE, 'widget.html'));
   widget.webContents.on('did-finish-load', () => widget.webContents.send('widget:status', status));
   widget.on('close', (e) => { if (!quitting) { e.preventDefault(); widget.hide(); } });
 }
 
+function setWidgetSize(size, keepCentre = true) {
+  if (!widget) return;
+  const s = Math.round(Math.min(MAX_SIZE, Math.max(MIN_SIZE, size)));
+  const b = widget.getBounds();
+  const x = keepCentre ? Math.round(b.x + (b.width - s) / 2) : b.x;
+  const y = keepCentre ? Math.round(b.y + (b.height - s) / 2) : b.y;
+  widget.setBounds({ x, y, width: s, height: s });
+  saveState({ widgetSize: s, widget: { x, y } });
+}
+
+function setPinned(on) {
+  saveState({ pinned: on });
+  widget?.setAlwaysOnTop(on, 'floating');
+}
+
 let drag = null;
 ipcMain.on('widget:drag-start', () => {
   if (!widget) return;
-  const [x, y] = widget.getPosition();
-  drag = { x, y, from: screen.getCursorScreenPoint() };
+  drag = { ...widget.getBounds(), from: screen.getCursorScreenPoint() };
 });
 ipcMain.on('widget:drag', () => {
   if (!widget || !drag) return;
   const now = screen.getCursorScreenPoint();
-  widget.setBounds({ x: drag.x + now.x - drag.from.x, y: drag.y + now.y - drag.from.y, width: WIDGET_SIZE, height: WIDGET_SIZE });
+  widget.setBounds({ x: drag.x + now.x - drag.from.x, y: drag.y + now.y - drag.from.y, width: drag.width, height: drag.height });
 });
 ipcMain.on('widget:drag-end', () => {
   if (!widget || !drag) return;
   drag = null;
   const [x, y] = widget.getPosition();
   saveState({ widget: { x, y } });
+});
+
+// The grip resizes from the top-left corner, keeping the window square.
+let sizing = null;
+ipcMain.on('widget:resize-start', () => {
+  if (!widget) return;
+  sizing = { ...widget.getBounds(), from: screen.getCursorScreenPoint() };
+});
+ipcMain.on('widget:resize', () => {
+  if (!widget || !sizing) return;
+  const now = screen.getCursorScreenPoint();
+  const grow = Math.max(now.x - sizing.from.x, now.y - sizing.from.y);
+  const s = Math.round(Math.min(MAX_SIZE, Math.max(MIN_SIZE, sizing.width + grow)));
+  widget.setBounds({ x: sizing.x, y: sizing.y, width: s, height: s });
+});
+ipcMain.on('widget:resize-end', () => {
+  if (!widget || !sizing) return;
+  sizing = null;
+  const b = widget.getBounds();
+  saveState({ widgetSize: b.width, widget: { x: b.x, y: b.y } });
 });
 ipcMain.on('widget:open', () => showMain());
 ipcMain.on('widget:menu', () => menu().popup({ window: widget }));
@@ -200,8 +241,12 @@ function menu() {
     { label: 'Tell Alfred…', click: () => onDayPage("const i = document.getElementById('tell-alfred-input'); if (i) { i.scrollIntoView({ block: 'center' }); i.focus(); }") },
     { label: 'Morning brief', click: () => onDayPage("const b = document.getElementById('day-brief'); if (b) b.click();") },
     { type: 'separator' },
-    ...login,
+    { label: 'Keep on top of other windows', type: 'checkbox', checked: pinned(), click: (item) => setPinned(item.checked) },
+    { label: 'Size', submenu: SIZES.map(([label, px]) => ({
+      label, type: 'radio', checked: widgetSize() === px, click: () => setWidgetSize(px),
+    })) },
     { label: 'Put the brain back in the corner', click: () => { const s = defaultSpot(); widget?.setPosition(s.x, s.y); saveState({ widget: s }); } },
+    ...login,
     { type: 'separator' },
     { label: 'Quit Alfred', click: () => { quitting = true; app.quit(); } },
   ]);
@@ -229,9 +274,11 @@ async function poll() {
     if (late) lines.push(`${late} late`);
     if (needs) lines.push(`${needs} waiting on you`);
     if (next) lines.push(`Next: ${next.title}`);
-    status = { online: true, count: left + needs, attention: late + needs > 0, lines };
+    // Which regions of the brain had notes change lately, so they ripple as on the Brain tab.
+    const s = await fetch(`${ENGINE_URL}/api/status`, { signal: AbortSignal.timeout(10000) }).then((x) => x.json()).catch(() => ({}));
+    status = { online: true, count: left + needs, attention: late + needs > 0, lines, activity: s.brainActivity?.folders || {} };
   } catch {
-    status = { online: false, count: 0, attention: false, lines: ["Alfred's engine isn't answering"] };
+    status = { online: false, count: 0, attention: false, lines: ["Alfred's engine isn't answering"], activity: {} };
   }
   widget?.webContents.send('widget:status', status);
   tray?.setToolTip(['Alfred', ...status.lines].join('\n'));
