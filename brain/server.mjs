@@ -10,8 +10,6 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { WebSocketServer } from 'ws';
-import pty from 'node-pty';
 import { buildIndex, linkKey, noteKey, resolveVaultDir, isSkippedDir, vaultExcludes, isExcludedPath } from './index-vault.mjs';
 import { composeGreeting, composeGreetingLines, parseMcpList } from './greeting.mjs';
 import { composeMorningBriefParagraphs } from './morning-brief.mjs';
@@ -62,27 +60,6 @@ const AGENTS_DIR = path.join(os.homedir(), '.claude', 'skills', 'orgagent', 'ref
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 const PROFILE_PATH = path.join(os.homedir(), '.claude', 'alfred-profile.md');
 const ORG_ACTIVE_MS = 20 * 1000;
-
-// An edge on the org chart only GLOWS when both of its ends are active, and "active" means
-// "wrote to its transcript in the last ORG_ACTIVE_MS". In a real delegation that is almost
-// never true of the whole chain at one instant: the employee is working while the manager
-// sits waiting, so the chain is structurally connected (buildSessionNode backfills idle
-// parents) but only one link lights at a time. You therefore cannot photograph a five-level
-// delegation, and more importantly you cannot SEE that your org actually wired up.
-//
-// While an orchestration self-test is running, the org views widen that window to cover the
-// whole run. Nothing is faked: every node shown genuinely wrote a transcript inside the
-// window. The window is just long enough to hold the shape of one delegation on screen.
-const ORG_SELFTEST_ACTIVE_MS = 10 * 60 * 1000;
-
-const selfTest = { running: false, runId: null, startedAt: null, endedAt: null, status: 'idle', error: null };
-
-// Deliberately NOT used by the open-terminal session picker, which uses ORG_ACTIVE_MS
-// directly to mean "live elsewhere, don't attach to it". Widening that would make the button
-// refuse the very session you are sitting in.
-function orgActiveMs() {
-  return selfTest.running ? ORG_SELFTEST_ACTIVE_MS : ORG_ACTIVE_MS;
-}
 const USAGE_CACHE_MS = 60 * 1000;
 const USAGE_WINDOW_HOURS = 24;
 
@@ -799,7 +776,7 @@ function countOrgActivity() {
   const now = Date.now();
   let activeSessions = 0, activeSubagents = 0;
   for (const { path: file, mtimeMs } of getTranscriptIndex()) {
-    if (now - mtimeMs >= orgActiveMs()) continue;
+    if (now - mtimeMs >= ORG_ACTIVE_MS) continue;
     if (isSubagentFile(file)) activeSubagents++; else activeSessions++;
   }
   return { rosterAgents: roster.length, activeSessions, activeSubagents };
@@ -850,7 +827,7 @@ async function loadInternAgents() {
   const now = Date.now();
   return loaded.map((m) => {
     const lastTs = lastUsage.get(m.name) || null;
-    const active = !!lastTs && (now - new Date(lastTs).getTime() < orgActiveMs());
+    const active = !!lastTs && (now - new Date(lastTs).getTime() < ORG_ACTIVE_MS);
     return {
       id: 'intern:' + m.name,
       label: m.name,
@@ -1215,7 +1192,7 @@ function buildSessionNode(file, statMtimeMs) {
   const { model, cwd, lastTs } = summarizeSessionTail(lines);
   const project = cwd ? path.basename(cwd) : null;
   const now = Date.now();
-  const active = now - statMtimeMs < orgActiveMs();
+  const active = now - statMtimeMs < ORG_ACTIVE_MS;
   const spend = usageByFile.get(file) || { in: 0, out: 0, costUsd: 0 };
   return {
     id: 'session:' + path.basename(file, '.jsonl'),
@@ -1273,7 +1250,7 @@ async function buildOrgPayload() {
   const neededParents = new Map(); // parentSessionId -> file path, for the backfill pass below
 
   for (const { path: file, mtimeMs } of getTranscriptIndex()) {
-    if (now - mtimeMs >= orgActiveMs()) continue; // stat-only for the common (inactive) case
+    if (now - mtimeMs >= ORG_ACTIVE_MS) continue; // stat-only for the common (inactive) case
 
     const lines = tailJsonl(file);
     const { model, cwd, lastTs } = summarizeSessionTail(lines);
@@ -1354,7 +1331,6 @@ async function buildOrgPayload() {
   return {
     generatedAt: new Date().toISOString(),
     tiers: orgTiers(),
-    selfTest: selfTestSummary(),
     agents,
     counts: { rosterAgents: roster.length, activeSessions, activeSubagents },
   };
@@ -5081,13 +5057,11 @@ function handleUi(req, res) {
 
 // --- Execution-bridge route handlers ---
 
-// Hands the SAME session to a real console, where the full TUI can render —
-// the escape hatch for when the line-based panel isn't enough.
-// The ONLY session affordance the HUD has left, and deliberately so. Alfred is
-// an observe surface; when you want a prompt you get a real terminal, not a
-// line-based imitation of one inside a dashboard.
+// "Open AI terminal": hands you a real, SEPARATE console running one of the AI command-line
+// tools installed on this PC. Alfred is an observe surface; when you want a prompt you get a
+// real terminal, not a line-based imitation of one inside a dashboard.
 //
-// It resumes the most recently touched top-level transcript. A transcript's
+// For Claude it resumes the most recently touched top-level transcript. A transcript's
 // filename IS its session id — the same mapping buildOrgDetail relies on — and
 // `topLevel` is what distinguishes a real session from a subagent transcript
 // (those sit at <dirKey>/<parentSessionId>/subagents/, so parts.length is 4 or
@@ -5099,8 +5073,7 @@ function handleUi(req, res) {
 // live transcript is one already open in a client somewhere — usually the very
 // terminal the operator is sitting in. Without this the button would hand you a
 // second client attached to the conversation you are already having, which is
-// not what "open a terminal" means. Verified against the real tree: the naive
-// most-recent pick selected the session running this HUD's own build work.
+// not what "open a terminal" means.
 function mostRecentSessionId() {
   const now = Date.now();
   let best = null;
@@ -5112,33 +5085,10 @@ function mostRecentSessionId() {
   return best ? path.basename(best.path, '.jsonl') : null;
 }
 
-function handleChatOpenTerminal(req, res) {
-  const home = os.homedir();
-  // A live HUD session still wins when there is one — falling straight to the
-  // transcript scan would resume by mtime and could pick a different session.
-  const sid = mostRecentSessionId();
-  const bin = resolveClaudeBin();
-  // No transcript anywhere means a first run: open a plain `claude` rather
-  // than failing. There is nothing to resume, but "open me a terminal" is
-  // still a request this can honour.
-  const claudeArgs = sid ? [bin, '--resume', sid] : [bin];
-  // wt first (tabs, better font); cmd's `start` as the always-present fallback.
-  execFile('wt.exe', ['-d', home, ...claudeArgs], (err) => {
-    if (!err) return;
-    execFile('cmd.exe', ['/c', 'start', '', 'cmd.exe', '/k', ...claudeArgs], { cwd: home }, () => {});
-  });
-  sendJson(res, 200, { ok: true, sessionId: sid, resumed: !!sid });
-}
-
-// --- Command Center: every AI seat in one window, and the council -------------
-// Two affordances on one surface. "Open Terminals" is the Open Terminal button
-// multiplied: one Windows Terminal window, one real console pane per signed-in
-// CLI (claude, agy, grok...). "Ask the Council" sends one question to
-// every chosen seat in parallel and, if asked, has Claude chair the answers.
-//
-// The seat list comes from `council-run.mjs --status` rather than a second copy
-// of the detection rules here: one source of truth for "who is installed and
-// signed in", and it is the same helper the council itself runs through.
+// --- AI seats: who is installed and signed in, and the console that opens for each -----------
+// The seat list comes from `council-run.mjs --status` rather than a second copy of the detection
+// rules here: one source of truth for "who is installed and signed in", which the sign-in check
+// at startup (/api/bench) reads too.
 const COUNCIL_HELPER = process.env.ALFRED_COUNCIL_HELPER || path.join(HELPERS_DIR, 'council-run.mjs');
 const SEAT_ID_RE = /^[a-z0-9-]+$/;
 const SEATS_TTL_MS = 30 * 1000;
@@ -5159,147 +5109,14 @@ function councilSeats(force) {
   });
 }
 
-// Per-seat model choices live in the local config, not the registry: the
-// registry's councilModel is the cheap default every machine starts from, and
-// what the operator raises it to is this machine's business. Fable, Opus and
-// the pro tiers are therefore never the default — they are a choice, per seat.
-const MODEL_ID_RE = /^[\w.:-]+$/;
-const DEFAULT_SYNTH_MODEL = 'sonnet';
-
-function commandCenterConfig() {
-  const c = loadLocalConfig().commandCenter;
-  if (!c || typeof c !== 'object') return { models: {}, synthModel: null };
-  return { models: { ...(c.models || {}) }, synthModel: c.synthModel || null };
-}
-
-function seatModel(seat, cfg) {
-  return cfg.models[seat.id] || seat.councilModel || null;
-}
-
-async function installedOllamaModels() {
-  try {
-    const list = await listInternModels();
-    return (Array.isArray(list) ? list : [])
-      .map((m) => (typeof m === 'string' ? m : (m && (m.name || m.model))))
-      .filter(Boolean);
-  } catch { return []; }
-}
-
-async function handleCommandCenterSeats(req, res, url) {
-  const seats = await councilSeats(url.searchParams.get('refresh') === '1');
-  const cfg = commandCenterConfig();
-  const ollama = seats.some((s) => s.id === 'ollama') ? await installedOllamaModels() : [];
-  // The resolved binary path stays server-side; the page only needs state.
-  sendJson(res, 200, {
-    synthModel: cfg.synthModel || DEFAULT_SYNTH_MODEL,
-    seats: seats.map((s) => ({
-      id: s.id, label: s.label, installed: s.installed, signedIn: s.signedIn, ready: s.ready,
-      cost: s.cost, approval: s.approval, specialism: s.specialism, loginCmd: s.loginCmd,
-      canSignIn: Array.isArray(s.signin),
-      surface: s.surface || 'tty', webUrl: s.webUrl || null,
-      model: seatModel(s, cfg), defaultModel: s.councilModel || null,
-      // Ollama's list is whatever is actually pulled; a static list would drift.
-      models: s.id === 'ollama' ? ollama : (s.models || []),
-    })),
-  });
-}
-
-async function handleCommandCenterConfig(req, res) {
-  let body;
-  try { body = await readJsonBody(req); } catch { return sendJson(res, 400, { error: 'invalid JSON body' }); }
-  const cfg = commandCenterConfig();
-  const models = body.models && typeof body.models === 'object' ? body.models : null;
-  const hasSynth = Object.prototype.hasOwnProperty.call(body, 'synthModel');
-  if (!models && !hasSynth) return sendJson(res, 400, { error: 'nothing to update' });
-  if (models) {
-    for (const [id, m] of Object.entries(models)) {
-      if (!SEAT_ID_RE.test(id)) return sendJson(res, 400, { error: `invalid provider id: ${id}` });
-      const model = String(m || '').trim();
-      if (model && !MODEL_ID_RE.test(model)) return sendJson(res, 400, { error: `invalid model id for ${id}` });
-      if (model) cfg.models[id] = model; else delete cfg.models[id]; // blank = back to the registry default
-    }
-  }
-  if (hasSynth) {
-    const model = String(body.synthModel || '').trim();
-    if (model && !MODEL_ID_RE.test(model)) return sendJson(res, 400, { error: 'invalid synthesis model id' });
-    cfg.synthModel = model || null;
-  }
-  saveLocalConfig({ commandCenter: { models: cfg.models, synthModel: cfg.synthModel } });
-  sendJson(res, 200, { ok: true, models: cfg.models, synthModel: cfg.synthModel || DEFAULT_SYNTH_MODEL });
-}
-
-// The command a console pane runs for a seat: its launcher plus the chosen
-// model, passed the way that CLI takes it (a flag for the coding CLIs, a
-// positional for `ollama run`).
-function paneArgv(seat, cfg) {
-  const base = seat.launch || [seat.bin];
-  const model = seatModel(seat, cfg);
-  if (!model) return base;
-  if (seat.modelFlag) return [...base, seat.modelFlag, model];
-  if (seat.modelPositional) return [...base, model];
-  return base;
-}
-
-// One window, equal columns. Each split takes the pane created before it, so
-// the k-th split claims (n-k)/(n-k+1) of what is left: 2/3 then 1/2 gives three
-// equal columns; 3/4, 2/3, 1/2 gives four.
-function commandCenterArgv(seats, cfg) {
-  const home = os.homedir();
-  const n = seats.length;
-  const argv = ['-w', 'new', 'new-tab', '-d', home, '--title', seats[0].label, ...paneArgv(seats[0], cfg)];
-  for (let k = 1; k < n; k++) {
-    const size = ((n - k) / (n - k + 1)).toFixed(3);
-    argv.push(';', 'split-pane', '-V', '-s', size, '-d', home, '--title', seats[k].label, ...paneArgv(seats[k], cfg));
-  }
-  return argv;
-}
-
-// A real console for a real sign-in flow: the HUD never proxies credentials,
-// it opens the provider's own login command in a window and steps aside.
+// A real console for a real sign-in flow or a prompt: the HUD never proxies credentials or
+// keystrokes, it opens the provider's own command in a window and steps aside.
 function openConsole(title, argv) {
   const home = os.homedir();
   execFile('wt.exe', ['-w', 'new', 'new-tab', '-d', home, '--title', title, ...argv], (err) => {
     if (!err) return;
     execFile('cmd.exe', ['/c', 'start', title, 'cmd.exe', '/k', ...argv], { cwd: home }, () => {});
   });
-}
-
-// One lane at a time: every lane-open targets the SAME named Windows Terminal
-// window, so the first click creates it and each later click adds a pane
-// beside the others — the HUD's lanes and the console's panes stay in step.
-const CC_WINDOW = 'alfred-command-center';
-function laneArgv(seats, cfg) {
-  const home = os.homedir();
-  const argv = ['-w', CC_WINDOW];
-  seats.forEach((s, i) => {
-    if (i) argv.push(';');
-    argv.push('split-pane', '-V', '-d', home, '--title', s.label, ...paneArgv(s, cfg));
-  });
-  return argv;
-}
-
-async function handleCommandCenterOpen(req, res) {
-  let body;
-  try { body = await readJsonBody(req); } catch { return sendJson(res, 400, { error: 'invalid JSON body' }); }
-  const wanted = Array.isArray(body.providers) && body.providers.length ? body.providers.map(String) : null;
-  if (wanted && wanted.some((id) => !SEAT_ID_RE.test(id))) return sendJson(res, 400, { error: 'invalid provider id' });
-  const all = await councilSeats(false);
-  const seats = (wanted ? all.filter((s) => wanted.includes(s.id)) : all).filter((s) => s.ready && s.bin);
-  if (!seats.length) return sendJson(res, 409, { error: 'no seat is ready — install and sign in to at least one CLI' });
-  const cfg = commandCenterConfig();
-  const lane = body.lane === true;
-  const argv = lane ? laneArgv(seats, cfg) : commandCenterArgv(seats, cfg);
-  if (process.env.ALFRED_CC_DRY_RUN === '1') {
-    return sendJson(res, 200, { ok: true, dryRun: true, lane, seats: seats.map((s) => s.id), argv });
-  }
-  execFile('wt.exe', argv, (err) => {
-    if (!err) return;
-    // No Windows Terminal: one plain console per seat is the honest fallback.
-    for (const s of seats) {
-      execFile('cmd.exe', ['/c', 'start', s.label, 'cmd.exe', '/k', ...paneArgv(s, cfg)], { cwd: os.homedir() }, () => {});
-    }
-  });
-  sendJson(res, 200, { ok: true, seats: seats.map((s) => s.id) });
 }
 
 async function handleCommandCenterSignin(req, res) {
@@ -5322,366 +5139,38 @@ async function handleCommandCenterSignin(req, res) {
   sendJson(res, 200, { ok: true, provider: id, opened: title });
 }
 
-const councilRuns = new Map(); // id -> run record
-let councilCounter = 0;
-
-function councilSummary(run) {
-  return {
-    id: run.id, question: run.question, providers: run.providers, synthesize: run.synthesize,
-    status: run.status, startedAt: run.startedAt, endedAt: run.endedAt,
-    seats: run.seats, synthesis: run.synthesis, error: run.error,
-  };
+// The AI command-line tools that can be started interactively with nothing more than their own
+// name. Ollama is left out on purpose: `ollama run` needs a model to run, so there is no
+// interactive entry without picking (and possibly downloading) one. A seat whose surface is a
+// web page is not a console either.
+function terminalSeats(seats) {
+  return seats.filter((s) => s.installed && Array.isArray(s.launch) && s.launch.length
+    && s.surface !== 'web' && !s.modelPositional);
 }
 
-function applyCouncilEvent(run, ev) {
-  switch (ev.type) {
-    case 'seat':
-      run.seats[ev.provider] = { label: ev.label, status: 'running', text: '', model: ev.model || null, ms: null, error: null };
-      break;
-    case 'answer':
-      run.seats[ev.provider] = { label: ev.label, status: 'done', text: ev.text, model: ev.model, ms: ev.ms, inTokens: ev.inTokens, outTokens: ev.outTokens, error: null };
-      break;
-    case 'error':
-      run.seats[ev.provider] = { label: ev.label, status: 'error', text: '', model: null, ms: ev.ms, error: ev.message };
-      break;
-    case 'synthesis':
-      run.synthesis = { status: 'done', text: ev.text, model: ev.model, ms: ev.ms, error: null };
-      break;
-    case 'synthesis-error':
-      run.synthesis = { status: 'error', text: '', model: null, ms: null, error: ev.message };
-      break;
-    default: break;
-  }
+// GET /api/claude/open-terminal [token] — what the "Open AI terminal" menu offers.
+async function handleTerminalChoices(req, res) {
+  const seats = terminalSeats(await councilSeats(false));
+  sendJson(res, 200, { providers: seats.map((s) => ({ id: s.id, label: s.label })) });
 }
 
-function launchCouncil(question, providers, synthesize, cfg) {
-  councilCounter += 1;
-  const id = 'council' + councilCounter;
-  const run = {
-    id, question, providers, synthesize,
-    status: 'running', startedAt: new Date().toISOString(), endedAt: null,
-    seats: {}, error: null, pid: null,
-    synthesis: synthesize ? { status: 'pending', text: '', model: null, ms: null, error: null } : null,
-  };
-  for (const p of providers) run.seats[p] = { label: p, status: 'queued', text: '', model: null, ms: null, error: null };
-  councilRuns.set(id, run);
-
-  const args = [COUNCIL_HELPER, '--json', question, '--providers', providers.join(',')];
-  if (!synthesize) args.push('--no-synth');
-  // Only the operator's overrides travel; the registry default is the helper's own fallback.
-  const overrides = providers.filter((p) => cfg.models[p]).map((p) => `${p}=${cfg.models[p]}`);
-  if (overrides.length) args.push('--models', overrides.join(','));
-  if (synthesize && cfg.synthModel) args.push('--synth-model', cfg.synthModel);
-  let proc;
-  try {
-    // shell:false + an args array: the question is one argv entry, so nothing in it is parsed.
-    proc = spawn(process.execPath, args, { cwd: os.homedir(), stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, shell: false });
-  } catch (err) {
-    run.status = 'failed'; run.error = err.message; run.endedAt = new Date().toISOString();
-    return run;
-  }
-  run.pid = proc.pid;
-  let stderr = '';
-  const splitter = makeLineSplitter((line) => {
-    const t = line.trim();
-    if (!t.startsWith('{')) return;
-    try { applyCouncilEvent(run, JSON.parse(t)); } catch { /* not an event line */ }
-  });
-  proc.stdout.on('data', (c) => splitter.push(c));
-  proc.stderr.on('data', (c) => { stderr += c; });
-  proc.on('error', (err) => { run.status = 'failed'; run.error = err.message; run.endedAt = new Date().toISOString(); });
-  proc.on('close', (code) => {
-    splitter.flush();
-    if (run.status !== 'running') return;
-    run.status = code === 0 ? 'done' : 'failed';
-    if (code !== 0) run.error = stderr.trim().slice(0, 500) || `council-run exited ${code}`;
-    run.endedAt = new Date().toISOString();
-  });
-  return run;
-}
-
-async function handleCouncilAsk(req, res) {
-  let body;
+// POST /api/claude/open-terminal [token] — { "provider": "claude" }. The id is only ever looked up
+// in the registry's own list; what runs is that entry's launch argv, never text from the page.
+async function handleChatOpenTerminal(req, res) {
+  let body = {};
   try { body = await readJsonBody(req); } catch { return sendJson(res, 400, { error: 'invalid JSON body' }); }
-  const question = String(body.question || '').trim();
-  if (!question) return sendJson(res, 400, { error: 'missing question' });
-  if (question.length > 200000) return sendJson(res, 400, { error: 'question too long' });
-  const providers = Array.isArray(body.providers) ? body.providers.map(String) : [];
-  if (!providers.length) return sendJson(res, 400, { error: 'pick at least one seat' });
-  if (providers.some((id) => !SEAT_ID_RE.test(id))) return sendJson(res, 400, { error: 'invalid provider id' });
-  if (!fs.existsSync(COUNCIL_HELPER)) return sendJson(res, 503, { error: 'council-run.mjs helper not found' });
-  const run = launchCouncil(question, providers, body.synthesize !== false, commandCenterConfig());
-  sendJson(res, 202, councilSummary(run));
-}
-
-function handleCouncilList(req, res) {
-  sendJson(res, 200, { runs: [...councilRuns.values()].map(councilSummary) });
-}
-
-function handleCouncilGet(req, res, id) {
-  const run = councilRuns.get(id);
-  if (!run) return sendJson(res, 404, { error: 'no such council run' });
-  sendJson(res, 200, councilSummary(run));
-}
-
-// --- Browser terminals: real consoles shown in the HUD's lanes ----------------
-// This is NOT the line-based terminal panel that was removed. Each lane is a
-// genuine Windows console (node-pty / ConPTY) running the seat's CLI exactly
-// as Windows Terminal would; xterm.js in the page is only its screen and
-// keyboard, and a token-gated, loopback-only WebSocket carries keystrokes down
-// and screen bytes up. Sessions belong to the server, not the page: a reload
-// reattaches to the same console instead of starting a new one.
-const TERM_SCROLLBACK_CHARS = 256 * 1024;
-const TERM_RETAIN_MS = 5 * 60 * 1000;
-const TERM_DROP_MAX_BYTES = 40 * 1e6;
-const termSessions = new Map(); // id -> session
-let termCounter = 0;
-
-function termSummary(t) {
-  return {
-    id: t.id, provider: t.provider, label: t.label, status: t.status, pid: t.pid,
-    cols: t.cols, rows: t.rows, startedAt: t.startedAt, endedAt: t.endedAt, exitCode: t.exitCode,
-    clients: t.clients.size,
-  };
-}
-
-function termBroadcast(t, msg) {
-  const raw = JSON.stringify(msg);
-  for (const ws of t.clients) if (ws.readyState === 1) ws.send(raw);
-}
-
-function clampDim(v, fallback) {
-  const n = parseInt(v, 10);
-  return Number.isFinite(n) ? Math.min(500, Math.max(10, n)) : fallback;
-}
-
-function spawnTerminal(seat, cfg, cols, rows) {
-  // ALFRED_TERM_STUB_CMD is test-only: a JSON argv to run instead of the seat's
-  // CLI, so the PTY path is exercised for real without a signed-in provider.
-  const argv = process.env.ALFRED_TERM_STUB_CMD ? JSON.parse(process.env.ALFRED_TERM_STUB_CMD) : paneArgv(seat, cfg);
-  const [file, ...args] = argv;
-  termCounter += 1;
-  const id = 'term' + termCounter;
-  const t = {
-    id, provider: seat.id, label: seat.label, status: 'running', pid: null, cols, rows,
-    startedAt: new Date().toISOString(), endedAt: null, exitCode: null,
-    clients: new Set(), scrollback: '', pty: null,
-  };
-  const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor', ALFRED_LANE: seat.id };
-  t.pty = pty.spawn(file, args, { name: 'xterm-256color', cols, rows, cwd: os.homedir(), env, useConpty: true });
-  t.pid = t.pty.pid;
-  t.pty.onData((data) => {
-    t.scrollback = (t.scrollback + data).slice(-TERM_SCROLLBACK_CHARS);
-    termBroadcast(t, { type: 'data', data });
-  });
-  t.pty.onExit(({ exitCode }) => {
-    t.status = 'exited';
-    t.exitCode = exitCode;
-    t.endedAt = new Date().toISOString();
-    termBroadcast(t, { type: 'exit', code: exitCode });
-    // Keep the record briefly so a page that reloads sees "exited", not "gone".
-    setTimeout(() => termSessions.delete(id), TERM_RETAIN_MS).unref?.();
-  });
-  termSessions.set(id, t);
-  return t;
-}
-
-function killTerminal(t) {
-  if (t.status !== 'running') return false;
-  try { t.pty.kill(); } catch { /* already gone */ }
-  // Like agents: the CLI spawns children, and killing only the parent orphans them.
-  if (process.platform === 'win32' && t.pid) execFile('taskkill', ['/PID', String(t.pid), '/T', '/F'], () => {});
-  return true;
-}
-
-function resizeTerminal(t, cols, rows) {
-  if (t.status !== 'running') return;
-  t.cols = clampDim(cols, t.cols);
-  t.rows = clampDim(rows, t.rows);
-  try { t.pty.resize(t.cols, t.rows); } catch { /* racing an exit */ }
-}
-
-async function handleTerminalCreate(req, res) {
-  let body;
-  try { body = await readJsonBody(req); } catch { return sendJson(res, 400, { error: 'invalid JSON body' }); }
-  const id = String(body.provider || '').trim();
+  const id = String(body.provider || 'claude').trim();
   if (!SEAT_ID_RE.test(id)) return sendJson(res, 400, { error: 'invalid provider id' });
-  const seat = (await councilSeats(false)).find((s) => s.id === id);
-  if (!seat) return sendJson(res, 404, { error: 'no such seat' });
-  if (!seat.ready || !seat.bin) return sendJson(res, 409, { error: `${seat.label} is not ready — ${seat.installed ? 'sign in first' : 'not installed'}` });
-  let t;
-  try {
-    t = spawnTerminal(seat, commandCenterConfig(), clampDim(body.cols, 100), clampDim(body.rows, 30));
-  } catch (err) {
-    return sendJson(res, 500, { error: `could not start a console for ${seat.label}: ${err.message}` });
+  const seat = terminalSeats(await councilSeats(false)).find((s) => s.id === id);
+  if (!seat) return sendJson(res, 404, { error: `no installed AI command-line tool called ${id}` });
+  // No transcript anywhere means a first run: open a plain `claude` rather than failing.
+  const sid = id === 'claude' ? mostRecentSessionId() : null;
+  const argv = sid ? [...seat.launch, '--resume', sid] : seat.launch;
+  if (process.env.ALFRED_CC_DRY_RUN === '1') {
+    return sendJson(res, 200, { ok: true, dryRun: true, provider: id, label: seat.label, sessionId: sid, resumed: !!sid, argv });
   }
-  sendJson(res, 200, { terminal: termSummary(t) });
-}
-
-function handleTerminalList(req, res) {
-  sendJson(res, 200, { terminals: [...termSessions.values()].map(termSummary) });
-}
-
-function handleTerminalKill(req, res, id) {
-  const t = termSessions.get(id);
-  if (!t) return sendJson(res, 404, { error: 'no such terminal' });
-  const killed = killTerminal(t);
-  sendJson(res, 200, { ok: killed, terminal: termSummary(t) });
-}
-
-async function handleTerminalResize(req, res, id) {
-  const t = termSessions.get(id);
-  if (!t) return sendJson(res, 404, { error: 'no such terminal' });
-  let body;
-  try { body = await readJsonBody(req); } catch { return sendJson(res, 400, { error: 'invalid JSON body' }); }
-  resizeTerminal(t, body.cols, body.rows);
-  sendJson(res, 200, { terminal: termSummary(t) });
-}
-
-// A file dropped on a lane: browsers never reveal the original path, so the
-// bytes come up, land in a temp folder, and the path is typed into the console
-// — which is what dropping a file on Windows Terminal does.
-async function handleTerminalDrop(req, res, id) {
-  const t = termSessions.get(id);
-  if (!t) return sendJson(res, 404, { error: 'no such terminal' });
-  if (t.status !== 'running') return sendJson(res, 409, { error: 'terminal has exited' });
-  let body;
-  try { body = await readJsonBody(req, TERM_DROP_MAX_BYTES); } catch { return sendJson(res, 413, { error: 'file too large or invalid body' }); }
-  const safe = path.basename(String(body.name || 'drop')).replace(/[^\w.-]+/g, '_').slice(0, 120) || 'drop';
-  let buf;
-  try { buf = Buffer.from(String(body.data || ''), 'base64'); } catch { return sendJson(res, 400, { error: 'invalid file data' }); }
-  if (!buf.length) return sendJson(res, 400, { error: 'empty file' });
-  const dir = path.join(os.tmpdir(), 'alfred-drops');
-  fs.mkdirSync(dir, { recursive: true });
-  const dest = path.join(dir, `${Date.now()}-${safe}`);
-  fs.writeFileSync(dest, buf);
-  t.pty.write(/\s/.test(dest) ? `"${dest}" ` : `${dest} `);
-  sendJson(res, 200, { ok: true, path: dest, bytes: buf.length });
-}
-
-// Browsers cannot set headers on a WebSocket handshake, so the token rides in
-// the query string — over loopback only, and rotated every boot. The origin is
-// checked as well: a WebSocket is not covered by CORS, and a random page must
-// not be able to open a console just because it guessed the port.
-function attachTerminalWs(server) {
-  const wss = new WebSocketServer({ noServer: true, maxPayload: 1e6 });
-  server.on('upgrade', (req, socket, head) => {
-    const url = new URL(req.url, `http://localhost:${PORT}`);
-    const m = url.pathname.match(/^\/ws\/terminal\/([\w-]+)$/);
-    const origin = req.headers.origin || '';
-    const originOk = !origin || /^http:\/\/(localhost|127\.0\.0\.1|alfred)(:\d+)?$/i.test(origin);
-    const refuse = (code, text) => { socket.write(`HTTP/1.1 ${code} ${text}\r\nConnection: close\r\n\r\n`); socket.destroy(); };
-    if (!m || !originOk) return refuse(403, 'Forbidden');
-    if (url.searchParams.get('token') !== SESSION_TOKEN) return refuse(403, 'Forbidden');
-    const t = termSessions.get(m[1]);
-    if (!t) return refuse(404, 'Not Found');
-    wss.handleUpgrade(req, socket, head, (ws) => {
-      t.clients.add(ws);
-      ws.send(JSON.stringify({ type: 'hello', terminal: termSummary(t), scrollback: t.scrollback }));
-      if (t.status !== 'running') ws.send(JSON.stringify({ type: 'exit', code: t.exitCode }));
-      ws.on('message', (raw) => {
-        let msg;
-        try { msg = JSON.parse(raw); } catch { return; }
-        if (t.status !== 'running') return;
-        if (msg.type === 'input' && typeof msg.data === 'string') t.pty.write(msg.data);
-        else if (msg.type === 'resize') resizeTerminal(t, msg.cols, msg.rows);
-      });
-      ws.on('close', () => t.clients.delete(ws));
-      ws.on('error', () => t.clients.delete(ws));
-    });
-  });
-}
-
-// xterm.js is served from node_modules by name — an allowlist, not a directory
-// — so the HUD works offline and nothing outside these four files is reachable.
-const VENDOR_FILES = {
-  'xterm.js': path.join(__dirname, 'node_modules', '@xterm', 'xterm', 'lib', 'xterm.js'),
-  'xterm.css': path.join(__dirname, 'node_modules', '@xterm', 'xterm', 'css', 'xterm.css'),
-  'addon-fit.js': path.join(__dirname, 'node_modules', '@xterm', 'addon-fit', 'lib', 'addon-fit.js'),
-  'addon-web-links.js': path.join(__dirname, 'node_modules', '@xterm', 'addon-web-links', 'lib', 'addon-web-links.js'),
-};
-
-function handleVendor(req, res, name) {
-  const file = VENDOR_FILES[name];
-  if (!file) return sendText(res, 404, 'not found');
-  fs.readFile(file, (err, buf) => {
-    if (err) return sendText(res, 404, 'not found');
-    res.writeHead(200, {
-      'Content-Type': name.endsWith('.css') ? 'text/css; charset=utf-8' : 'application/javascript; charset=utf-8',
-      'Content-Length': buf.length, 'Cache-Control': 'no-cache',
-    });
-    res.end(buf);
-  });
-}
-
-// POST /api/org/selftest [token] — prove the chain of command actually wires up.
-//
-// Spawns ONE real Claude Code turn whose prompt instructs a three-deep delegation:
-// VP -> manager -> employee, each doing nothing but passing a word along. The nested
-// subagent transcripts that produces are what the org chart reads, so the lineage it
-// draws is REAL delegation, not injected activity. That distinction matters: a synthetic
-// chain would make this feature a liar in the one place people photograph it.
-//
-// Costs a handful of tokens by design — every agent in it is told to answer in one word
-// and to touch no files.
-const SELFTEST_PROMPT = [
-  'ORCHESTRATION SELF-TEST. Do no real work, read no files, write no files.',
-  'Use the Agent tool to engage the `cto` agent with exactly this instruction:',
-  '"Orchestration self-test. Use the Agent tool to engage `backend-manager` with exactly this',
-  'instruction: \'Orchestration self-test. Use the Agent tool to engage `backend-api-dev` and ask',
-  'it to reply with the single word READY. Reply with only the word it gave you.\' Reply with only',
-  'the word it gave you."',
-  'Then reply with only the word you received. Nothing else.',
-].join(' ');
-
-async function handleOrgSelfTest(req, res) {
-  if (selfTest.running) {
-    return sendJson(res, 409, { error: 'a self-test is already running', selfTest: selfTestSummary() });
-  }
-  const bin = resolveClaudeBin();
-  if (!bin) return sendJson(res, 503, { error: 'the claude CLI was not found on PATH' });
-
-  const run = launchAgent(SELFTEST_PROMPT, 'sonnet');
-  selfTest.running = true;
-  selfTest.runId = run.id;
-  selfTest.startedAt = new Date().toISOString();
-  selfTest.endedAt = null;
-  selfTest.status = 'running';
-  selfTest.error = null;
-
-  // launchAgent resolves its own promise internally, so poll the run record rather than
-  // reaching into it — the widened activity window must close even if the turn fails.
-  const started = Date.now();
-  const poll = setInterval(() => {
-    const r = agentRuns.get(run.id);
-    const timedOut = Date.now() - started > ORG_SELFTEST_ACTIVE_MS;
-    if ((r && r.status !== 'running') || timedOut) {
-      clearInterval(poll);
-      selfTest.running = false;
-      selfTest.endedAt = new Date().toISOString();
-      selfTest.status = timedOut ? 'timeout' : (r ? r.status : 'unknown');
-      if (timedOut) selfTest.error = 'the self-test exceeded its window and was abandoned';
-    }
-  }, 1000);
-  poll.unref?.();
-
-  sendJson(res, 202, { started: true, selfTest: selfTestSummary(), run: agentSummary(run) });
-}
-
-function selfTestSummary() {
-  const run = selfTest.runId ? agentRuns.get(selfTest.runId) : null;
-  return {
-    running: selfTest.running,
-    status: selfTest.status,
-    runId: selfTest.runId,
-    startedAt: selfTest.startedAt,
-    endedAt: selfTest.endedAt,
-    error: selfTest.error,
-    // While a self-test holds the window open, say so on the API rather than letting the
-    // chart silently imply everything was busy at the same instant.
-    activeWindowMs: orgActiveMs(),
-    runStatus: run ? run.status : null,
-  };
+  openConsole(seat.label, argv);
+  sendJson(res, 200, { ok: true, provider: id, label: seat.label, sessionId: sid, resumed: !!sid });
 }
 
 async function handleAgentLaunch(req, res) {
@@ -6072,14 +5561,11 @@ async function main() {
       // --- Mutating bridge endpoints: token-gated, loopback-only ---
       if (req.method === 'POST') {
         const agentAction = url.pathname.match(/^\/api\/agents\/([\w-]+)\/kill$/);
-        const termAction = url.pathname.match(/^\/api\/terminals\/([\w-]+)\/(kill|resize|drop)$/);
-        // NOTE: this allowlist is the execution bridge, NOT the terminal's.
-        // Removing the terminal removed /api/terminal/input from it; every
-        // other entry — agents, interns, reindex, approvals — is shared
+        // NOTE: this allowlist is the execution bridge. Every entry — agents,
+        // interns, reindex, settings, the open-terminal button — is shared
         // infrastructure and stays.
         const isBridgePost = url.pathname === '/api/claude/open-terminal'
           || url.pathname === '/api/agents/launch'
-          || url.pathname === '/api/org/selftest'
           || url.pathname === '/api/interns/run'
           || url.pathname === '/api/interns/pull'
           || url.pathname === '/api/settings'
@@ -6089,16 +5575,11 @@ async function main() {
           || url.pathname === '/api/source/save'
           || url.pathname === '/api/github/device/start'
           || url.pathname === '/api/github/disconnect'
-          || url.pathname === '/api/command-center/open'
-          || url.pathname === '/api/command-center/config'
           || url.pathname === '/api/command-center/signin'
-          || url.pathname === '/api/council'
-          || url.pathname === '/api/terminals'
           || url.pathname === '/api/assistant/action'
           || url.pathname === '/api/assistant/librarian'
           || url.pathname === '/api/assistant/tell'
           || url.pathname === '/api/assistant/item'
-          || termAction
           || agentAction;
         if (!isBridgePost) return sendJson(res, 404, { error: 'not found' });
         if (!authorize(req, res)) return;
@@ -6107,18 +5588,9 @@ async function main() {
         if (url.pathname === '/api/assistant/librarian') return await handleAssistantLibrarian(req, res);
         if (url.pathname === '/api/assistant/tell') return await handleTell(req, res);
         if (url.pathname === '/api/assistant/item') return await handleAssistantItem(req, res);
-        if (url.pathname === '/api/terminals') return await handleTerminalCreate(req, res);
-        if (termAction && termAction[2] === 'kill') return handleTerminalKill(req, res, termAction[1]);
-        if (termAction && termAction[2] === 'resize') return await handleTerminalResize(req, res, termAction[1]);
-        if (termAction && termAction[2] === 'drop') return await handleTerminalDrop(req, res, termAction[1]);
-
-        if (url.pathname === '/api/claude/open-terminal') return handleChatOpenTerminal(req, res);
-        if (url.pathname === '/api/command-center/open') return await handleCommandCenterOpen(req, res);
-        if (url.pathname === '/api/command-center/config') return await handleCommandCenterConfig(req, res);
+        if (url.pathname === '/api/claude/open-terminal') return await handleChatOpenTerminal(req, res);
         if (url.pathname === '/api/command-center/signin') return await handleCommandCenterSignin(req, res);
-        if (url.pathname === '/api/council') return await handleCouncilAsk(req, res);
         if (url.pathname === '/api/agents/launch') return await handleAgentLaunch(req, res);
-        if (url.pathname === '/api/org/selftest') return await handleOrgSelfTest(req, res);
         if (url.pathname === '/api/interns/run') return await handleInternRun(req, res);
         if (url.pathname === '/api/interns/pull') return await handleInternPull(req, res);
         if (url.pathname === '/api/settings') return await handleSettingsPost(req, res);
@@ -6149,24 +5621,19 @@ async function main() {
       // joins them because it used to be read through /api/terminal/output,
       // which was gated — dropping the gate would be a silent widening.
       const agentOutput = url.pathname.match(/^\/api\/agents\/([\w-]+)\/output$/);
-      const councilGet = url.pathname.match(/^\/api\/council\/([\w-]+)$/);
       if (url.pathname === '/api/reindex/status'
           || url.pathname === '/api/interns/pull/status' || url.pathname === '/api/settings'
           || url.pathname === '/api/agents' || url.pathname === '/api/interns/models'
           || url.pathname === '/api/interns/catalog'
           || url.pathname === '/api/github/status' || url.pathname === '/api/workshop'
-          || url.pathname === '/api/command-center/seats' || url.pathname === '/api/council'
-          || url.pathname === '/api/terminals' || url.pathname === '/api/assistant'
+          || url.pathname === '/api/claude/open-terminal' || url.pathname === '/api/assistant'
           || url.pathname === '/api/assistant/note' || url.pathname === '/api/bench'
-          || councilGet || agentOutput) {
+          || agentOutput) {
         if (!authorize(req, res)) return;
-        if (url.pathname === '/api/terminals') return handleTerminalList(req, res);
+        if (url.pathname === '/api/claude/open-terminal') return await handleTerminalChoices(req, res);
         if (url.pathname === '/api/assistant') return await handleAssistant(req, res);
         if (url.pathname === '/api/assistant/note') return await handleAssistantNote(req, res, url);
         if (url.pathname === '/api/bench') return await handleBench(req, res, url);
-        if (url.pathname === '/api/command-center/seats') return await handleCommandCenterSeats(req, res, url);
-        if (url.pathname === '/api/council') return handleCouncilList(req, res);
-        if (councilGet) return handleCouncilGet(req, res, councilGet[1]);
         if (url.pathname === '/api/github/status') return await handleGithubStatus(req, res);
         if (url.pathname === '/api/workshop') return await handleWorkshop(req, res, url);
         if (url.pathname === '/api/reindex/status') return handleReindexStatus(req, res, url);
@@ -6177,9 +5644,6 @@ async function main() {
         if (url.pathname === '/api/settings') return handleSettingsGet(req, res);
         return handleAgentOutput(req, res, agentOutput[1], url);
       }
-
-      const vendor = url.pathname.match(/^\/vendor\/xterm\/([\w.-]+)$/);
-      if (vendor) return handleVendor(req, res, vendor[1]);
 
       if (url.pathname === '/' || url.pathname === '/index.html') {
         // Render the greeting audio while the landing page is on screen. The
@@ -6210,8 +5674,6 @@ async function main() {
     }
   });
 
-  attachTerminalWs(server);
-
   server.listen(PORT, BIND_HOST, () => {
     console.log(`ALFRED online — http://localhost:${PORT}`);
     console.log(`[alfred] execution bridge armed (token rotates each boot)`);
@@ -6224,9 +5686,6 @@ async function main() {
   // it's free, but IIS/Skype/another Alfred may hold it — a failure here is
   // cosmetic, so it degrades silently to the :7777 URL.
   const friendly = http.createServer(server.listeners('request')[0]);
-  // Sharing the request listener does not share 'upgrade': without this the
-  // lanes' WebSockets die silently for anyone using http://alfred/.
-  attachTerminalWs(friendly);
   friendly.on('error', (err) => {
     if (err.code === 'EACCES' || err.code === 'EADDRINUSE') {
       console.log(`[alfred] port 80 unavailable (${err.code}) — use http://localhost:${PORT}`);

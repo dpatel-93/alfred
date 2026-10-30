@@ -1,23 +1,20 @@
 // P0 regression harness for the Blend redesign (see the implementation plan,
 // section 4, "P0 — Regression harness"). This suite pins the shipped behaviour
-// the redesign must not break — the terminal tab strip, grid-mode refit, the
-// unread dot, the Interns catalog search,
+// the redesign must not break — the "Open AI terminal" menu, the Interns catalog search,
 // and the Brain graph's click-to-open-panel path — at three widths. It MUST
 // be green against the code as it stands before any redesign edit lands; a
 // harness that has never passed on the old code proves nothing about the new
 // code, so every later phase's exit criterion is "P0 still green."
 //
 // Port discipline: this suite boots its own server (fixture vault,
-// ALFRED_COUNCIL_STUB_DIR so every registry seat is ready, ALFRED_TERM_STUB_CMD
-// so opening a console never shells out to a real signed-in CLI) exactly like
-// terminals.mjs does, on ALFRED_TERM_TEST_PORT. Never port 7777 — that is the
-// operator's live session.
+// ALFRED_COUNCIL_STUB_DIR so every registry seat is ready, ALFRED_CC_DRY_RUN so
+// opening a terminal never starts a real window) on ALFRED_TERM_TEST_PORT.
+// Never port 7777 — that is the operator's live session.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import WebSocket from 'ws';
 
 const { chromium } = await import(process.env.PLAYWRIGHT_INDEX || 'playwright');
 
@@ -28,12 +25,6 @@ const R = [];
 const chk = (n, c, d = '') => R.push({ n, ok: !!c, d: String(d) });
 
 const stub = fs.mkdtempSync(path.join(os.tmpdir(), 'alfred-redesign-'));
-// Echoes whatever it is sent, exactly like terminals.mjs's stub console — the
-// whole point is exercising the real spawn/attach/io path with no signed-in CLI.
-const echoScript = 'process.stdout.write("ALFRED_TERM_OK\\n");'
-  + 'process.stdin.setEncoding("utf8");'
-  + 'process.stdin.on("data",function(d){process.stdout.write("GOT:"+d);});';
-
 const PORT = Number(process.env.ALFRED_TERM_TEST_PORT || 7797);
 const BASE = `http://127.0.0.1:${PORT}`;
 const server = spawn(process.execPath, [path.join(HERE, '..', 'server.mjs')], {
@@ -49,8 +40,8 @@ const server = spawn(process.execPath, [path.join(HERE, '..', 'server.mjs')], {
     ALFRED_COUNCIL_HELPER: HELPER,
     ALFRED_COUNCIL_STUB_DIR: stub,
     ALFRED_PROVIDERS: REGISTRY,
-    ALFRED_TERM_STUB_CMD: JSON.stringify([process.execPath, '-e', echoScript]),
-    // The Day view auto-opens a sign-in console for a signed-out seat; never on a test run.
+    // The Day view auto-opens a sign-in console for a signed-out seat, and "Open AI terminal" opens a
+    // window; never on a test run.
     ALFRED_CC_DRY_RUN: '1',
   },
   stdio: ['ignore', 'pipe', 'pipe'],
@@ -122,145 +113,69 @@ if (!(await up())) {
     });
 
     // --- the Day place is the default landing ---------------------------------
-    // No hash: the app opens on Day (not the Brain), and the nav is Day then Brain with
-    // Day active. Command is no longer a tab (still reachable by hash and key 3, which the
-    // Command section below uses). Instant checks only: the Command section that follows
-    // races a once-per-page terminal re-attach, so nothing here may add delay before it.
+    // No hash: the app opens on Day (not the Brain), and the nav is Day, Projects, Brain with
+    // Day active. There is no Terminals tab any more.
     chk(tag('with no hash the app lands on the Day view'), await page.evaluate(() =>
       !document.getElementById('pane-day').hidden && document.getElementById('pane-brain').hidden
-      && document.getElementById('pane-command').hidden));
-    chk(tag('the nav is Day, Projects, Brain, Terminals, with Day active'), await page.evaluate(() => {
+      && !document.getElementById('pane-command')));
+    chk(tag('the nav is Day, Projects, Brain, with Day active'), await page.evaluate(() => {
       const b = [...document.querySelectorAll('#views .view-btn')];
-      return b.map((x) => x.dataset.view).join(',') === 'day,projects,brain,command'
-        && b.map((x) => x.textContent).join(',') === 'Day,Projects,Brain,Terminals'
-        && b.map((x) => x.getAttribute('aria-controls')).join(',') === 'pane-day,pane-projects,pane-brain,pane-command'
+      return b.map((x) => x.dataset.view).join(',') === 'day,projects,brain'
+        && b.map((x) => x.textContent).join(',') === 'Day,Projects,Brain'
+        && b.map((x) => x.getAttribute('aria-controls')).join(',') === 'pane-day,pane-projects,pane-brain'
         && b[0].classList.contains('active') && b[0].getAttribute('aria-selected') === 'true'
         && b.slice(1).every((x) => !x.classList.contains('active') && x.getAttribute('aria-selected') === 'false');
     }));
 
-    // --- the Command place: tab strip, grid mode, unread dot, seats -------
-    // Seats now render on the Bench (#cc-seats), visible on every place —
-    // P5 moved them out of the Command pane's old "Lanes" section and moved
-    // pollCommandCenter into GLOBAL_POLLS to match. Every control that used
-    // to sit directly on a seat card (model, open/native/sign-in) now lives behind that row's own
-    // "..." popover (#seat-popover) — plan §3.2.
-    await page.evaluate(() => { location.hash = 'command'; }); // no tab any more: hash (or key 3)
-    await page.waitForFunction(
-      () => document.querySelectorAll('#cc-seats .seat').length > 0,
-      null, { timeout: 10000 },
-    ).catch(() => {});
+    // --- Open AI terminal: one header button and a menu of the installed AI tools ------------
+    // The server runs with ALFRED_COUNCIL_STUB_DIR, so every registry seat counts as installed, and with
+    // ALFRED_CC_DRY_RUN, so picking one is answered {dryRun:true} instead of opening a real window.
+    chk(tag('the header has one "Open AI terminal" button, a closed menu, and no Org Self-Test button'), await page.evaluate(() => {
+      const b = document.getElementById('open-terminal-btn');
+      return !!b && /Open AI terminal/.test(b.textContent) && b.getAttribute('aria-expanded') === 'false'
+        && !document.getElementById('org-selftest-btn') && !document.getElementById('org-selftest-status')
+        && getComputedStyle(document.getElementById('ai-term-menu')).display === 'none';
+    }));
+    await page.click('#open-terminal-btn');
+    await page.waitForFunction(() => document.querySelectorAll('#ai-term-menu .btn').length > 0, null, { timeout: 8000 }).catch(() => {});
+    const menu = await page.evaluate(() => {
+      const r = document.getElementById('ai-term-menu').getBoundingClientRect();
+      return {
+        open: document.getElementById('ai-term-menu').classList.contains('open'),
+        expanded: document.getElementById('open-terminal-btn').getAttribute('aria-expanded'),
+        items: [...document.querySelectorAll('#ai-term-menu .btn')].map((b) => b.textContent),
+        box: { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top) },
+      };
+    });
+    chk(tag('clicking it opens a menu of the installed AI tools: Claude, Gemini and Grok, not Ollama'), menu.open && menu.expanded === 'true'
+      && ['Claude', 'Gemini', 'Grok'].every((n) => menu.items.some((t) => t.startsWith(n))) && !menu.items.some((t) => /ollama/i.test(t)), JSON.stringify(menu));
+    chk(tag('the menu sits on screen, under the button'), menu.box.left >= 0 && menu.box.right <= width && menu.box.top > 0, JSON.stringify(menu.box));
+    const posted = page.waitForResponse((r) => r.url().endsWith('/api/claude/open-terminal') && r.request().method() === 'POST', { timeout: 8000 }).catch(() => null);
+    await page.click('#ai-term-menu .btn:has-text("Grok")');
+    const resp = await posted;
+    const sent = resp ? JSON.parse(resp.request().postData() || '{}') : null;
+    const reply = resp ? await resp.json().catch(() => null) : null;
+    chk(tag('picking Grok sends only its provider id, and the server answers for Grok'),
+      !!resp && resp.status() === 200 && JSON.stringify(sent) === '{"provider":"grok"}' && !!reply && reply.provider === 'grok' && reply.dryRun === true,
+      JSON.stringify({ sent, reply }));
+    await page.waitForFunction(() => /Opened Grok/.test(document.getElementById('toast-stack').textContent), null, { timeout: 5000 }).catch(() => {});
+    chk(tag('the menu closes after a pick and a toast says what opened'), await page.evaluate(() =>
+      !document.getElementById('ai-term-menu').classList.contains('open')
+      && document.getElementById('open-terminal-btn').getAttribute('aria-expanded') === 'false'
+      && /Opened Grok/.test(document.getElementById('toast-stack').textContent)));
+    await page.click('#open-terminal-btn');
+    await page.keyboard.press('Escape');
+    chk(tag('Esc closes the menu'), await page.evaluate(() => !document.getElementById('ai-term-menu').classList.contains('open')));
+    await page.click('#open-terminal-btn');
+    await page.evaluate(() => document.body.click());
+    chk(tag('a click elsewhere closes the menu'), await page.evaluate(() => !document.getElementById('ai-term-menu').classList.contains('open')));
+    chk(tag('there is no seat bar, console lane, council or Open Terminals checklist anywhere on the page'), await page.evaluate(() =>
+      !['cc-seats', 'cc-term-stage', 'cc-council', 'cc-ask-btn', 'composer-foot', 'ext-term-btn', 'ext-term-menu', 'seat-popover', 'bench']
+        .some((id) => document.getElementById(id)) && typeof window.__ccDebug === 'undefined'));
 
-    const seatMoreBtns = page.locator('#cc-seats .seat-more');
-    const seatRowCount = await seatMoreBtns.count();
-
-    // Opening a seat's popover replaces whatever popover was already open,
-    // so consoles are opened one at a time: open a row's "...", check for
-    // an "Open terminal" button inside the shared popover, click it if
-    // present, then move to the next row.
-    let openedIds = [];
-    let openedCount = 0;
-    for (let i = 0; i < seatRowCount && openedCount < 2; i++) {
-      await seatMoreBtns.nth(i).click();
-      const openBtn = page.locator('#seat-popover button:has-text("Open terminal")');
-      if (await openBtn.count()) {
-        await openBtn.first().click();
-        openedCount++;
-      }
-    }
-    await page.keyboard.press('Escape').catch(() => {});
-    chk(tag('at least 2 ready tty seats to open a console on'), openedCount >= 2, `opened=${openedCount} of ${seatRowCount} seats`);
-
-    if (openedCount >= 2) {
-      // --- 1. terminal tab strip -----------------------------------------
-      await page.waitForFunction(
-        () => document.querySelectorAll('#cc-tabs .cc-tab').length === 2,
-        null, { timeout: 10000 },
-      ).catch(() => {});
-
-      const tabCount = await page.locator('#cc-tabs .cc-tab').count();
-      const activeTabCount = await page.locator('#cc-tabs .cc-tab.active').count();
-      let dbg = await page.evaluate(() => window.__ccDebug());
-      openedIds = dbg.map((d) => d.id);
-      chk(tag('opening 2 consoles produces exactly 2 tabs'), tabCount === 2, `tabCount=${tabCount}`);
-      chk(tag('exactly one tab is active'), activeTabCount === 1, `activeTabCount=${activeTabCount}`);
-      // Only the focused pane is laid out outside grid mode — its sibling is
-      // legitimately display:none (a single-focus tab strip, by design) until
-      // grid mode (assertion 2) makes every pane visible at once.
-      const focused1 = dbg.find((d) => d.active);
-      chk(tag('the focused console has a laid-out (nonzero-width) pane'),
-        dbg.length === 2 && !!focused1 && focused1.rect.width > 0, JSON.stringify(dbg.map((d) => d.rect.width)));
-
-      // --- 2. grid mode ----------------------------------------------------
-      // Real OS-level Ctrl+\ is delivered to whatever has focus; a just-opened
-      // terminal holds it, and xterm's own attachCustomKeyEventHandler AND the
-      // page-level window keydown listener both call ccHandleGlobalShortcut for
-      // the same event as it bubbles — a double-toggle that nets to no visible
-      // change. Drive the grid toggle button directly: it is the exact same
-      // ccToggleGridMode()/ccSetGridMode() code path, without that ambiguity.
-      await page.click('#cc-grid-toggle');
-      await page.waitForFunction(
-        () => document.getElementById('cc-terms').classList.contains('cc-grid'),
-        null, { timeout: 5000 },
-      ).catch(() => {});
-      await sleep(300); // ccSetGridMode's own 60ms refit sweep, with margin
-
-      const gridOn = await page.evaluate(() => document.getElementById('cc-terms').classList.contains('cc-grid'));
-      dbg = await page.evaluate(() => window.__ccDebug());
-      chk(tag('the grid-mode toggle turns on grid mode'), gridOn);
-      chk(tag('every console refits in grid mode (width > 0)'),
-        dbg.length === 2 && dbg.every((d) => d.rect.width > 0), JSON.stringify(dbg.map((d) => d.rect.width)));
-      chk(tag('every console refits in grid mode (rows > 0)'),
-        dbg.length === 2 && dbg.every((d) => d.rows > 0), JSON.stringify(dbg.map((d) => d.rows)));
-
-      // Unread is only marked outside grid mode (every pane is already visible
-      // in grid mode) — leave grid mode before the unread check.
-      await page.click('#cc-grid-toggle');
-      await page.waitForFunction(
-        () => !document.getElementById('cc-terms').classList.contains('cc-grid'),
-        null, { timeout: 5000 },
-      ).catch(() => {});
-
-      // --- 3. unread dot on a backgrounded tab -----------------------------
-      dbg = await page.evaluate(() => window.__ccDebug());
-      const activeEntry = dbg.find((d) => d.active);
-      const bgEntry = dbg.find((d) => !d.active);
-      if (bgEntry) {
-        // A second, independent WebSocket to the backgrounded terminal — the
-        // server broadcasts its output to every attached client, including
-        // the page's own already-open socket for that terminal (the same
-        // mechanism terminals.mjs's `attach()` exercises).
-        const bgWs = new WebSocket(`ws://127.0.0.1:${PORT}/ws/terminal/${bgEntry.id}?token=${encodeURIComponent(TOKEN)}`, { origin: BASE });
-        await new Promise((resolve, reject) => {
-          bgWs.on('open', resolve);
-          bgWs.on('error', reject);
-          setTimeout(() => reject(new Error('ws open timeout')), 5000);
-        }).catch(() => {});
-        bgWs.send(JSON.stringify({ type: 'input', data: 'ping\r' }));
-        await page.waitForFunction(
-          () => !!document.querySelector('#cc-tabs .cc-tab.has-unread'),
-          null, { timeout: 8000 },
-        ).catch(() => {});
-        try { bgWs.close(); } catch { /* fine */ }
-
-        const unreadTabCount = await page.locator('#cc-tabs .cc-tab.has-unread').count();
-        const activeHasUnread = await page.evaluate(() => !!document.querySelector('#cc-tabs .cc-tab.active.has-unread'));
-        dbg = await page.evaluate(() => window.__ccDebug());
-        const bgAfter = dbg.find((d) => d.id === bgEntry.id);
-        chk(tag('a backgrounded tab that receives output gets the unread dot'),
-          unreadTabCount === 1 && !activeHasUnread, `unreadTabCount=${unreadTabCount} activeHasUnread=${activeHasUnread}`);
-        chk(tag('the debug hook reports unread on that backgrounded console'),
-          !!(bgAfter && bgAfter.unread === true), JSON.stringify(bgAfter));
-      } else {
-        chk(tag('a backgrounded tab exists to test unread on'), false, JSON.stringify(dbg));
-      }
-
-      // Clean up so the next width starts with no leftover consoles — a
-      // second-page load would otherwise reattach these via ccReattachTerminals
-      // and throw off the "exactly 2 tabs" assertion for the next width.
-      for (const id of openedIds) {
-        await fetch(`${BASE}/api/terminals/${id}/kill`, { method: 'POST', headers: H, body: '{}' }).catch(() => {});
-      }
-    }
+    // The Ask bar, Local GPU and Status sit over the Brain (they are hidden on Day), so the Interns check goes there.
+    await page.evaluate(() => { location.hash = 'brain'; });
+    await page.waitForFunction(() => getComputedStyle(document.getElementById('composer-dock')).visibility === 'visible', null, { timeout: 5000 }).catch(() => {});
 
     // --- 4. Interns catalog search ---------------------------------------
     // Local GPU moved off the retired Bench into the composer's tools row
@@ -282,42 +197,8 @@ if (!(await up())) {
     ).catch(() => {});
     const catalogCount = await page.locator('#intern-catalog-results .intern-catalog-item').count();
     chk(tag('typing a model name searches the Interns catalog'), catalogCount > 0, `count=${catalogCount}`);
-    // Close it before the next section — Local GPU's popover and the seat
-    // strip share the same small area at the foot of the screen, and a left-
-    // open <details> would otherwise cover the "..." buttons clicked next
-    // (the app itself now guards this too: opening a seat popover closes any
-    // open .composer-tool, and vice versa — this mirrors that for the test).
+    // Close it before the next section — a left-open <details> pops up over the foot of the screen.
     await page.evaluate(() => { document.getElementById('composer-tool-interns').open = false; });
-
-    // (Section 5, the web-surface "Open panel" label, was dropped with the
-    // DeepSeek Harness seat 2026-10-23 — no registered seat is web-surfaced.)
-
-    // --- 5b. Focus mechanism (plan §3.2/§4 P5) -----------------------------
-    // Clicking a seat's row body sets body[data-focus-seat] and re-tints
-    // --accent-primary — the one CSS variable 85+ call sites already read.
-    if (seatRowCount > 0) {
-      const before = await page.evaluate(() => getComputedStyle(document.body).getPropertyValue('--accent-primary').trim());
-      await page.locator('#cc-seats .seat-main').first().click();
-      const seatIdAfter = await page.evaluate(() => document.body.dataset.focusSeat || '');
-      // --focus is registered via @property and transitions over --t-focus
-      // (420ms) — reading the computed value in the same tick as the click
-      // would still show the pre-transition value. Wait past the transition.
-      await sleep(500);
-      const after = await page.evaluate(() => getComputedStyle(document.body).getPropertyValue('--accent-primary').trim());
-      chk(tag('clicking a seat sets body[data-focus-seat]'), seatIdAfter.length > 0, `focusSeat="${seatIdAfter}"`);
-      chk(tag('focusing a seat changes --accent-primary'), before !== after, `before="${before}" after="${after}"`);
-      // That click also opens (or focuses) the seat's console. Kill whatever is running, so the next
-      // width's page has nothing to re-attach: a late re-attach is a third tab in its tab-strip checks.
-      let left = [];
-      for (let i = 0; i < 20 && !left.length; i++) {
-        await sleep(150);
-        const d = await fetch(`${BASE}/api/terminals`, { headers: H }).then((r) => r.json()).catch(() => ({}));
-        left = (d.terminals || []).filter((t) => t.status === 'running');
-      }
-      for (const t of left) {
-        await fetch(`${BASE}/api/terminals/${t.id}/kill`, { method: 'POST', headers: H, body: '{}' }).catch(() => {});
-      }
-    }
 
     // --- 6. Brain: click a node opens the panel ----------------------------
     // P4 contained #graph inside .brain-canvas — worldToScreen/__alfredDebug's
@@ -501,7 +382,7 @@ if (!(await up())) {
       const titles = [...document.querySelectorAll('#pane-day .day-card-title, #pane-day details.day-card > summary')].map((t) => t.textContent);
       return !titles.some((t) => /morning brief|end of day|^projects|signals|due today|routines today|today on the calendar/i.test(t));
     }), await page.evaluate(() => [...document.querySelectorAll('#pane-day .day-card-title')].map((t) => t.textContent).join(' | ')));
-    chk(tag('Day: the seat chips and the Ask bar are not on the Day page'), await page.evaluate(() =>
+    chk(tag('Day: the Ask bar is not on the Day page'), await page.evaluate(() =>
       getComputedStyle(document.getElementById('composer-dock')).visibility === 'hidden'
       && document.elementFromPoint(innerWidth / 2, innerHeight - 30) !== document.getElementById('search-input')));
 
@@ -1058,38 +939,28 @@ if (!(await up())) {
       document.getElementById('panel').classList.contains('open') && document.getElementById('panel-title').textContent === 'Demo'));
     await page.evaluate(() => { document.getElementById('panel').classList.remove('open'); if (document.activeElement) document.activeElement.blur(); });
 
-    // --- Terminals: the seat chips, the Ask bar, Open Terminals and the seat pills -----------
+    // --- The Terminals tab is gone ---------------------------------------------------------
     await page.keyboard.press('4');
-    await page.waitForFunction(() => !document.getElementById('pane-command').hidden, null, { timeout: 5000 }).catch(() => {});
-    chk(tag('Terminals: key 4 opens the Terminals tab with the seat chips and the Ask bar showing'), await page.evaluate(() => {
-      const pane = document.getElementById('pane-command');
-      const seats = document.getElementById('cc-seats').getBoundingClientRect();
-      return !pane.hidden && pane.querySelector('h1').textContent === 'Terminals' && location.hash === '#command'
-        && document.querySelector('#views [data-view="command"]').getAttribute('aria-selected') === 'true'
-        && getComputedStyle(document.getElementById('composer-dock')).visibility === 'visible'
-        && document.querySelectorAll('#cc-seats .seat').length > 0 && seats.height > 0
-        && document.getElementById('search-input').getBoundingClientRect().height >= 24;
-    }));
-    chk(tag('Terminals: Open Terminals and the seat pills moved into the Terminals pane'), await page.evaluate(() => {
-      const pane = document.getElementById('pane-command');
-      return pane.contains(document.getElementById('ext-term-btn')) && pane.contains(document.getElementById('bench'))
-        && !document.getElementById('top').contains(document.getElementById('ext-term-btn'));
-    }));
-    await page.click('#ext-term-btn');
-    chk(tag('Terminals: Open Terminals still opens its seat checklist'), await page.evaluate(() =>
-      document.getElementById('ext-term-menu').classList.contains('open')
-      && document.getElementById('ext-term-btn').getAttribute('aria-expanded') === 'true'));
-    await page.keyboard.press('Escape');
-    await page.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
+    await sleep(200);
+    chk(tag('Terminals: key 4 does nothing now (still on Projects, no Terminals pane, tab or hash)'), await page.evaluate(() =>
+      !document.getElementById('pane-projects').hidden && !document.getElementById('pane-command')
+      && !document.querySelector('#views [data-view="command"]') && location.hash === '#projects'));
     await page.keyboard.press('2');
     await page.waitForFunction(() => !document.getElementById('pane-projects').hidden, null, { timeout: 5000 }).catch(() => {});
     chk(tag('Projects: key 2 opens the Projects tab'), await page.evaluate(() => !document.getElementById('pane-projects').hidden));
     await page.keyboard.press('1');
     await page.waitForFunction(() => !document.getElementById('pane-day').hidden, null, { timeout: 5000 }).catch(() => {});
     await page.keyboard.press('/');
-    chk(tag('Day: "/" opens Terminals and puts focus in the Ask bar'), await page.evaluate(() =>
-      !document.getElementById('pane-command').hidden && document.activeElement.id === 'search-input'));
+    chk(tag('Day: "/" opens the Brain and puts focus in the Ask bar'), await page.evaluate(() =>
+      !document.getElementById('pane-brain').hidden && document.activeElement.id === 'search-input'));
     await page.evaluate(() => { document.activeElement.blur(); });
+    // An old bookmark to #command must land on Day, not on a blank page.
+    const old = await ctx.newPage();
+    await old.goto(BASE + '/?nogate=1#command', { waitUntil: 'domcontentloaded' });
+    await old.waitForFunction(() => !!document.getElementById('pane-day'), null, { timeout: 5000 }).catch(() => {});
+    chk(tag('an old #command link falls back to Day'), await old.evaluate(() =>
+      !document.getElementById('pane-day').hidden && document.getElementById('pane-brain').hidden && document.getElementById('pane-projects').hidden), await old.evaluate(() => location.hash));
+    await old.close();
 
     // --- Brain map regions follow the Second Brain's folders -------------------
     const regions = await page.evaluate(() => ({

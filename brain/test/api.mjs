@@ -122,20 +122,26 @@ chk('the operator name is a name, not the template placeholder',
   !/^\(/.test(tiers.ceo?.name || '') && !/not specified/i.test(tiers.ceo?.name || ''),
   JSON.stringify(tiers.ceo?.name));
 
-// --- org self-test ---
-// Deliberately NOT executed here: running it spawns real `claude` processes and spends real
-// tokens, which a test suite has no business doing. What IS asserted is the contract around
-// it — the state it publishes, and that it cannot be triggered without the session token.
-const selfT = org?.selfTest;
-chk('/api/org publishes self-test state', selfT && typeof selfT === 'object', JSON.stringify(selfT));
-chk('self-test is idle in a fresh server', selfT?.running === false, JSON.stringify(selfT?.running));
-chk('self-test reports the active window it is imposing',
-  typeof selfT?.activeWindowMs === 'number' && selfT.activeWindowMs > 0, JSON.stringify(selfT?.activeWindowMs));
-chk('an idle self-test does not widen the org activity window',
-  selfT?.activeWindowMs === 20000, `got ${selfT?.activeWindowMs}`);
-const stNoTok = await fetch(B + '/api/org/selftest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-chk('POST /api/org/selftest without a token is blocked',
-  stNoTok.status === 401 || stNoTok.status === 403, `got ${stNoTok.status}`);
+// --- the org self-test is removed ---
+// It spawned real `claude` turns to light the org chart up; the chart reads real transcripts,
+// so it no longer needs one. Asserted gone rather than dropped, like the terminal above.
+chk('/api/org no longer publishes self-test state', org && !('selfTest' in org), Object.keys(org || {}).join(','));
+const stGone = await fetch(B + '/api/org/selftest', { method: 'POST', headers: H, body: '{}' });
+chk('POST /api/org/selftest removed -> 404', stGone.status === 404, `got ${stGone.status}`);
+
+// --- the Terminals tab, its consoles and the council are removed ---
+// The in-page consoles (/api/terminals + a WebSocket), the council and the multi-seat window are
+// gone. The "Open AI terminal" button replaced them (covered in council.mjs); the sign-in check
+// at startup keeps /api/bench and /api/command-center/signin.
+for (const [method, p] of [['POST', '/api/terminals'], ['GET', '/api/terminals'], ['POST', '/api/council'], ['GET', '/api/council'],
+                           ['GET', '/api/council/council1'], ['POST', '/api/command-center/open'], ['POST', '/api/command-center/config'],
+                           ['GET', '/api/command-center/seats'], ['GET', '/vendor/xterm/xterm.js']]) {
+  const r = await fetch(B + p, { method, headers: H, ...(method === 'POST' ? { body: '{}' } : {}) });
+  chk(`${method} ${p} removed -> 404`, r.status === 404, `got ${r.status}`);
+}
+const pageNow = await fetch(B + '/').then((r) => r.text());
+chk('the page carries no xterm, console lane or seat-bar markup',
+  !/xterm|pane-command|cc-term|ext-term-btn|cc-seats|org-selftest/.test(pageNow), 'a Terminals-tab remnant is still in ui.html');
 
 // --- the voice surface stays removed ---
 // Every route WS2 deleted, asserted gone. A revert or a bad merge that brings

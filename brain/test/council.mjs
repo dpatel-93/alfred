@@ -1,7 +1,9 @@
-// Council + Command Center.
+// Council helper + the seat routes the dashboard still has.
 //
-// The helper runs against a stub directory (ALFRED_COUNCIL_STUB_DIR) so the
-// whole pipeline is exercised without spending a token or needing a sign-in.
+// The helper (council-run.mjs, also the source of the seat list) runs against a stub directory
+// (ALFRED_COUNCIL_STUB_DIR) so the whole pipeline is exercised without spending a token or needing
+// a sign-in. The dashboard's own council and multi-seat window are gone; what is left over HTTP is
+// the sign-in route behind the startup check and the "Open AI terminal" button's routes.
 // The HTTP half boots its OWN throwaway server: the shared test server is
 // started before any suite runs, so it cannot carry the stub env this needs.
 import fs from 'node:fs';
@@ -140,53 +142,41 @@ if (!(await up())) {
   const H = { 'X-Alfred-Token': TOKEN, 'Content-Type': 'application/json' };
   const G = { headers: { 'X-Alfred-Token': TOKEN } };
 
-  const noTok = await j('/api/command-center/seats');
-  chk('GET /api/command-center/seats without token blocked', noTok.s === 401 || noTok.s === 403, `got ${noTok.s}`);
-  const seats = await j('/api/command-center/seats', G);
-  chk('GET /api/command-center/seats lists ready seats', seats.s === 200 && seats.d.seats.some((s) => s.id === 'claude' && s.ready), JSON.stringify(seats.d).slice(0, 200));
-  chk('seat payload carries no binary path', seats.s === 200 && seats.d.seats.every((s) => !('bin' in s)), Object.keys(seats.d.seats[0] || {}).join(','));
+  // --- Open AI terminal: the installed AI command-line tools, and opening one ---
+  // Stub mode marks every registry seat installed and ready, so the list is deterministic.
+  const listNoTok = await j('/api/claude/open-terminal');
+  chk('GET /api/claude/open-terminal without token blocked', listNoTok.s === 401 || listNoTok.s === 403, `got ${listNoTok.s}`);
+  const list = await j('/api/claude/open-terminal', G);
+  const offered = (list.d?.providers || []).map((p) => p.id);
+  chk('GET lists the CLIs with an interactive entry: claude, gemini and grok', list.s === 200 && ['claude', 'gemini', 'grok'].every((id) => offered.includes(id)), JSON.stringify(list.d));
+  chk('ollama is not offered: `ollama run` needs a model, so it has no interactive entry', !offered.includes('ollama'), offered.join(','));
+  chk('the list carries a label per tool and no binary path or launch command',
+    list.s === 200 && list.d.providers.every((p) => typeof p.label === 'string' && p.label && Object.keys(p).sort().join() === 'id,label'), JSON.stringify(list.d?.providers?.[0]));
 
-  const openNoTok = await fetch(B + '/api/command-center/open', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-  chk('POST /api/command-center/open without token blocked', openNoTok.status === 401 || openNoTok.status === 403, `got ${openNoTok.status}`);
-  const badId = await j('/api/command-center/open', { method: 'POST', headers: H, body: JSON.stringify({ providers: ['nope!'] }) });
-  chk('POST open rejects a malformed provider id', badId.s === 400, `got ${badId.s}`);
-  const two = await j('/api/command-center/open', { method: 'POST', headers: H, body: JSON.stringify({ providers: ['claude', 'grok'] }) });
-  const argv2 = two.d?.argv || [];
-  chk('POST open (dry run) builds one wt window with two panes', two.s === 200 && two.d.dryRun && argv2[0] === '-w' && argv2[1] === 'new' && argv2.filter((a) => a === 'split-pane').length === 1 && argv2.includes('0.500'), JSON.stringify(argv2));
-  chk('panes are titled by seat label', argv2.includes('Claude (Anthropic)') && argv2.includes('Grok (xAI, via Grok Build CLI)'), JSON.stringify(argv2));
-  const lane = await j('/api/command-center/open', { method: 'POST', headers: H, body: JSON.stringify({ providers: ['grok'], lane: true }) });
-  const argvL = lane.d?.argv || [];
-  chk('a lane open targets the shared named window and adds one pane', lane.s === 200 && lane.d.lane && argvL[0] === '-w' && argvL[1] === 'alfred-command-center' && argvL[2] === 'split-pane' && !argvL.includes('new-tab') && argvL.includes('Grok (xAI, via Grok Build CLI)'), JSON.stringify(argvL));
-  const all = await j('/api/command-center/open', { method: 'POST', headers: H, body: JSON.stringify({}) });
-  const argvAll = all.d?.argv || [];
-  const sizes = argvAll.filter((a) => /^0\.\d{3}$/.test(a));
-  // k-th split takes (n-k)/(n-k+1) of what is left — derived from the seat count so a new
-  // registry entry does not silently invalidate this assertion.
-  const nReady = seats.d.seats.filter((s) => s.ready).length;
-  const expected = Array.from({ length: nReady - 1 }, (_, i) => ((nReady - 1 - i) / (nReady - i)).toFixed(3)).join(',');
-  chk('POST open with no list uses every ready seat, equal columns', all.s === 200 && argvAll.filter((a) => a === 'split-pane').length === nReady - 1 && sizes.join(',') === expected, `${sizes.join(',')} vs ${expected} (n=${nReady})`);
+  const otNoTok = await fetch(B + '/api/claude/open-terminal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"provider":"claude"}' });
+  chk('POST /api/claude/open-terminal without token blocked', otNoTok.status === 401 || otNoTok.status === 403, `got ${otNoTok.status}`);
+  const otGrok = await j('/api/claude/open-terminal', { method: 'POST', headers: H, body: JSON.stringify({ provider: 'grok' }) });
+  chk('POST (dry run) for grok launches only its own command, fresh and not resumed',
+    otGrok.s === 200 && otGrok.d.dryRun && otGrok.d.provider === 'grok' && JSON.stringify(otGrok.d.argv) === '["stub:grok"]' && otGrok.d.resumed === false, JSON.stringify(otGrok.d));
+  const otClaude = await j('/api/claude/open-terminal', { method: 'POST', headers: H, body: '{}' });
+  const argvC = otClaude.d?.argv || [];
+  chk('POST with no provider defaults to claude, which resumes only when an idle session exists',
+    otClaude.s === 200 && otClaude.d.provider === 'claude' && argvC[0] === 'stub:claude'
+      && (otClaude.d.resumed ? argvC.join() === `stub:claude,--resume,${otClaude.d.sessionId}` : argvC.length === 1), JSON.stringify(otClaude.d));
+  const otExtra = await j('/api/claude/open-terminal', { method: 'POST', headers: H, body: JSON.stringify({ provider: 'gemini', argv: ['calc.exe'], launch: ['calc.exe'], command: 'calc' }) });
+  chk('extra fields in the body never reach the command that is run', otExtra.s === 200 && JSON.stringify(otExtra.d.argv) === '["stub:gemini"]', JSON.stringify(otExtra.d));
+  for (const bad of ['nope!', 'claude --dangerously-skip-permissions', '../claude', 'Claude']) {
+    const r = await j('/api/claude/open-terminal', { method: 'POST', headers: H, body: JSON.stringify({ provider: bad }) });
+    chk(`POST rejects the provider id "${bad}" before anything is looked up`, r.s === 400, `got ${r.s}`);
+  }
+  const otNope = await j('/api/claude/open-terminal', { method: 'POST', headers: H, body: JSON.stringify({ provider: 'nope' }) });
+  chk('POST for a well-formed id that is not in the registry -> 404', otNope.s === 404, `got ${otNope.s}`);
+  const otOllama = await j('/api/claude/open-terminal', { method: 'POST', headers: H, body: JSON.stringify({ provider: 'ollama' }) });
+  chk('POST for ollama (no interactive entry) -> 404', otOllama.s === 404, `got ${otOllama.s}`);
+  const otBadJson = await j('/api/claude/open-terminal', { method: 'POST', headers: H, body: '{not json' });
+  chk('POST with a body that is not JSON -> 400', otBadJson.s === 400, `got ${otBadJson.s}`);
 
-  // --- per-seat model config, sign-in ---
-  const cfgNoTok = await fetch(B + '/api/command-center/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-  chk('POST /api/command-center/config without token blocked', cfgNoTok.status === 401 || cfgNoTok.status === 403, `got ${cfgNoTok.status}`);
-  const cfgBad = await j('/api/command-center/config', { method: 'POST', headers: H, body: JSON.stringify({ models: { claude: 'not a model' } }) });
-  chk('POST config rejects a malformed model id', cfgBad.s === 400, `got ${cfgBad.s}`);
-  const cfgEmpty = await j('/api/command-center/config', { method: 'POST', headers: H, body: JSON.stringify({}) });
-  chk('POST config with nothing to update -> 400', cfgEmpty.s === 400, `got ${cfgEmpty.s}`);
-  const cfgOk = await j('/api/command-center/config', { method: 'POST', headers: H, body: JSON.stringify({ models: { claude: 'opus' }, synthModel: 'haiku' }) });
-  chk('POST config saves a seat model and the chair model', cfgOk.s === 200 && cfgOk.d.models.claude === 'opus' && cfgOk.d.synthModel === 'haiku', JSON.stringify(cfgOk.d));
-  chk('config landed in the test config dir, not the real one', fs.existsSync(path.join(stub, 'cfg', 'config.json')), path.join(stub, 'cfg', 'config.json'));
-  const seats2 = await j('/api/command-center/seats', G);
-  const claudeSeat = seats2.d?.seats.find((s) => s.id === 'claude');
-  const geminiSeat = seats2.d?.seats.find((s) => s.id === 'gemini');
-  chk('GET seats reflects the override, the default and the chair', claudeSeat?.model === 'opus' && claudeSeat?.defaultModel === 'sonnet' && geminiSeat?.model === 'gemini-3.7-flash-high' && seats2.d.synthModel === 'haiku', JSON.stringify({ c: claudeSeat?.model, g: geminiSeat?.model, s: seats2.d?.synthModel }));
-  const openModel = await j('/api/command-center/open', { method: 'POST', headers: H, body: JSON.stringify({ providers: ['claude', 'ollama'] }) });
-  const argvM = openModel.d?.argv || [];
-  const iClaude = argvM.indexOf('--model');
-  chk('panes open with the chosen model: a flag for claude, positional after `ollama run`', iClaude > 0 && argvM[iClaude + 1] === 'opus' && argvM.indexOf('run') > 0 && /^[\w.:-]+$/.test(argvM[argvM.indexOf('run') + 1]), JSON.stringify(argvM));
-  const cfgClear = await j('/api/command-center/config', { method: 'POST', headers: H, body: JSON.stringify({ models: { claude: '' } }) });
-  chk('blank model clears the override', cfgClear.s === 200 && !('claude' in cfgClear.d.models), JSON.stringify(cfgClear.d));
-
+  // --- sign-in (the startup check's Sign in button) ---
   const signNoTok = await fetch(B + '/api/command-center/signin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"provider":"claude"}' });
   chk('POST /api/command-center/signin without token blocked', signNoTok.status === 401 || signNoTok.status === 403, `got ${signNoTok.status}`);
   const signClaude = await j('/api/command-center/signin', { method: 'POST', headers: H, body: JSON.stringify({ provider: 'claude' }) });
@@ -195,34 +185,6 @@ if (!(await up())) {
   chk('POST signin for a seat with no console flow -> 409', signOllama.s === 409, `got ${signOllama.s}`);
   const signNope = await j('/api/command-center/signin', { method: 'POST', headers: H, body: JSON.stringify({ provider: 'nope' }) });
   chk('POST signin for an unknown seat -> 404', signNope.s === 404, `got ${signNope.s}`);
-
-  const askNoTok = await fetch(B + '/api/council', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-  chk('POST /api/council without token blocked', askNoTok.status === 401 || askNoTok.status === 403, `got ${askNoTok.status}`);
-  const noQ = await j('/api/council', { method: 'POST', headers: H, body: JSON.stringify({ providers: ['claude'] }) });
-  chk('POST /api/council without a question -> 400', noQ.s === 400, `got ${noQ.s}`);
-  const noSeats = await j('/api/council', { method: 'POST', headers: H, body: JSON.stringify({ question: 'Q', providers: [] }) });
-  chk('POST /api/council without seats -> 400', noSeats.s === 400, `got ${noSeats.s}`);
-
-  const ask = await j('/api/council', { method: 'POST', headers: H, body: JSON.stringify({ question: 'Which IaC tool?', providers: ['claude', 'gemini', 'grok'] }) });
-  chk('POST /api/council -> 202 with a run id and queued seats', ask.s === 202 && /^council\d+$/.test(ask.d.id) && ask.d.status === 'running' && Object.keys(ask.d.seats).length === 3, JSON.stringify(ask.d).slice(0, 200));
-  let run = ask.d;
-  const deadline = Date.now() + 20000;
-  while (run && run.status === 'running' && Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 300));
-    run = (await j('/api/council/' + ask.d.id, G)).d;
-  }
-  chk('council run completes', run && run.status === 'done', JSON.stringify(run).slice(0, 300));
-  chk('run carries each seat answer', run && run.seats.claude.status === 'done' && run.seats.claude.text.includes('Terraform') && run.seats.grok.status === 'done', JSON.stringify(run && run.seats).slice(0, 300));
-  chk('a failed seat is reported, not hidden', run && run.seats.gemini.status === 'error' && /stub missing/.test(run.seats.gemini.error), JSON.stringify(run && run.seats.gemini));
-  chk('run carries the verdict', run && run.synthesis && run.synthesis.status === 'done' && run.synthesis.text.includes('verified'), JSON.stringify(run && run.synthesis));
-  chk('the saved chair model and the registry seat default reached the council', run && run.synthesis.model === 'stub:haiku' && run.seats.claude.model === 'stub:sonnet', JSON.stringify(run && { synth: run.synthesis.model, claude: run.seats.claude.model }));
-
-  const list = await j('/api/council', G);
-  chk('GET /api/council lists runs', list.s === 200 && list.d.runs.some((r) => r.id === ask.d.id), `got ${list.s}`);
-  const missing = await j('/api/council/nope', G);
-  chk('GET /api/council/<unknown> -> 404', missing.s === 404, `got ${missing.s}`);
-  const getNoTok = await fetch(B + '/api/council/' + ask.d.id);
-  chk('GET /api/council/<id> without token blocked', getNoTok.status === 401 || getNoTok.status === 403, `got ${getNoTok.status}`);
 }
 
 stopServer();
