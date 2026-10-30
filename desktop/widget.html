@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'">
+  <title>Alfred</title>
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; user-select: none; }
+    body { position: relative; cursor: grab; }
+    body.dragging { cursor: grabbing; }
+    canvas { display: block; width: 100%; height: 100%; transition: filter 0.2s; }
+    body:hover canvas { filter: brightness(1.25); }
+    #badge {
+      position: absolute; top: 14px; right: 14px; min-width: 22px; height: 22px; padding: 0 6px; box-sizing: border-box;
+      border-radius: 11px; font: 600 12px/22px "Segoe UI", system-ui, sans-serif; text-align: center;
+      background: #2ef2b2; color: #04241a; box-shadow: 0 0 0 2px #07080d;
+    }
+    #badge.attention { background: #ff4d6d; color: #fff; }
+    #badge[hidden] { display: none; }
+  </style>
+</head>
+<body>
+  <canvas id="brain"></canvas>
+  <div id="badge" hidden></div>
+  <script src="widget.js"></script>
+</body>
+</html>
