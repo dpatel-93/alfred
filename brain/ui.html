@@ -937,13 +937,17 @@
   /* --- "Open AI terminal" menu (#open-terminal-btn): a small fixed popover under the button,
        one row per AI command-line tool installed on this PC. --- */
   #ai-term-menu {
-    position: fixed; z-index: 45; width: 220px;
+    position: fixed; z-index: 45; width: 260px;
     background: var(--surface-2); border: 1px solid var(--border-strong, var(--border));
     border-radius: var(--r-md); box-shadow: var(--shadow-panel);
     padding: 6px; display: none; flex-direction: column; gap: 4px;
   }
   #ai-term-menu.open { display: flex; }
-  #ai-term-menu .btn { justify-content: flex-start; text-align: left; }
+  /* The registry's labels are long ("Gemini (Google, via Antigravity CLI)"): wrap them, in sentence case. */
+  #ai-term-menu .btn {
+    justify-content: flex-start; text-align: left; height: auto; min-height: 28px; padding: 5px 8px;
+    white-space: normal; text-transform: none; letter-spacing: normal; line-height: 1.35;
+  }
   #ai-term-menu .panel-help { padding: 4px 6px; }
 
   /* --- Interns: glanceable summary strip (VRAM/resident proxy + counts),
@@ -8909,7 +8913,7 @@
     var r = aiTermBtn.getBoundingClientRect();
     aiTermMenu.textContent = '';
     aiTermMenu.appendChild(el('div', 'panel-help', ['Looking for AI tools…']));
-    aiTermMenu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 228)) + 'px';
+    aiTermMenu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 268)) + 'px';
     aiTermMenu.style.top = (r.bottom + 6) + 'px';
     aiTermMenu.classList.add('open');
     aiTermBtn.setAttribute('aria-expanded', 'true');
