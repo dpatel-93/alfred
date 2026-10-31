@@ -11,7 +11,7 @@ Work in the brain folder named in your instructions (`RULEBOOK.md` §9 and §15 
 
 **When:** the user asks, or it is Sunday or later in the week and the newest line in `System/logs/reviews-YYYY-MM.md` (this month or last) is more than six days old.
 
-In team mode, take the pen (`Handoffs/pen.md`) for each batch of edits and give it back after (RULEBOOK §16.5).
+In team mode, take the pen (`Agents/pen.md`) for each batch of edits and give it back after (RULEBOOK §16.5).
 
 ## 1. Look back
 Gather, from the files:

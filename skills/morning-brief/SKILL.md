@@ -21,7 +21,7 @@ Work in the brain folder named in your instructions (`RULEBOOK.md` §14 there). 
 
 ## 2. Tidy first
 - An open `errand` whose `Due:` is before today, or a `watch` whose `Until:` date has passed, expires: `Status: expired`, add `- Expired: <now> by <who> (errand day ended)` or `(Until date passed)`, set `Last updated`, move it to `Reminders/Done/`. Yesterday's expired errands go under **Needs you** as "carry over?".
-- In team mode, take the pen (`Handoffs/pen.md`) for these edits and give it back after.
+- In team mode, take the pen (`Agents/pen.md`) for these edits and give it back after.
 
 ## 3. Sort
 | Section | What goes in it |

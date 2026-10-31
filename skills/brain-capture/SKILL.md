@@ -22,7 +22,7 @@ Work in the brain folder named in your instructions. Its `RULEBOOK.md` is the fu
    | a fact about them, how something of theirs works, a preference or a decision | a memory proposal |
 2. **Work out the dates** against today in the user's time zone. Never write "Friday" or "next week" into a date field. A date in the past, or one you can't pin down, is a question for the user.
 3. **Look first.** Search `Reminders/`, `Routines/` and `Calendar/events.md` for the same thing. If it is there, change it instead of adding a second one.
-4. **Team mode only** (`Team:` in `System/settings.md` is not `none`): take the pen in `Handoffs/pen.md` before editing an existing file (RULEBOOK §16.5). A brand-new file needs no pen.
+4. **Team mode only** (`Team:` in `System/settings.md` is not `none`): take the pen in `Agents/pen.md` before editing an existing file (RULEBOOK §16.5). A brand-new file needs no pen.
 
 ## 2. Add a reminder, errand, to-do or watch
 File: `Reminders/<date>--<slug>.md`. `<date>` is the due date, or today if there is none. `<slug>` is the title in lowercase with every run of other characters turned into one hyphen, at most 48 characters. If the name is taken, add `-2`.

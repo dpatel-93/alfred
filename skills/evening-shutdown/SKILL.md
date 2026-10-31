@@ -24,7 +24,7 @@ Work in the brain folder named in your instructions (`RULEBOOK.md` §9 and §14.
 ## 3. Do what they chose
 - **Moves** (RULEBOOK §9): set `Due:`; if `Status:` was `snoozed`, set it to `open`; add `- Moved: <now> to <date> by <who>`; set `Last updated`.
 - **Something new in the three** that is not yet a reminder: create a to-do due tomorrow (RULEBOOK §6), `Author: <who>`.
-- In team mode, take the pen (`Handoffs/pen.md`) for these edits and give it back after.
+- In team mode, take the pen (`Agents/pen.md`) for these edits and give it back after.
 
 ## 4. Save the wrap-up
 Write `Outputs/shutdowns/<today>.md` (make the folder if needed), exactly in the RULEBOOK §14.1 shape: `Kind: shutdown`, `Author: <who>`, `For: <tomorrow>`, `Created`, `Last updated`; sections `## Done today`, `## Moved`, `## Next three for <Weekday> <tomorrow>` (numbered, `1. **Title** · Reminders/<file>.md`), `## Note`; `- nothing` in an empty section. If the file exists, rewrite it in place: keep `Created`, set `Last updated`, and put the old text in `Archive/YYYY-MM/replaced/` first (§9).
