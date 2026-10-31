@@ -12,7 +12,7 @@ Work in the brain folder named in your instructions (`RULEBOOK.md` §16 there). 
 ## The one rule
 Each AI writes only in its own folder, `Agents/<Me>/`: its outgoing files are `Agents/<Me>/handoffs/to-<them>.md`, and it reads the ones addressed to it, `Agents/<Them>/handoffs/to-<me>.md`. Never edit another AI's hand-off file.
 
-**An older brain** (made before Alfie 0.3) may still have `Handoffs/<them>-to-<me>.md` and `Handoffs/pen.md`: read those too. When you write to a pair whose old file `Handoffs/<me>-to-<them>.md` is still there, put all of its items into `Agents/<Me>/handoffs/to-<them>.md`, then move the old file to `Archive/YYYY-MM/Handoffs/`. Never delete it.
+**An older brain** (made before Brainiac 0.3) may still have `Handoffs/<them>-to-<me>.md` and `Handoffs/pen.md`: read those too. When you write to a pair whose old file `Handoffs/<me>-to-<them>.md` is still there, put all of its items into `Agents/<Me>/handoffs/to-<them>.md`, then move the old file to `Archive/YYYY-MM/Handoffs/`. Never delete it.
 
 ## 1. At the start of every session: check
 1. Read every `Agents/*/handoffs/to-<me>.md` (and any old `Handoffs/*-to-<me>.md`).
@@ -36,7 +36,7 @@ When the user wants another AI on the team to do something, or the work suits it
 - **What to do:** <the task, with file paths>
 - **Done looks like:** <what the result should be, and where it goes>
 ```
-4. Set the file's `Last updated`, and tell the user: "I've asked Codex. Alfie will wake it if Alfie is running; otherwise it picks this up the next time it runs."
+4. Set the file's `Last updated`, and tell the user: "I've asked Codex. Brainiac will wake it if Brainiac is running; otherwise it picks this up the next time it runs."
 5. Until it is reported, treat it as on its way, not done.
 
 ## 3. Report on an ask

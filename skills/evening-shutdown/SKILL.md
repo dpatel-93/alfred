@@ -5,7 +5,7 @@ description: Close the user's day in about two minutes - what got done, what to 
 
 # Evening shutdown
 
-Work in the brain folder named in your instructions (`RULEBOOK.md` §9 and §14.1 there). The Alfie app has the same thing as a button ("Wrap up the day"); this is the conversation version. Keep it short: the point is to stop working, not to start planning a week.
+Work in the brain folder named in your instructions (`RULEBOOK.md` §9 and §14.1 there). The Brainiac app has the same thing as a button ("Wrap up the day"); this is the conversation version. Keep it short: the point is to stop working, not to start planning a week.
 
 **Today** and **now** are in the user's time zone (`Time zone:` in `System/settings.md`); stamps are `YYYY-MM-DD HH:MM`. **Tomorrow** is the next day. **`<who>`** is your short name.
 
