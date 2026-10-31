@@ -136,10 +136,7 @@ investigation.
 ![The live org chart with a five-level delegation glowing](docs/screenshots/02-org-chart-lineage.jpg)
 
 An edge only glows when both of its ends are active, and in a real delegation that is rarely
-true of the whole chain at one instant — the employee works while the manager waits. The
-`Org Self-Test` button runs a genuine VP → manager → employee delegation that does nothing but
-pass a word down and back, and holds the window open long enough to see the shape of it. That
-is how the shot above was taken: a real chain, not a diagram.
+true of the whole chain at one instant — the employee works while the manager waits.
 
 **The Library — every artifact on disk, with its real source.**
 Skills, commands, hooks and instruction files from both your own `~/.claude` and every
@@ -250,22 +247,13 @@ query the same index directly instead of guessing filenames.
   `ollama pull qwen3.5:4b` for noticeably better answer quality at the cost of
   10-60+ seconds per answer (`ALFRED_ASK_MODEL=qwen3.5:4b` to switch).
 - **Claude Code** — the CLI, or the VS Code extension. Either reads `~/.claude/`.
-- **Five runtime packages, all for the Command Center's live consoles.** The
-  indexer, search and every other HUD view are plain Node. The lanes that show a
-  real terminal in the page need `node-pty` (a genuine Windows console per lane —
-  ConPTY), `ws` (the socket between console and page) and `@xterm/xterm` with
-  two addons (the screen). Run `npm install` inside `brain/` once; `node-pty`
-  ships prebuilt binaries for current Node releases, and `package.json` carries
-  the `allowScripts` entry its install step needs. Without that install the server
-  still starts and every other view works — only the in-page consoles are absent,
-  and each lane's "native window" button still opens Windows Terminal instead.
-  Playwright remains a devDependency used only by the browser test suite.
-- **Optional AI CLIs for the Command Center.** Every signed-in CLI on the machine
-  becomes a seat: Claude Code (the host), Grok Build (`npm i -g @xai-official/grok`,
-  SuperGrok / X Premium+), Google's Antigravity CLI (`agy`, Google AI Pro/Ultra)
-  and local Ollama models. All are
+- **No runtime packages.** The server, the indexer, search and every HUD view are plain
+  Node. Playwright is a devDependency used only by the browser test suite.
+- **Optional AI CLIs.** Every CLI on the machine becomes a seat: Claude Code (the host),
+  Grok Build (`npm i -g @xai-official/grok`, SuperGrok / X Premium+), Google's
+  Antigravity CLI (`agy`, Google AI Pro/Ultra) and local Ollama models. All are
   subscription or local — no per-token API keys are needed for any of them, and
-  none is required: the council and the lanes use whatever is ready.
+  none is required: the **Open AI terminal** button offers whichever are installed.
 - **Any markdown editor works for hand-editing brain notes** — VS Code,
   Obsidian, Notepad, whatever you like. The brain is just a folder of `.md`
   files; Alfred doesn't call any editor's API or require one to be installed.
@@ -370,7 +358,6 @@ that governs you.
 | **Enterprise** | The org chart, with live delegation lineage and per-branch spend |
 | **Operative Roster** | Every agent's charter — mission, tier, model, reporting line |
 | **Library** | Every skill, command, hook and instruction file, with its source and usedBy |
-| **Command Center** | Every AI CLI on the machine as a lane — a live console in the page, sign-in, and the model it runs — plus the council: one question to all of them, with Claude chairing a verdict |
 
 Protocols, the Operative Roster and the Library are also where you **edit** this stuff.
 Clicking through to a file opens it as raw text, frontmatter included; changing it and
@@ -394,10 +381,18 @@ Everything else happens from the search bar:
 ### Day
 
 The page Alfred opens on. It is the desk view of the shared brain (the Google Drive "Second
-Brain" folder that every AI reads): the left column is today — overdue, due today,
-yesterday's errands to carry over, the routines that fall today; the middle is Grok's morning
-brief and the week ahead; the right is open to-dos, what each project is waiting on, signals
-waiting between AIs, and an end-of-day card that lists what got done and tidies up.
+Brain" folder that every AI reads): the left column is everything to act on — overdue, due
+today, yesterday's errands to carry over, the routines that fall today, the week ahead and open
+to-dos; the middle is the month calendar on its own; the right is Grok's morning brief, what
+each project is waiting on, signals waiting between AIs, and an end-of-day card that lists what
+got done and tidies up.
+
+**Tell Grok**, in the Day header, takes what you would say to Grok in the car ("remind me to
+call the plumber Saturday", "dentist Tuesday 3pm"). Grok's CLI turns it into a plan; Alfred
+checks every field and writes the reminder file or calendar line itself, then the page shows it.
+If Grok cannot answer (signed out, timed out), your words go to Grok's `Inbox/` as a handoff so
+nothing is lost. Grok runs in an empty temp folder: only your sentence and today's date leave
+the machine.
 
 Every item has **Done**, **Tomorrow** and **Snooze**. They edit the reminder file in place
 whoever wrote it (MANIFESTO rule 2: any AI edits any file), add a dated `Closed:` or `Moved:`
@@ -409,63 +404,36 @@ every ten minutes while the dashboard is up and the moment a signal lands.
 The view re-reads the brain whenever a watched folder changes on disk (Drive for Desktop
 lands Grok's car-side edits within seconds), every two minutes otherwise, and on Refresh.
 
-**Calendar.** With Google Calendar connected (Settings → Google Calendar, a one-time OAuth
-client from the Google Cloud Console), Alfred keeps a dedicated "Second Brain" calendar on the
-account in step with the brain: every open dated reminder is an all-day event there, closing
-the reminder removes it, and an event anyone creates in that calendar (Grok through its own
-Google Calendar connector, the phone, you) becomes a reminder file; moving or deleting the
-event moves or closes the reminder. The Day view's month grid shows a dot per item per day
-across every calendar the account sees, shared calendars and invitations included, and a
-day's agenda on click. Only a refresh token is stored, in an owner-only file under `~/.alfred`.
+**Calendar.** The shared calendar is one Markdown file in the brain, `Calendar/events.md`, that
+Grok and Claude both add to and read from: one line per event under its month,
+`- YYYY-MM-DD [HH:MM[-HH:MM]] Title [@ place] (added by <ai>)`, cancelled lines struck through
+rather than deleted. The Day view's month grid shows a dot per reminder due and per event, and
+the picked day's agenda; lines it cannot read are flagged under the grid. The Librarian lists
+the next 7 days in `index.md`, and the session-start hook prints them for Claude. Add one from a
+desk session with `node ~/.claude/helpers/brain-calendar.mjs add 2026-10-30 "Dentist" --time 09:30 --at "clinic"`.
+(Google Calendar was tried first and dropped on 2026-10-23 in favour of the file.)
 
-The **bench strip** in the Day header shows each AI seat's state (ready, needs sign-in, not
-installed) with a Sign in button that opens the provider's own login console. At startup, if
-Claude or Grok is signed out, a banner says so and the sign-in console opens once per server
-boot (a checkbox on the banner turns the auto-open off). Grok's subscription sign-in lapses
-every 7 days, so this is the Friday nudge made visible.
+The **sign-in check** that opens the dashboard lists each AI seat's state (ready, needs sign-in,
+not installed) with a Sign in button that opens the provider's own login console; Claude is
+required, Grok and Gemini are asked for when installed. Afterwards, if Claude or Grok signs
+out, a banner on Day says so and the sign-in console opens once per server boot (a checkbox on
+the banner turns the auto-open off). Grok's subscription sign-in lapses every 7 days, so this
+is the Friday nudge made visible.
 
-### Command Center
+### Open AI terminal
 
-Retired from the navigation in favour of the Day view's bench strip; still reachable with the
-`3` key or `#command` in the URL while its remaining pieces (in-page consoles, the council)
-are being folded into the single ask box. A **seat** is any
-provider in `helpers/providers.json` that is the host (Claude Code), a CLI you can sign into
-(Grok Build, Antigravity) or the local Ollama daemon. Adding a
-seat is a data edit in that registry — there is no code to change.
+The **Open AI terminal** button in the header lists the AI command-line tools installed on this
+PC — Claude Code, Grok Build, Antigravity (Gemini) and whatever else `helpers/providers.json`
+holds with a CLI of its own — and opens the one you pick in a separate Windows Terminal window
+(a plain console window if Windows Terminal is not installed), in your home folder. Alfred does
+not host the terminal and nothing you type passes through it. Claude resumes your most recent
+idle session when there is one; every other tool starts fresh. Ollama is not offered: `ollama
+run` needs a model name, so it has no interactive entry of its own. If no tool is installed,
+the menu says so. A **seat** is any provider in `helpers/providers.json` that is the host
+(Claude Code), a CLI you can sign into (Grok Build, Antigravity) or the local Ollama daemon.
+Adding a seat is a data edit in that registry — there is no code to change.
 
-Each seat is a **lane** — a card that shows whether the CLI is installed and signed in, which
-model it runs, and two buttons:
-
-- **Open terminal** starts the seat's CLI in a real Windows console on the server
-  (`node-pty`, ConPTY) and shows it in the page through xterm.js. This is a true terminal, not
-  a chat imitation: the CLI's own TUI, colours, cursor, keyboard shortcuts and sign-in flows
-  all work, and because the process is native, Claude Code's `Alt+V` screenshot paste still
-  reads your clipboard. Drag a file onto a lane and it lands in a temp folder with its path
-  typed into the console. Consoles belong to the server — reload the page and they reattach
-  with their scrollback; **hide** keeps one running out of sight; **kill** stops it and
-  everything it spawned. `Ctrl+Shift+C` / `Ctrl+Shift+V` stay with the browser; every other
-  key goes to the CLI.
-- **↗ native window** opens the same seat in Windows Terminal instead, adding a pane to one
-  shared "alfred-command-center" window per click. **Open all lanes** does that for every
-  ticked seat at once, equal columns.
-
-**Sign in** appears on any seat that is installed but not signed in. It opens the provider's
-own login command (`claude auth login`, `agy`, `grok login`) in a real console
-and steps aside — the HUD never sees a credential. On load, the HUD says once which seats
-still need one.
-
-**Models.** Each lane has a model box. The registry's `councilModel` is the cheap default every
-machine starts from (Claude → `sonnet`, Gemini → a Flash tier, Ollama → whatever you set);
-what you raise it to is saved per machine in `~/.alfred/config.json` and used both in council
-and when that lane's console opens. The expensive tiers are therefore a per-seat choice you
-make, never a default you inherit.
-
-**The council.** Beneath the lanes: tick the seats you want, type one question, and every
-ticked seat answers it in parallel through `helpers/council-run.mjs`. Answers land in
-side-by-side columns as they arrive; then, if you leave the chair box ticked, Claude reads all
-of them and writes a verdict — where they agree, where they disagree, and what it recommends,
-honouring each provider's registry contract (Grok's answers are leads to verify, never facts).
-The same engine works from any shell:
+The council is no longer part of the dashboard, but its engine still works from any shell:
 
 ```
 node ~/.claude/helpers/council-run.mjs "Which IaC tool for this?"          # every ready seat, Claude chairs
@@ -475,14 +443,13 @@ node ~/.claude/helpers/council-run.mjs --status                            # who
 ```
 
 Seats marked *ask first* in the registry (anything that leaves the machine) only ever receive
-the question you send from here — ticking the seat is that approval, per question.
+the question you send them.
 
 ### API reference
 
 Everything is served by `server.mjs` on `http://localhost:7777` (or your `PORT`). The table
-below is the useful subset, not the full surface — there are 32 fixed routes plus two
-parameterised agent ones, and the rest are per-view reads (`/api/projects`, `/api/charter`,
-`/api/protocols`) and the agent and intern bridge routes.
+below is the useful subset, not the full surface — the rest are per-view reads
+(`/api/projects`, `/api/charter`, `/api/protocols`) and the agent and intern bridge routes.
 
 The whole server binds to loopback only, and cross-origin preflights are refused outright, so
 a random web page cannot reach it even from your own browser. On top of that, anything that
@@ -517,17 +484,10 @@ behind the token too, that is one line in the router's allowlist.
 | `POST` | `/api/reindex` | token | Rebuilds the index; progress is streamed via `GET /api/reindex/status` |
 | `GET`/`POST` | `/api/settings` | token | Reads and writes local config. A saved cloud key is proven against the provider by an authenticated probe (a rejected key is reported in the Interns bench); the read path returns a mask, never the key |
 | `POST` | `/api/agents/launch` | token | Spawns a subagent run; output via `GET /api/agents/<id>/output` |
-| `POST` | `/api/org/selftest` | token | Runs a real VP → manager → employee delegation so the org chart has a genuine lineage to draw; state is published on `/api/org` as `selfTest` |
 | `POST` | `/api/interns/run` \| `/pull` | token | Runs or downloads a local Ollama model |
-| `POST` | `/api/claude/open-terminal` | token | Opens a real console resumed on your most recent idle session |
-| `GET` | `/api/command-center/seats` | token | Every seat with installed / signed-in / ready state, its effective model and suggestions (`?refresh=1` bypasses the 30s cache) |
-| `POST` | `/api/command-center/open` | token | Opens ticked seats in Windows Terminal — `{"providers":[…]}` for a fresh equal-column window, `"lane": true` to add a pane to the shared window |
+| `GET` | `/api/claude/open-terminal` | token | The AI command-line tools installed on this PC that can be opened — `{"providers":[{"id","label"}]}` |
+| `POST` | `/api/claude/open-terminal` | token | Opens one of them in its own terminal window — `{"provider": "claude"}` (the default); Claude resumes your most recent idle session. The id is checked against the provider registry, never run as typed |
 | `POST` | `/api/command-center/signin` | token | Opens the seat's own login command in a real console; `{"provider": "grok"}` |
-| `POST` | `/api/command-center/config` | token | Saves per-seat models and the chair model to `~/.alfred/config.json`; a blank model returns a seat to the registry default |
-| `POST` | `/api/council` | token | Convenes a council — `{"question", "providers": […], "synthesize"}` — and returns a run id; poll `GET /api/council/<id>` for answers and the verdict as they land |
-| `POST` | `/api/terminals` | token | Starts a seat's CLI in a real console (`{"provider", "cols", "rows"}`); `GET /api/terminals` lists them, `POST /api/terminals/<id>/kill` \| `/resize` \| `/drop` control one |
-| `WS` | `/ws/terminal/<id>?token=…` | token | The console's screen and keyboard: `{"type":"input"}` and `{"type":"resize"}` down, `hello` (with scrollback), `data` and `exit` up. Origin-checked, loopback only |
-| `GET` | `/vendor/xterm/<file>` | — | xterm.js and its two addons, served from `node_modules` by allowlist so the HUD works offline |
 
 `/api/library/item` is worth calling out as a pattern rather than a route: the caller passes
 an opaque id that is looked up in a map the server built by scanning its own directories. No
@@ -556,9 +516,9 @@ the page, and `/api/github/status` is asserted in the test suite to never return
 | `ALFRED_PROJECT_ROOTS` | `~/OneDrive/Desktop/_Projects` | Folders scanned for local git clones, used to annotate Workshop cards. Semicolon-separated. |
 | `OLLAMA_API_KEY` | unset | Ollama Cloud key. Unlocks the cloud half of the Interns panel, so intern-tier work can run on a free hosted model instead of your own GPU. Get one at [ollama.com](https://ollama.com) → Settings → Keys. **You don't need this variable** — the HUD's own Settings panel takes the key and saves it to `~/.alfred/config.json`. Set it here only if you'd rather manage it as an environment variable; it takes precedence over the saved one. |
 | `OLLAMA_CLOUD_URL` | `https://ollama.com` | Override the cloud endpoint (self-hosted or a compatible provider) |
-| `ALFRED_COUNCIL_CLAUDE_MODEL` / `ALFRED_COUNCIL_SYNTH_MODEL` | `sonnet` | Fallback model for Claude's seat and for the chair when neither the HUD nor `--models` / `--synth-model` names one |
+| `ALFRED_COUNCIL_CLAUDE_MODEL` / `ALFRED_COUNCIL_SYNTH_MODEL` | `sonnet` | Fallback model for Claude's seat and for the chair when `--models` / `--synth-model` names none |
 | `ALFRED_COUNCIL_TIMEOUT_MS` | `600000` | How long a single seat may take before the council gives up on it |
-| `ALFRED_LOCAL_CONFIG_DIR` | `~/.alfred` | Where `config.json` (GitHub token, saved keys, per-seat models) lives — the test servers point this at a temp folder so they never touch yours |
+| `ALFRED_LOCAL_CONFIG_DIR` | `~/.alfred` | Where `config.json` (GitHub token, saved keys) lives — the test servers point this at a temp folder so they never touch yours |
 | `ALFRED_TOKEN_FILE` | `~/.claude/alfred-session.token` | Where the per-boot bridge token is written for hooks to read — likewise redirected by the test servers |
 
 ### Naming the org chart's lanes

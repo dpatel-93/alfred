@@ -2,6 +2,28 @@ const B = process.env.ALFRED_TEST_BASE || 'http://localhost:7777';
 const R = []; const T = (n, c, d = '') => R.push({ n, ok: !!c, d: String(d) });
 const j = async (p, o) => { const r = await fetch(B + p, o); let d = null; try { d = await r.json(); } catch {} return { s: r.status, d }; };
 
+// --- What the indexer keeps out of the brain map ---------------------------
+// The Second Brain keeps its blank forms in System/templates (lower case) and
+// a machine mirror of Claude Code's working memory in Memory/agents/claude-code.
+// Both were indexed: 14 template "notes" and ~100 mirror files, the mirror
+// outnumbering the operator's real Memory folder five to one.
+{
+  const pathMod = await import('node:path');
+  const os = await import('node:os');
+  const iv = await import('../index-vault.mjs');
+  const root = pathMod.join(os.tmpdir(), 'alfred-vault-probe');
+  T('a templates folder is skipped whatever its case',
+    iv.isSkippedDir('templates') && iv.isSkippedDir('Templates') && iv.isSkippedDir('TEMPLATES'), '');
+  T('ordinary folders are not skipped', !iv.isSkippedDir('Memory') && !iv.isSkippedDir('Projects'), '');
+  T('the Claude Code memory mirror is excluded in every vault',
+    iv.vaultExcludes().includes('memory/agents/claude-code'), JSON.stringify(iv.vaultExcludes()));
+  T('files inside the mirror are excluded',
+    iv.isExcludedPath(root, pathMod.join(root, 'Memory', 'agents', 'claude-code', 'feedback_x.md')), '');
+  T('the rest of Memory, other agents\' memory included, is still indexed',
+    !iv.isExcludedPath(root, pathMod.join(root, 'Memory', 'profile.md'))
+      && !iv.isExcludedPath(root, pathMod.join(root, 'Memory', 'agents', 'grok.md')), '');
+}
+
 // Ollama is unreachable in this environment, so every call here exercises the
 // degraded path — which is exactly the thing that used to return nothing.
 const status = (await j('/api/status')).d;

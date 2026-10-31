@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'">
+  <title>Alfred</title>
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; user-select: none; }
+    body { position: relative; cursor: grab; --size: 220px; }
+    body.dragging { cursor: grabbing; }
+    body.resizing, body.resizing * { cursor: nwse-resize; }
+    canvas { display: block; transition: filter 0.2s; }
+    body:hover canvas { filter: brightness(1.18); }
+    #badge {
+      position: absolute; top: calc(var(--size) * 0.07); right: calc(var(--size) * 0.12);
+      min-width: 24px; height: 24px; padding: 0 7px; box-sizing: border-box;
+      border-radius: 12px; font: 600 13px/24px "Segoe UI", system-ui, sans-serif; text-align: center;
+      background: #2ef2b2; color: #04241a; box-shadow: 0 0 0 2px #07080d;
+    }
+    #badge.attention { background: #ff4d6d; color: #fff; }
+    #badge[hidden] { display: none; }
+    /* the corner grip: shows on hover, drag it to resize */
+    #grip {
+      position: absolute; right: 4px; bottom: 4px; width: 18px; height: 18px; cursor: nwse-resize;
+      opacity: 0; transition: opacity 0.2s;
+      background: linear-gradient(135deg, transparent 0 46%, rgba(130,217,255,0.75) 46% 54%, transparent 54% 66%,
+        rgba(130,217,255,0.75) 66% 74%, transparent 74%);
+    }
+    body:hover #grip, body.resizing #grip { opacity: 1; }
+  </style>
+</head>
+<body>
+  <canvas id="brain"></canvas>
+  <div id="badge" hidden></div>
+  <div id="grip" title="Drag to resize"></div>
+  <script src="widget.js"></script>
+</body>
+</html>
