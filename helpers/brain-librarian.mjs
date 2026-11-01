@@ -221,13 +221,15 @@ const namesPath = (line, old) => {
   for (let i = line.indexOf(old); i >= 0; i = line.indexOf(old, i + 1)) if (i === 0 || !/[\w./-]/.test(line[i - 1])) return true;
   return false;
 };
+// History lines are skipped: lifecycle lines (- Edited:, - Closed:, …) and log lines ("- HH:MM ET …").
+const HISTORY_LINE = /^\s*[-*]\s+(?:(?:Edited|Closed|Reopened|Applied|Handled|Moved|Expired|Amended|Not applied):|\d{1,2}:\d{2}\s*ET\b)/;
 export function pathReferences(text, changes) {
   const hits = [];
   let heading = '';
   for (const line of text.split(/\r?\n/)) {
     const h = line.match(/^#{1,6}\s+(.*)$/);
     if (h) { heading = h[1]; continue; }
-    if (/path changes/i.test(heading)) continue;
+    if (/path changes/i.test(heading) || HISTORY_LINE.test(line)) continue;
     for (const c of changes) {
       if (!namesPath(line, c.old) || (c.new && line.includes(c.new))) continue;
       hits.push({ line: oneLine(line, 300), old: c.old, new: c.new });

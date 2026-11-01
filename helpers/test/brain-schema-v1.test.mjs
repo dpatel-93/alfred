@@ -67,7 +67,7 @@ put('Reminders/Done/2026-10-31--expired-errand.md', old('Expired errand', 'erran
 applyAction(BRAIN, { file: 'Reminders/Done/2026-10-31--expired-errand.md', action: 'carryover' }, NOW);
 const carried = read('Reminders/2026-10-31--expired-errand.md');
 chk('carrying an expired errand over reopens it with a Reopened line and an Edited line for the date',
-  new RegExp(`- Reopened: ${NOW.stamp} by alfred for user · reason: mistake\\n- Edited: ${NOW.stamp} by alfred for user: due 2026-10-31 → ${NOW.date} \\(carried over\\)\\n$`).test(carried)
+  new RegExp(`- Reopened: ${NOW.stamp} by alfred for user · reason: carried-over\\n- Edited: ${NOW.stamp} by alfred for user: due 2026-10-31 → ${NOW.date} \\(carried over\\)\\n$`).test(carried)
   && readFields(carried).status === 'open' && readFields(carried).schema === '1', carried);
 
 // --- 17.3 and 17.5.1: the Librarian ---
@@ -118,17 +118,18 @@ put('System/path-changes.md', ['# Path changes', '', '- **Kind:** reference', '-
   '| `My Drive/MASTER_INSTRUCTIONS.md` | `Archive/2026-11/MASTER_INSTRUCTIONS.md` (Grok\'s rules: `System/agents/grok.md`) | 2026-11-01 |',
   '| `MASTER_INSTRUCTIONS.md` | `System/agents/grok.md` | 2026-11-01 |', '| `Briefs/` | `Outputs/briefs/` | 2026-10-23 |', ''].join('\n'));
 put('Routines/grok-morning.md', ['# Grok: morning brief', '', '- **Kind:** routine', '- **Runs:** Grok', '- **Author:** Grok', '- **Status:** active', '',
-  'Reads MASTER_INSTRUCTIONS.md at startup.', 'Saves the brief in Outputs/briefs/ (was Briefs/ before).', 'MASTER_INSTRUCTIONS.md moved to System/agents/grok.md.',
+  'Reads MASTER_INSTRUCTIONS.md at startup.', '- Edited: 2026-11-01 12:00 ET by grok: dropped MASTER_INSTRUCTIONS.md', '- Closed: 2026-11-01 12:01 ET by grok · reason: done (MASTER_INSTRUCTIONS.md)', '- 09:30 ET sync: read MASTER_INSTRUCTIONS.md', 'Saves the brief in Outputs/briefs/ (was Briefs/ before).', 'MASTER_INSTRUCTIONS.md moved to System/agents/grok.md.',
   'The old copy is at Archive/2026-11/MASTER_INSTRUCTIONS.md.', '', '## Path changes', '| `MASTER_INSTRUCTIONS.md` | here |', ''].join('\n'));
 put('Knowledge/Docs/setup.md', '# Setup\n\n- **Kind:** doc\n- **Author:** Claude Code (from a desk session)\n\nThe old rules lived in `My Drive/MASTER_INSTRUCTIONS.md`.\n');
 put('Archive/2026-10/old.md', '# Old\n\n- **Author:** grok\n\nRead MASTER_INSTRUCTIONS.md.\n');
 put('Reminders/Done/2026-10-01--done.md', '# Done\n\n- **Author:** grok\n- **Status:** done\n\nRead MASTER_INSTRUCTIONS.md.\n');
 put('System/CHANGELOG.md', '# Changelog\n\n- **Author:** Claude Code\n\n- moved MASTER_INSTRUCTIONS.md\n');
 put('System/logs/grok-2026-11.md', '# Log\n\n- **Author:** grok\n\n- read MASTER_INSTRUCTIONS.md\n');
+put('Inbox/2026-11-01-1256--grok--claude--fyi--old-path.md', note('fyi', 'x.md', '2026-11-01 12:56 ET', 'Read MASTER_INSTRUCTIONS.md.\n').replace('**To:** librarian', '**To:** claude'));
 
 const refs = pathReferences(read('Routines/grok-morning.md'), [
   { old: 'MASTER_INSTRUCTIONS.md', new: 'System/agents/grok.md' }, { old: 'Briefs/', new: 'Outputs/briefs/' }]);
-chk('path references: a bare old path is found; a line also naming the new path, a longer path ending in it, and lines under "Path changes" are not',
+chk('path references: a bare old path is found; history lines (Edited, Closed, log), a line also naming the new path, a longer path ending in it, and lines under "Path changes" are not',
   refs.length === 1 && refs[0].line === 'Reads MASTER_INSTRUCTIONS.md at startup.', JSON.stringify(refs));
 
 console.log('\nThe Librarian (17.3, 17.5)');
@@ -182,7 +183,7 @@ chk('one fyi signal per file, to its Author, naming the line', ps.length === 2 &
 chk('a "Claude Code (…)" author gets a claude-code signal for a "My Drive/" path', ps.some((f) => /--librarian--claude-code--fyi--path-check-knowledge-docs-setup-md/.test(f)));
 chk('the signal is a schema-1 fyi from the librarian', readFields(read(`Inbox/${toGrok}`)).schema === '1' && readFields(read(`Inbox/${toGrok}`)).type === 'fyi'
   && readFields(read(`Inbox/${toGrok}`)).from === 'librarian');
-chk('Archive/, Done/, System/logs/, the CHANGELOG and path-changes.md itself are skipped', !ps.some((f) => /archive|done|logs|changelog|path-changes/.test(f.replace(/--fyi--path-check-/, '#'))));
+chk('Archive/, Done/, Inbox/, index.md, System/logs/, the CHANGELOG and path-changes.md itself are skipped', !ps.some((f) => /archive|done|logs|changelog|path-changes|inbox|old-path|index/.test(f.replace(/--fyi--path-check-/, '#'))));
 chk('the file itself is never edited', /Reads MASTER_INSTRUCTIONS\.md at startup/.test(read('Routines/grok-morning.md')));
 const log1 = read('System/logs/librarian-2026-11.md');
 chk('the run is one log line with the counts', /\n- 2026-11-01 13:00 ET · cloud · applied 4, needs a look 4, waiting [1-9]\d*, path references 2 \(\d+ file changes\)\n$/.test(log1), log1);

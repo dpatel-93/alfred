@@ -254,8 +254,8 @@ export function applyAction(brain, { file, action, due, by = 'user' } = {}, now 
     if (action === 'carryover' && !inDone) return { status: 400, error: 'carryover is for expired items in Reminders/Done/' };
     const oldDue = (String(h.due || '').match(/\d{4}-\d{2}-\d{2}/) || ['none'])[0];
     text = stamp(setField(text, 'Due', newDue));
-    // Carrying an expired errand over reopens it; §17.3 has no carry-over code, so it is the user undoing the expiry.
-    if (inDone) text = appendLine(setField(text, 'Status', 'open'), reopenedLine(now.stamp, who, 'mistake'));
+    // Carrying an expired errand over reopens it for a new day (§17.3 reason carried-over).
+    if (inDone) text = appendLine(setField(text, 'Status', 'open'), reopenedLine(now.stamp, who, 'carried-over'));
     text = appendLine(text, `- Edited: ${now.stamp} by ${who}: due ${oldDue} → ${newDue}${inDone ? ' (carried over)' : ''}`);
     fs.writeFileSync(full, text, 'utf8');
     if (inDone) moveTo(path.join(brain, 'Reminders'));

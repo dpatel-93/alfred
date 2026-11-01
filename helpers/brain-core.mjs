@@ -62,7 +62,7 @@ export function withSchema(text) {
 }
 
 // The closed list of reason codes; writers use only these.
-export const REASONS = ['done', 'cancelled', 'not-needed', 'expired', 'superseded', 'duplicate', 'moved', 'mistake'];
+export const REASONS = ['done', 'cancelled', 'not-needed', 'expired', 'superseded', 'duplicate', 'moved', 'mistake', 'carried-over'];
 export const reasonOf = (v, fallback) => (REASONS.includes(String(v || '').trim().toLowerCase().split(/[\s(]/)[0])
   ? String(v).trim().toLowerCase().split(/[\s(]/)[0] : fallback);
 // One line at the end of the file for every change of state.
