@@ -49,6 +49,27 @@ export function setField(text, field, value) {
   return lines.join('\n');
 }
 
+// --- Item schema v1 (MANIFESTO §17.2, §17.3) ---
+// Any writer that creates a file, or changes a header field of one, writes `- **Schema:** 1`
+// (as the first header field when it is missing). A file without it is schema 0, read as before.
+export function withSchema(text) {
+  if (/^- \*\*Schema:\*\*.*$/m.test(text)) return text.replace(/^- \*\*Schema:\*\*.*$/m, '- **Schema:** 1');
+  const lines = text.split('\n');
+  const first = lines.slice(0, 40).findIndex((l) => /^- \*\*[A-Za-z ]+:\*\*/.test(l));
+  if (first < 0) return text;
+  lines.splice(first, 0, '- **Schema:** 1');
+  return lines.join('\n');
+}
+
+// The closed list of reason codes; writers use only these.
+export const REASONS = ['done', 'cancelled', 'not-needed', 'expired', 'superseded', 'duplicate', 'moved', 'mistake'];
+export const reasonOf = (v, fallback) => (REASONS.includes(String(v || '').trim().toLowerCase().split(/[\s(]/)[0])
+  ? String(v).trim().toLowerCase().split(/[\s(]/)[0] : fallback);
+// One line at the end of the file for every change of state.
+export const closedLine = (stamp, who, reason) => `- Closed: ${stamp} by ${who} · reason: ${reason}`;
+export const reopenedLine = (stamp, who, reason) => `- Reopened: ${stamp} by ${who} · reason: ${reason}`;
+export const appendLine = (text, line) => `${text.trimEnd()}\n${line}\n`;
+
 export const firstWord = (v) => String(v || '').toLowerCase().split(/[\s(·]/)[0];
 export const cleanRef = (v) => String(v || '').replace(/[`"]/g, '').split(/\s+\(|;/)[0].trim().replace(/\\/g, '/');
 export const mdFiles = (dir) => (fs.existsSync(dir)
