@@ -11,7 +11,7 @@
 // ---------------------------------------------------------------------------
 import fs from 'node:fs';
 import path from 'node:path';
-import { easternNow, readFields, setField } from './brain-core.mjs';
+import { easternNow, readFields, setField, withSchema } from './brain-core.mjs';
 import { addEvent } from './brain-calendar.mjs';
 
 // --- Shared checks ---
@@ -58,7 +58,7 @@ function readItem(brain, rel, folder) {
   if (!fs.existsSync(full)) fail(`${rel} is not there (it may have been closed or moved)`);
   return { full, text: fs.readFileSync(full, 'utf8') };
 }
-const stamp = (text, now) => setField(text, 'Last updated', now.stamp);
+const stamp = (text, now) => withSchema(setField(text, 'Last updated', now.stamp));
 const editedLine = (text, now, by, what) => `${text.trimEnd()}\n- Edited: ${now.stamp} by ${by}: ${what}\n`;
 const setTitle = (text, title, prefix = '') => text.replace(/^#\s+.*$/m, `# ${prefix}${title}`);
 function uniqueName(dir, base) {
@@ -89,7 +89,7 @@ export function createReminder(brain, it, { words = '', author = 'user (Alfred d
   fs.mkdirSync(dir, { recursive: true });
   const name = uniqueName(dir, `${due !== 'none' ? due : now.date}--${slugify(title)}`);
   const note = oneLine(it.note, 300);
-  const text = [`# ${title}`, '',
+  const text = [`# ${title}`, '', '- **Schema:** 1',
     `- **Kind:** ${kind}`, '- **Status:** open', `- **Due:** ${due}${time ? ` ${time}` : ''}`,
     `- **Until:** ${kind === 'errand' ? 'end-of-day' : 'done'}`, `- **Scope:** ${it.scope === 'work' ? 'work' : 'personal'}`,
     '- **Nudge:** car + wake', `- **Author:** ${author}`,
@@ -159,7 +159,7 @@ export function createRoutine(brain, it, { words = '', author = 'user (Alfred da
   fs.mkdirSync(dir, { recursive: true });
   const name = uniqueName(dir, `user-${slugify(title)}`);
   const note = oneLine(it.note, 300);
-  const text = [`# The user: ${title}`, '',
+  const text = [`# The user: ${title}`, '', '- **Schema:** 1',
     '- **Kind:** routine', '- **Type:** habit', '- **Runs:** the user',
     '- **Nudger:** Grok (car + wake, morning brief) and the Alfred Day page',
     `- **Schedule:** ${schedule}`, '- **Status:** active', `- **Author:** ${author}`,

@@ -18,7 +18,9 @@
 // ---------------------------------------------------------------------------
 import fs from 'node:fs';
 import path from 'node:path';
-import { cleanRef, easternNow, firstWord, mdFiles, nowFromStamp, readFields, setField, stampOf } from './brain-core.mjs';
+import {
+  appendLine, cleanRef, closedLine, easternNow, firstWord, mdFiles, nowFromStamp, readFields, reasonOf, reopenedLine, setField, stampOf, withSchema,
+} from './brain-core.mjs';
 import { CALENDAR_FILE, cancelEvent, findEvent, parseEvents, readCalendar } from './brain-calendar.mjs';
 import { createEvent, oneLine, updateReminder, updateRoutine } from './brain-items.mjs';
 
@@ -90,7 +92,12 @@ export function parseNote(name, text) {
   const actionable = NOTE_TYPES.includes(type) && !!target
     && (close || Object.keys(set).length > 0 || add.length > 0 || cancel.length > 0 || !!replace
       || (LOG_RE.test(target) && logLines.length > 0));
-  return { name, file: `Inbox/${name}`, type, from, status, created: stampOf(h.created) || null, target, set, add, logLines, cancel, replace, close, actionable };
+  // "Add: a section …" to an ordinary file, or a replacement that is only a section (no "# " title):
+  // instructions for a person, never applied mechanically (§17.5.1).
+  const freeform = /\//.test(target) && target !== CALENDAR_FILE && !LOG_RE.test(target) && !/^(Reminders|Routines|Inbox)\//i.test(target)
+    && (logLines.length > 0 || (!!replace && !/^#\s+\S/.test(replace)));
+  return { name, file: `Inbox/${name}`, type, from, status, created: stampOf(h.created) || null, target, set, add, logLines, cancel, replace, close,
+    reason: reasonOf(h.reason, null), actionable, freeform };
 }
 
 export function openNotes(brain) {
@@ -137,11 +144,11 @@ function splitDue(v) {
   return { due: d, ...(t ? { time: t.padStart(5, '0') } : {}) };
 }
 
-function closeReminder(brain, t, { asOf, by, cancelled, run }) {
+function closeReminder(brain, t, { asOf, by, cancelled, reason, run }) {
   let text = fs.readFileSync(t.full, 'utf8');
   if (!['done', 'cancelled'].includes(firstWord(readFields(text).status))) {
-    text = setField(setField(text, 'Status', cancelled ? 'cancelled' : 'done'), 'Last updated', asOf.stamp);
-    text = `${text.trimEnd()}\n- Closed: ${asOf.stamp} by ${by}\n`;
+    text = withSchema(setField(setField(text, 'Status', cancelled ? 'cancelled' : 'done'), 'Last updated', asOf.stamp));
+    text = appendLine(text, closedLine(asOf.stamp, by, reason || (cancelled ? 'cancelled' : 'done')));
     run.write(t.full, text, 'closed by change note');
   }
   if (!t.inDone) run.move(t.full, path.join(brain, 'Reminders', 'Done'), 'closed');
@@ -150,25 +157,30 @@ function closeReminder(brain, t, { asOf, by, cancelled, run }) {
 
 function applyToReminder(brain, n, t, ctx) {
   if (n.replace) return replaceFile(brain, t, n, ctx);
-  if (n.close) return closeReminder(brain, t, { ...ctx, cancelled: firstWord(n.set.status) === 'cancelled' });
+  if (n.close) return closeReminder(brain, t, { ...ctx, cancelled: firstWord(n.set.status) === 'cancelled', reason: n.reason });
   const bad = Object.keys(n.set).filter((f) => !REMINDER_SET.includes(f));
   if (bad.length) fail(`can't set ${bad.join(', ')} on a reminder by note`);
   let rel = t.rel;
   const reopen = t.inDone && (['open', 'snoozed'].includes(firstWord(n.set.status)) || n.set.due);
   let text = fs.readFileSync(t.full, 'utf8');
   const raw = [];
-  if (n.set.status && ['open', 'snoozed'].includes(firstWord(n.set.status))) { text = setField(text, 'Status', firstWord(n.set.status)); raw.push(`status → ${firstWord(n.set.status)}`); }
-  else if (reopen) { text = setField(text, 'Status', 'open'); raw.push('status → open'); }
-  else if (n.set.status) fail(`status "${oneLine(n.set.status, 20)}" can't be set by note`);
+  // Going back to open from Done is a Reopened line (§17.3); a snooze is an edit.
+  const want = firstWord(n.set.status);
+  if (n.set.status && !['open', 'snoozed'].includes(want)) fail(`status "${oneLine(n.set.status, 20)}" can't be set by note`);
+  if (reopen) text = setField(text, 'Status', want === 'snoozed' ? 'snoozed' : 'open');
+  else if (n.set.status) { text = setField(text, 'Status', want); raw.push(`status → ${want}`); }
   const cur = readFields(text);
   for (const f of REMINDER_RAW) {
     if (!n.set[f] || oneLine(n.set[f], 80) === (cur[f] || '')) continue;  // record real changes only
     text = setField(text, cap(f), oneLine(n.set[f], 80));
     raw.push(`${f} → ${oneLine(n.set[f], 40)}`);
   }
-  if (raw.length) {
-    text = `${setField(text, 'Last updated', ctx.asOf.stamp).trimEnd()}\n- Edited: ${ctx.asOf.stamp} by ${ctx.by}: ${raw.join('; ')}\n`;
-    ctx.run.write(t.full, text, 'changed by change note');
+  const wrote = raw.length > 0 || reopen;
+  if (wrote) {
+    text = withSchema(setField(text, 'Last updated', ctx.asOf.stamp));
+    if (reopen) text = appendLine(text, reopenedLine(ctx.asOf.stamp, ctx.by, n.reason || 'mistake'));
+    if (raw.length) text = appendLine(text, `- Edited: ${ctx.asOf.stamp} by ${ctx.by}: ${raw.join('; ')}`);
+    ctx.run.write(t.full, text, reopen ? 'reopened by change note' : 'changed by change note');
   }
   if (reopen) { const to = ctx.run.move(t.full, path.join(brain, 'Reminders'), 'reopened by change note'); if (to) rel = `Reminders/${path.basename(to)}`; }
   const changes = {};
@@ -176,7 +188,7 @@ function applyToReminder(brain, n, t, ctx) {
   if (n.set.due != null) Object.assign(changes, splitDue(n.set.due));
   if (n.set.time != null) changes.time = /^none$/i.test(n.set.time) ? null : n.set.time;
   if (Object.keys(changes).length) {
-    try { updateReminder(brain, rel, changes, { by: ctx.by, now: ctx.asOf }); } catch (err) { if (!(raw.length && /nothing to change/.test(err.message))) throw err; }
+    try { updateReminder(brain, rel, changes, { by: ctx.by, now: ctx.asOf }); } catch (err) { if (!(wrote && /nothing to change/.test(err.message))) throw err; }
   }
   return `changed ${rel}`;
 }
@@ -197,7 +209,7 @@ function applyToRoutine(brain, n, t, ctx) {
   // An AI's own routine, changed by that AI: header fields as written.
   let text = fs.readFileSync(t.full, 'utf8');
   for (const [f, v] of Object.entries(n.set)) text = setField(text, cap(f), oneLine(v, 200));
-  text = `${setField(text, 'Last updated', ctx.asOf.stamp).trimEnd()}\n- Edited: ${ctx.asOf.stamp} by ${ctx.by}: ${Object.keys(n.set).join(', ')}\n`;
+  text = `${withSchema(setField(text, 'Last updated', ctx.asOf.stamp)).trimEnd()}\n- Edited: ${ctx.asOf.stamp} by ${ctx.by}: ${Object.keys(n.set).join(', ')}\n`;
   ctx.run.write(t.full, text, 'changed by change note');
   return `changed ${t.rel}`;
 }
@@ -253,27 +265,47 @@ function fileSignal(brain, n, t, { run, now, by }) {
   if (!t.exists) fail(`target "${n.target}" not found`);
   if (t.full === path.join(brain, n.file)) fail('a note cannot close itself');
   if (t.inDone) return `already filed: ${t.rel}`;
-  const text = setField(fs.readFileSync(t.full, 'utf8'), 'Status', 'done');
-  run.write(t.full, `${text.trimEnd()}\n- Handled: ${now.stamp} by ${by}\n`, 'signal closed by change note');
+  const text = withSchema(setField(fs.readFileSync(t.full, 'utf8'), 'Status', 'done'));
+  run.write(t.full, appendLine(text, closedLine(now.stamp, by, reasonOf(n.reason, 'done'))), 'signal closed by change note');
   run.move(t.full, path.join(brain, 'Inbox', 'Done'), 'signal closed by change note');
   return `filed ${t.rel}`;
 }
 
-// The Librarian's step 1: apply every open change note, oldest first.
+// A change note the Librarian can't apply by itself: left in Inbox/ for Claude Code's hourly check.
+export const JUDGEMENT = 'needs judgement';
+const CHANGE_TYPES = ['amend', 'change', 'close'];
+const count = (run, key) => { if (run.stats) run.stats[key] = (run.stats[key] || 0) + 1; };
+
+function needsLook(run, note, n, why, now, detail = '') {
+  let text = withSchema(setField(fs.readFileSync(note, 'utf8'), 'Status', `needs a look (${why})`));
+  if (detail) text = appendLine(text, `- Not applied: ${now.stamp} by librarian: ${oneLine(detail, 200)}`);
+  run.write(note, text, why === JUDGEMENT ? 'change note needs judgement' : 'change note could not be applied');
+  run.note(`${n.type} note ${n.name}: ${detail || why}; left for a person`);
+  count(run, 'needsLook');
+}
+
+// The Librarian's step 1: apply every open change note, oldest first. Each one ends applied (filed in
+// Inbox/Done/, a superseded one too) or stays in Inbox/ marked "needs a look (<why>)" (§17.5.1).
 export function applyChangeNotes(brain, run, now = easternNow()) {
   for (const n of openNotes(brain)) {
     const note = path.join(brain, n.file);
-    if (!n.actionable) {
-      if (['amend', 'change', 'close'].includes(n.type)) run.note(`${n.type} signal ${n.name}: no structured change found; left for a person`);
+    const judgement = (!n.actionable && CHANGE_TYPES.includes(n.type)) || (n.actionable && n.freeform);
+    if (!n.actionable && !judgement) continue;  // a memory capture: for its curator, not the Librarian
+    if (run.dryRun) { run.note(`would ${judgement ? 'leave for a person' : 'apply'} ${n.type} note ${n.name} (${n.target || 'no target'})`); continue; }
+    if (judgement) {
+      needsLook(run, note, n, JUDGEMENT, now, n.freeform ? 'free-form edit (Add: lines or a section to place in the file)' : 'no structured change found');
       continue;
     }
-    if (run.dryRun) { run.note(`would apply ${n.type} note ${n.name} to ${n.target}`); continue; }
     const asOf = nowFromStamp(n.created) || now;
-    const by = `${n.from || 'another AI'} (change note, applied ${now.stamp})`;
+    const by = `librarian via ${n.from || 'unknown'}`;
     const ctx = { run, now, asOf, by };
     let outcome;
     try {
       const t = resolveTarget(brain, n.target);
+      if (t.kind === 'file' && LOCKED.some((re) => re.test(t.rel))) {
+        needsLook(run, note, n, JUDGEMENT, now, `${t.rel} is locked: not changed by note (MANIFESTO rule 2)`);
+        continue;
+      }
       if (t.kind === 'calendar') outcome = applyToCalendar(brain, n, ctx);
       else if (t.kind === 'signal') outcome = fileSignal(brain, n, t, ctx);
       else if (t.kind === 'log') outcome = applyToLog(brain, n, t, ctx);
@@ -288,14 +320,13 @@ export function applyChangeNotes(brain, run, now = easternNow()) {
         else fail(`only a whole-file replacement can change ${t.rel} by note`);
       }
     } catch (err) {
-      const why = oneLine(err.message, 160);
-      run.write(note, setField(fs.readFileSync(note, 'utf8'), 'Status', `needs a look (${why})`), 'change note could not be applied');
-      run.note(`${n.type} note ${n.name}: ${why}; left for a person`);
+      needsLook(run, note, n, oneLine(err.message, 160), now);
       continue;
     }
-    const text = setField(fs.readFileSync(note, 'utf8'), 'Status', `done (applied by librarian ${now.stamp})`);
-    run.write(note, `${text.trimEnd()}\n- Applied: ${now.stamp}: ${outcome}\n`, 'change note applied');
+    const text = withSchema(setField(fs.readFileSync(note, 'utf8'), 'Status', `done (applied by librarian ${now.stamp})`));
+    run.write(note, appendLine(text, `- Applied: ${now.stamp}: ${outcome}`), 'change note applied');
     run.move(note, path.join(brain, 'Inbox', 'Done'), 'change note applied');
+    count(run, 'applied');
   }
 }
 
@@ -344,7 +375,7 @@ export function overlayReminders(items, pending) {
 }
 
 // --- The other direction: what changed recently, anywhere --------------------------------
-// From the dated lines every edit leaves (Edited, Closed, Moved, Amended, Expired) and each
+// From the dated lines every edit leaves (Edited, Closed, Reopened, and the older Moved, Amended, Expired) and each
 // new item's Created stamp. index.md lists these so Grok can bring its own copies (its
 // memory, its scheduled pings) up to date with changes made at the desk.
 export function recentChanges(brain, now = easternNow(), hours = RECENT_HOURS) {
@@ -358,7 +389,7 @@ export function recentChanges(brain, now = easternNow(), hours = RECENT_HOURS) {
       const h = readFields(text);
       const created = stampOf(h.created);
       if (created && created >= since && created <= now.stamp) rows.push({ stamp: created, what: `added by ${oneLine((h.author || '?').split('(')[0], 40)}`, title, file: rel });
-      for (const m of text.matchAll(/^- (Edited|Closed|Moved|Amended|Expired): (\d{4}-\d{2}-\d{2} \d{2}:\d{2} ET)\s*(.*)$/gm)) {
+      for (const m of text.matchAll(/^- (Edited|Closed|Reopened|Moved|Amended|Expired): (\d{4}-\d{2}-\d{2} \d{2}:\d{2} ET)\s*(.*)$/gm)) {
         if (m[2] < since || m[2] > now.stamp) continue;
         rows.push({ stamp: m[2], what: `${m[1].toLowerCase()} ${oneLine(m[3], 140)}`.trim(), title, file: rel });
       }
