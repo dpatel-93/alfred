@@ -171,7 +171,8 @@ function retireTemporaryMemory(brain, run, now) {
 const CHANGE_NOTE = ['close', 'amend', 'change'];
 export function waitingItems(brain, now = easternNow()) {
   const rows = [];
-  const cutoff = now.ms - WAITING_HOURS * 3600 * 1000;
+  // Stamps are read as ET-as-UTC (nowFromStamp), so the cutoff is taken on that same clock.
+  const cutoff = nowFromStamp(now.stamp).ms - WAITING_HOURS * 3600 * 1000;
   for (const f of mdFiles(path.join(brain, 'Inbox'))) {
     const h = readFields(fs.readFileSync(path.join(brain, 'Inbox', f), 'utf8'));
     const status = firstWord(h.status) || 'open';
@@ -221,8 +222,9 @@ const namesPath = (line, old) => {
   for (let i = line.indexOf(old); i >= 0; i = line.indexOf(old, i + 1)) if (i === 0 || !/[\w./-]/.test(line[i - 1])) return true;
   return false;
 };
-// History lines are skipped: lifecycle lines (- Edited:, - Closed:, …) and log lines ("- HH:MM ET …").
-const HISTORY_LINE = /^\s*[-*]\s+(?:(?:Edited|Closed|Reopened|Applied|Handled|Moved|Expired|Amended|Not applied):|\d{1,2}:\d{2}\s*ET\b)/;
+// History lines are skipped: lifecycle lines (- Edited:, - Closed:, …), log lines ("- HH:MM ET …") and dated
+// status entries ("- (2026-11-01, evening) …").
+const HISTORY_LINE = /^\s*[-*]\s+(?:(?:Edited|Closed|Reopened|Applied|Handled|Moved|Expired|Amended|Not applied):|\d{1,2}:\d{2}\s*ET\b|\(\d{4}-\d{2}-\d{2})/;
 export function pathReferences(text, changes) {
   const hits = [];
   let heading = '';
@@ -267,7 +269,7 @@ function checkPaths(brain, run, now) {
   for (const rel of textFiles(brain)) {
     const text = fs.readFileSync(path.join(brain, rel), 'utf8');
     const already = seen.get(rel) || new Set();
-    const fresh = pathReferences(text, changes).filter((x) => !already.has(x.line));
+    const fresh = pathReferences(text, changes.filter((c) => c.new !== rel)).filter((x) => !already.has(x.line));
     if (!fresh.length) continue;
     const h = readFields(text);
     const to = signalTo(h.author || h.owner);

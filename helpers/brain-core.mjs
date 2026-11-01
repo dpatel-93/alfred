@@ -19,14 +19,17 @@ export function easternNow(now = new Date(process.env.ALFRED_NOW || Date.now()))
 }
 export const addDays = (date, n) => new Date(Date.parse(`${date}T12:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
 
-// "2026-10-23 22:44 ET" -> the same shape easternNow() returns, so a change can be applied
+// "2026-10-23 22:44 ET" (or without ET, as Brainiac writes Last updated) -> the same shape easternNow() returns, so a change can be applied
 // "as of" the moment it was asked for. null when the stamp cannot be read.
 export function nowFromStamp(stamp) {
-  const m = /^(\d{4}-\d{2}-\d{2})\s+(\d{2}):(\d{2})\s*ET\b/.exec(String(stamp || '').trim());
+  const m = /^(\d{4}-\d{2}-\d{2})\s+(\d{2}):(\d{2})(?:\s*ET)?(?!\d)/.exec(String(stamp || '').trim());
   if (!m) return null;
   return { date: m[1], stamp: `${m[1]} ${m[2]}:${m[3]} ET`, month: m[1].slice(0, 7), ms: Date.parse(`${m[1]}T${m[2]}:${m[3]}:00Z`) };
 }
-export const stampOf = (v) => (/\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s*ET/.exec(String(v || '')) || [''])[0].replace(/\s*ET$/, ' ET');
+export const stampOf = (v) => {
+  const m = /\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?!\d)/.exec(String(v || ''));
+  return m ? `${m[0]} ET` : '';
+};
 
 // --- Header fields: "- **Field:** value" lines near the top ---
 export function readFields(text) {

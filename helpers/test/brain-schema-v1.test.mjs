@@ -167,7 +167,7 @@ const waiting = (index.match(/## Waiting\n\n([\s\S]*?)\n\n/) || [])[1] || '';
 chk('index.md has a "## Waiting" section', /\n## Waiting\n\n- /.test(index), index.slice(0, 200));
 chk('a signal open over 6 hours is listed with its reason and since', waiting.includes('- Inbox/2026-10-31-0900--grok--claude--capture--memory.md · waiting for claude · since 2026-10-31 09:00 ET'), waiting);
 chk('a change note left "needs a look" over 6 hours is listed as needs a look', waiting.includes('- Inbox/2026-11-01-1000--grok--librarian--amend--cancel-me.md') === false
-  && waitingItems(BRAIN, easternNow(new Date('2026-11-01T23:00:00Z'))).some((w) => w.ref === 'Inbox/2026-11-01-1222--grok--librarian--amend--grok-skills-section.md' && w.reason === 'needs a look'));
+  && waitingItems(BRAIN, easternNow(new Date('2026-11-02T00:00:00Z'))).some((w) => w.ref === 'Inbox/2026-11-01-1222--grok--librarian--amend--grok-skills-section.md' && w.reason === 'needs a look'));
 chk('a signal under 6 hours old is not listed', !waiting.includes('fresh'));
 chk('hand-off asks past 48 hours with no report are listed by ID, both sides', waiting.includes('- G-2026-10-29-1050 · no report · since 2026-10-29 10:50 ET')
   && waiting.includes('- G-2026-10-30-1200 · no report · since 2026-10-30 12:00 ET') && waiting.includes('- C-2026-10-29-0800 · no report · since 2026-10-29 08:00 ET'), waiting);

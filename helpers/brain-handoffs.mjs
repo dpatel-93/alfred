@@ -249,7 +249,8 @@ export function check(brain, { apply = false, now = easternNow() } = {}) {
   const driveRoot = path.dirname(brain);
   const waitingNote = (n) => n.actionable || ['amend', 'change', 'close'].includes(n.type);
   const ran = apply && openNotes(brain).some(waitingNote) ? runLibrarian(brain, { now }) : [];
-  const grok = parseItems(read(path.join(driveRoot, GROK_FILE)));
+  const grokText = read(path.join(driveRoot, GROK_FILE));
+  const grok = parseItems(grokText);
   const mine = parseItems(read(path.join(driveRoot, CLAUDE_FILE)));
   const grokIds = new Set(grok.map((x) => x.id));
   const mineIds = new Set(mine.map((x) => x.id));
@@ -265,7 +266,8 @@ export function check(brain, { apply = false, now = easternNow() } = {}) {
   }
   for (const c of grok.filter((x) => x.side === 'C' && mineIds.has(x.id))) items.push({ kind: 'grok answered', ref: c.id, status: c.status || c.title });
   const cleared = [];
-  for (const r of mine.filter((x) => x.side === 'G' && !grokIds.has(x.id))) {
+  // An empty read of Grok's file (mid-sync) is not Grok clearing its asks: keep our reports until it reads back.
+  for (const r of grokText.trim() ? mine.filter((x) => x.side === 'G' && !grokIds.has(x.id)) : []) {
     if (apply) { clearItem(brain, r.id, 'Grok cleared its ask', now); cleared.push(r.id); } else items.push({ kind: 'clear report', ref: r.id, status: 'Grok cleared its ask' });
   }
   if (apply && !cleared.length) saveClaudeFile(driveRoot, read(path.join(driveRoot, CLAUDE_FILE)) || claudeTemplate(now), now);
