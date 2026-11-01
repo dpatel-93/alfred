@@ -76,7 +76,7 @@ chk('only Grok\'s asks (G-…) take a report', threw);
 const a1 = ask(BRAIN, 'Turn off news bot notifications', { words: '"no notification overload"', todo: 'switch each bot\'s Notifications off' }, NOW);
 const a2 = ask(BRAIN, 'Second ask, same minute', { todo: 'something' }, NOW);
 chk('an ask gets a C- ID from the time, unique within the minute', a1 === 'C-2026-10-26-1530' && a2 === 'C-2026-10-26-1530-2', `${a1} ${a2}`);
-chk('asks go under "Asks for Grok"', /## Asks for Grok[\s\S]*### C-2026-10-26-1530 · Turn off news bot notifications\n- \*\*Status:\*\* pending\n- \*\*Asked:\*\* 2026-10-26 15:30 ET\n- \*\*The user's words:\*\* "no notification overload"/.test(mine()), mine());
+chk('asks go under "Asks for Grok"', /## Asks for Grok[\s\S]*### C-2026-10-26-1530 · Turn off news bot notifications\n- \*\*Status:\*\* open\n- \*\*Opened:\*\* 2026-10-26 15:30 ET\n- \*\*The user's words:\*\* "no notification overload"/.test(mine()), mine());
 chk('clearing our answered ask removes it and logs it', clearItem(BRAIN, 'C-2026-10-26-0900', 'Grok reported done', NOW)
   && !/C-2026-10-26-0900/.test(mine()) && /cleared C-2026-10-26-0900 \(Grok reported done\)/.test(read(path.join(BRAIN, 'System/logs/handoffs-2026-10.md'))));
 chk('Grok\'s file is never written', !/Claude/.test(read(path.join(ROOT, GROK_FILE)).replace(/Claude's asks|Grok → Claude|Asks for Claude/g, '')));

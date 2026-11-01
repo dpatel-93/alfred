@@ -24,7 +24,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { easternNow, firstWord, mdFiles, readFields } from './brain-core.mjs';
+import { easternNow, firstWord, mdFiles, nowFromStamp, readFields, stampOf } from './brain-core.mjs';
 import { openNotes, parseNote } from './brain-notes.mjs';
 import { runLibrarian, sharedBrainPath } from './brain-librarian.mjs';
 
@@ -35,31 +35,101 @@ const REPORTS = "## Done or answered (Grok's asks)";
 const ASKS = '## Asks for Grok';
 const ID_RE = /\b([GC]-\d{4}-\d{2}-\d{2}-\d{4}(?:-\d+)?)\b/;
 const STATUSES = ['done', 'needs-the-user', 'in-progress'];
+const WAIT_HOURS = 48;
 const TO_CLAUDE = ['claude', 'claude-code', 'librarian', 'all'];
 const deferred = (text) => /^- Deferred: /m.test(text);
 const read = (f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : '');
 
 // --- Reading a handoff file ---
-// Items are "## " or "### " headings carrying an ID; the item runs to the next heading.
+// Items are "## " or "### " headings carrying an ID; the item runs to the next heading. Grok also
+// writes asks as list items, "- **G-YYYY-MM-DD-HHMM:** text" with indented lines under them; those
+// run to the next list item, heading or unindented line. An item's `opened` is its Opened (or older
+// Asked) time, else the time in its ID.
+const LIST_ITEM_RE = /^[-*]\s+\*\*([GC]-\d{4}-\d{2}-\d{2}-\d{4}(?:-\d+)?)\s*(?::\*\*|\*\*\s*:?)\s*(.*)$/;
+const listTitle = (s) => String(s || '').replace(/\*\*/g, '').split(/(?<=[a-z)\]])\.\s|\n/)[0].replace(/[\s:.]+$/, '').trim().slice(0, 100);
+export const idStamp = (id) => {
+  const m = /^[GC]-(\d{4}-\d{2}-\d{2})-(\d{2})(\d{2})/.exec(id || '');
+  return m ? `${m[1]} ${m[2]}:${m[3]} ET` : null;
+};
+
 export function parseItems(text) {
   const lines = String(text || '').split(/\r?\n/);
   const items = [];
   let cur = null;
+  const close = (i) => { if (cur) { cur.end = i; items.push(cur); cur = null; } };
   lines.forEach((l, i) => {
     const h = l.match(/^(#{1,3})\s+(.*)$/);
     if (h) {
-      if (cur) { cur.end = i; items.push(cur); cur = null; }
+      close(i);
       const m = h[2].match(ID_RE);
       if (m && h[1].length >= 2) cur = { id: m[1], side: m[1][0], title: h[2].replace(ID_RE, '').replace(/^[\s·:—-]+/, '').trim(), start: i };
+      return;
     }
+    const li = l.match(LIST_ITEM_RE);
+    if (li) { close(i); cur = { id: li[1], side: li[1][0], title: listTitle(li[2]), start: i, list: true }; return; }
+    if (cur?.list && l.trim() && !/^\s/.test(l)) close(i);  // an unindented line ends a list item
   });
-  if (cur) { cur.end = lines.length; items.push(cur); }
+  close(lines.length);
   for (const it of items) {
-    const body = lines.slice(it.start + 1, it.end).join('\n');
-    it.status = readFields(body).status || '';
+    const body = lines.slice(it.start + 1, it.end).map((l) => (it.list ? l.trim() : l)).join('\n');
+    const f = readFields(body);
+    it.status = f.status || '';
     it.state = firstWord(it.status).replace(/[^a-z-]/g, '') || 'pending';
+    it.opened = stampOf(f.opened) || stampOf(f.asked) || idStamp(it.id);
   }
   return items;
+}
+const isOpen = (it) => !['done', 'cancelled'].includes(it.state);
+
+// --- The loop's state: asks with no report from the other side (§17.4) ---
+const hoursSince = (stamp, now) => {
+  const t = nowFromStamp(stamp);
+  const n = nowFromStamp(now.stamp);
+  return t && n ? Math.max(0, (n.ms - t.ms) / 3600000) : 0;
+};
+// Open asks on both sides that the other file has not reported on, oldest first, with their age;
+// `overdue` once one has waited 48 hours. Never closes anything.
+export function openAsks(grokText, claudeText, now = easternNow()) {
+  const grok = parseItems(grokText);
+  const mine = parseItems(claudeText);
+  const grokIds = new Set(grok.map((x) => x.id));
+  const mineIds = new Set(mine.map((x) => x.id));
+  const rows = [
+    ...grok.filter((x) => x.side === 'G' && isOpen(x) && !mineIds.has(x.id)).map((x) => ({ ...x, asker: 'grok' })),
+    ...mine.filter((x) => x.side === 'C' && isOpen(x) && !grokIds.has(x.id)).map((x) => ({ ...x, asker: 'claude' })),
+  ].map((x) => {
+    const hours = hoursSince(x.opened, now);
+    return { id: x.id, title: x.title, asker: x.asker, opened: x.opened, hours, days: Math.floor(hours / 24), overdue: hours >= WAIT_HOURS };
+  });
+  return rows.sort((a, b) => String(a.opened).localeCompare(String(b.opened)));
+}
+export function handoffWaiting(brain, now = easternNow()) {
+  const driveRoot = path.dirname(brain);
+  return openAsks(read(path.join(driveRoot, GROK_FILE)), read(path.join(driveRoot, CLAUDE_FILE)), now).filter((x) => x.overdue);
+}
+
+const ageText = (hours) => (hours < 24 ? `${Math.floor(hours)}h` : `${Math.floor(hours / 24)}d`);
+// "- **Loop:** synced … · open asks N · reports pending M · oldest open <ID> (<age>)" for Claude's file:
+// N is Claude's own asks still open, M Grok's asks still waiting for Claude's report.
+export function loopLine(claudeText, grokText, now = easternNow()) {
+  const mineOpen = parseItems(claudeText).filter((x) => x.side === 'C' && isOpen(x));
+  const waiting = openAsks(grokText, claudeText, now);
+  const owed = waiting.filter((x) => x.asker === 'grok');
+  const oldest = [...mineOpen.map((x) => ({ id: x.id, hours: hoursSince(x.opened, now), opened: x.opened })), ...owed]
+    .sort((a, b) => String(a.opened).localeCompare(String(b.opened)))[0];
+  return `- **Loop:** synced ${now.stamp} · open asks ${mineOpen.length} · reports pending ${owed.length} · oldest open ${oldest ? `${oldest.id} (${ageText(oldest.hours)})` : 'none'}`;
+}
+
+// The Loop line sits right under the file's header fields (the first run of "- **Field:**" lines).
+function withLoop(text, line) {
+  if (/^- \*\*Loop:\*\*.*$/m.test(text)) return text.replace(/^- \*\*Loop:\*\*.*$/m, line);
+  const lines = text.split('\n');
+  const first = lines.findIndex((l) => /^- \*\*[A-Za-z' ]+:\*\*/.test(l));
+  if (first < 0) { const title = lines.findIndex((l) => /^# /.test(l)); lines.splice(title + 1, 0, '', line); return lines.join('\n'); }
+  let last = first;
+  while (last + 1 < lines.length && /^- \*\*[A-Za-z' ]+:\*\*/.test(lines[last + 1])) last++;
+  lines.splice(last + 1, 0, line);
+  return lines.join('\n');
 }
 
 // --- Writing Claude's file ---
@@ -95,9 +165,10 @@ function insertUnder(text, heading, block) {
   return `${lines.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd()}\n`;
 }
 
+// Every write stamps Last updated and rewrites the Loop line (§17.4).
 function saveClaudeFile(driveRoot, text, now) {
   const stamped = text.replace(/- \*\*Last updated:\*\* .*/, `- **Last updated:** ${now.stamp}`);
-  fs.writeFileSync(path.join(driveRoot, CLAUDE_FILE), stamped, 'utf8');
+  fs.writeFileSync(path.join(driveRoot, CLAUDE_FILE), withLoop(stamped, loopLine(stamped, read(path.join(driveRoot, GROK_FILE)), now)), 'utf8');
 }
 
 function logCleared(brain, item, why, now) {
@@ -139,7 +210,7 @@ export function ask(brain, title, { words, todo }, now = easternNow()) {
   const base = `C-${now.stamp.slice(0, 10)}-${now.stamp.slice(11, 16).replace(':', '')}`;
   let id = base;
   for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
-  const block = [`### ${id} · ${title}`, '- **Status:** pending', `- **Asked:** ${now.stamp}`,
+  const block = [`### ${id} · ${title}`, '- **Status:** open', `- **Opened:** ${now.stamp}`,
     ...(words ? [`- **The user's words:** ${words}`] : []), `- **What to do:** ${todo}`].join('\n');
   body = insertUnder(body, ASKS, block);
   saveClaudeFile(driveRoot, body, now);
@@ -171,21 +242,33 @@ function grokSignals(brain) {
   });
 }
 
+// Asks open 48 hours with no report in either file are flagged "waiting N days", never closed (§17.4).
+// With --apply the Librarian runs first when a change note is waiting (it stands by while the cloud
+// one is fresh), and Claude's file is rewritten so its Loop line is current.
 export function check(brain, { apply = false, now = easternNow() } = {}) {
   const driveRoot = path.dirname(brain);
-  const ran = apply && openNotes(brain).some((n) => n.actionable) ? runLibrarian(brain, { now }) : [];
+  const waitingNote = (n) => n.actionable || ['amend', 'change', 'close'].includes(n.type);
+  const ran = apply && openNotes(brain).some(waitingNote) ? runLibrarian(brain, { now }) : [];
   const grok = parseItems(read(path.join(driveRoot, GROK_FILE)));
   const mine = parseItems(read(path.join(driveRoot, CLAUDE_FILE)));
   const grokIds = new Set(grok.map((x) => x.id));
   const mineIds = new Set(mine.map((x) => x.id));
+  const late = new Map(openAsks(read(path.join(driveRoot, GROK_FILE)), read(path.join(driveRoot, CLAUDE_FILE)), now)
+    .filter((x) => x.overdue).map((x) => [x.id, x]));
+  const flag = (x, text) => (late.has(x.id) ? `waiting ${late.get(x.id).days} days · ${text}` : text);
   const items = [];
-  const openAsk = (x) => x.side === 'G' && !mineIds.has(x.id) && !['done', 'cancelled'].includes(x.state);
-  for (const g of grok.filter(openAsk)) items.push({ kind: 'grok ask', ref: g.id, status: g.title });
+  for (const g of grok.filter((x) => x.side === 'G' && isOpen(x) && !mineIds.has(x.id))) {
+    items.push({ kind: 'grok ask', ref: g.id, status: flag(g, g.title), ...(late.has(g.id) ? { waitingDays: late.get(g.id).days } : {}) });
+  }
+  for (const c of mine.filter((x) => x.side === 'C' && late.has(x.id))) {
+    items.push({ kind: 'our ask', ref: c.id, status: flag(c, `${c.title} (no report from Grok)`), waitingDays: late.get(c.id).days });
+  }
   for (const c of grok.filter((x) => x.side === 'C' && mineIds.has(x.id))) items.push({ kind: 'grok answered', ref: c.id, status: c.status || c.title });
   const cleared = [];
   for (const r of mine.filter((x) => x.side === 'G' && !grokIds.has(x.id))) {
     if (apply) { clearItem(brain, r.id, 'Grok cleared its ask', now); cleared.push(r.id); } else items.push({ kind: 'clear report', ref: r.id, status: 'Grok cleared its ask' });
   }
+  if (apply && !cleared.length) saveClaudeFile(driveRoot, read(path.join(driveRoot, CLAUDE_FILE)) || claudeTemplate(now), now);
   items.push(...legacyHandoffs(driveRoot), ...grokSignals(brain));
   return { ran: ran.length, cleared, items };
 }
