@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { addDays, collectOpenItems, easternNow, readFields, runLibrarian, setField, sharedBrainPath } from './brain-librarian.mjs';
+import { appendLine, closedLine, reopenedLine, withSchema } from './brain-core.mjs';
 import {
   DAYS, createEvent, createReminder, createRoutine, oneLine, routineDueToday, slugify, updateReminder, updateRoutine, weekdayOf,
 } from './brain-items.mjs';
@@ -94,9 +95,9 @@ export function writeSignal(brain, { type, from = 'user', to, re, subject, body 
   const base = `${now.date}-${hhmm(now)}--${from}--${to}--${type}--${slugify(subject)}`;
   let name = `${base}.md`;
   for (let n = 2; fs.existsSync(path.join(inbox, name)); n++) name = `${base}-${n}.md`;
-  const text = [`# ${type[0].toUpperCase()}${type.slice(1)}: ${subject}`, '',
+  const text = [`# ${type[0].toUpperCase()}${type.slice(1)}: ${subject}`, '', '- **Schema:** 1',
     '- **Kind:** signal', `- **Type:** ${type}`, `- **From:** ${from}`, `- **To:** ${to}`, `- **Re:** ${re}`,
-    '- **Status:** open', `- **Created:** ${now.stamp}`, '', body.trim(), ''].join('\n');
+    '- **Status:** open', `- **Created:** ${now.stamp}`, `- **Author:** ${from}`, '', body.trim(), ''].join('\n');
   fs.writeFileSync(path.join(inbox, name), text, 'utf8');
   return `Inbox/${name}`;
 }
@@ -227,7 +228,6 @@ export function applyAction(brain, { file, action, due, by = 'user' } = {}, now 
   let text = fs.readFileSync(full, 'utf8');
   const h = readFields(text);
   const title = titleOf(text, path.basename(rel));
-  const ours = authorIsOurs(h.author);
   const moveTo = (dir) => {
     fs.mkdirSync(dir, { recursive: true });
     const dest = path.join(dir, path.basename(full));
@@ -237,12 +237,13 @@ export function applyAction(brain, { file, action, due, by = 'user' } = {}, now 
   // MANIFESTO rule 2 (2026-10-23): any AI edits any file in place, so the dashboard writes
   // directly whoever created the file, notes who did it and why, then runs the Librarian
   // pass so index.md's open-items view is current for the next AI that reads it.
-  const who = `${by} (Alfred dashboard${ours ? '' : `; file by ${String(h.author || 'another AI').split('(')[0].trim()}`})`;
-  const stamp = (text) => text.replace(/^- \*\*Last updated:\*\*.*$/m, `- **Last updated:** ${now.stamp}`);
+  // Lifecycle lines name the app and whose word it was (§17.3): "alfred for user".
+  const who = by === 'user' ? 'alfred for user' : `alfred via ${by}`;
+  const stamp = (text) => withSchema(text.replace(/^- \*\*Last updated:\*\*.*$/m, `- **Last updated:** ${now.stamp}`));
   let result;
   if (action === 'close') {
     if (inDone) return { status: 400, error: 'already closed' };
-    text = `${stamp(setField(text, 'Status', 'done')).trimEnd()}\n- Closed: ${now.stamp} by ${who}\n`;
+    text = appendLine(stamp(setField(text, 'Status', 'done')), closedLine(now.stamp, who, 'done'));
     fs.writeFileSync(full, text, 'utf8');
     moveTo(path.join(brain, 'Reminders', 'Done'));
     result = { status: 200, applied: true, via: 'direct', title };
@@ -251,9 +252,11 @@ export function applyAction(brain, { file, action, due, by = 'user' } = {}, now 
       : action === 'carryover' ? now.date : addDays(now.date, 1);  // carry-over means "today"
     if (!newDue) return { status: 400, error: 'snooze needs due: YYYY-MM-DD' };
     if (action === 'carryover' && !inDone) return { status: 400, error: 'carryover is for expired items in Reminders/Done/' };
-    text = setField(text, 'Due', newDue);
-    if (inDone) text = setField(text, 'Status', 'open');
-    text = `${stamp(text).trimEnd()}\n- Moved: ${now.stamp} to ${newDue} by ${who}${inDone ? ' (carried over)' : ''}\n`;
+    const oldDue = (String(h.due || '').match(/\d{4}-\d{2}-\d{2}/) || ['none'])[0];
+    text = stamp(setField(text, 'Due', newDue));
+    // Carrying an expired errand over reopens it for a new day (§17.3 reason carried-over).
+    if (inDone) text = appendLine(setField(text, 'Status', 'open'), reopenedLine(now.stamp, who, 'carried-over'));
+    text = appendLine(text, `- Edited: ${now.stamp} by ${who}: due ${oldDue} → ${newDue}${inDone ? ' (carried over)' : ''}`);
     fs.writeFileSync(full, text, 'utf8');
     if (inDone) moveTo(path.join(brain, 'Reminders'));
     result = { status: 200, applied: true, via: 'direct', title, due: newDue };
@@ -359,7 +362,7 @@ function closeChore(brain, rel, by, now) {
   if (logLine(monday).test(text)) text = text.replace(logLine(monday), (l) => l.replace(/:\s*(open|not done)\b/, ': done'));
   else text = addLogLine(text, `- ${monday} week (${weekRange(monday)}): done`);
   text = text.replace(logLine(monday), (l) => `${l}\n  - Closed: ${now.stamp} by ${by} (Alfred dashboard)`);
-  text = setField(setField(text, 'Status', 'done'), 'Last updated', now.stamp);
+  text = withSchema(setField(setField(text, 'Status', 'done'), 'Last updated', now.stamp));
   text = `${text.trimEnd()}\n- Edited: ${now.stamp} by ${by} (Alfred dashboard): done for the week of ${monday}\n`;
   fs.writeFileSync(full, text, 'utf8');
   runLibrarian(brain, { now });

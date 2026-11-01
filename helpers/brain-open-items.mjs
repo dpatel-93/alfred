@@ -31,6 +31,13 @@ function main() {
   const o = collectOpenItems(brain, now);
   const mine = o.signals.filter((s) => NAMES.includes(s.to));
   const out = [`[SecondBrain] ${now.stamp}: open items from the shared brain (any AI may have added these).`];
+  // Grok's handoff file at the Drive root: what the user asked Grok for that Grok can't do
+  // itself. Checked at every session, so it is never left waiting for the hourly check.
+  const handoffs = handoffCheck(brain, { now }).items;
+  // An ask open 48 hours with no report goes first (§17.4): do it, report why not, or ask the user to cancel it.
+  const late = handoffs.filter((h) => h.waitingDays != null);
+  if (late.length) out.push(`  Hand-off asks waiting over 48 hours (${late.length}): do it, report why not, or ask the user to cancel it:`,
+    ...late.map((h) => `    - ${h.kind} · ${h.ref} · ${h.status}`));
   if (o.today.length) out.push('  Due today:', ...o.today.map(line));
   if (o.overdue.length) out.push('  Overdue:', ...o.overdue.map(line));
   if (o.carryOver.length) out.push('  Yesterday\'s errands not done (ask once whether to carry over):', ...o.carryOver.map(line));
@@ -48,12 +55,10 @@ function main() {
     out.push(`  Signals for you (${mine.length}): handle per MANIFESTO §6, then reply or file them:`,
       ...mine.map((s) => `    - ${s.type} from ${s.from}${s.ageDays > 7 ? ` (${s.ageDays} days old)` : ''} · ${s.file}`));
   }
-  // Grok's handoff file at the Drive root: what the user asked Grok for that Grok can't do
-  // itself. Checked at every session, so it is never left waiting for the hourly check.
-  const handoffs = handoffCheck(brain, { now }).items;
-  if (handoffs.length) {
-    out.push(`  From Grok's handoff file (${handoffs.length}): run \`node ~/.claude/helpers/brain-handoffs.mjs check --apply\`, do each ask, report it in your file (MANIFESTO §6):`,
-      ...handoffs.map((h) => `    - ${h.kind} · ${h.ref} · ${h.status}`));
+  const rest = handoffs.filter((h) => h.waitingDays == null);
+  if (rest.length) {
+    out.push(`  From Grok's handoff file (${rest.length}): run \`node ~/.claude/helpers/brain-handoffs.mjs check --apply\`, do each ask, report it in your file (MANIFESTO §6):`,
+      ...rest.map((h) => `    - ${h.kind} · ${h.ref} · ${h.status}`));
   }
   if (out.length === 1) return;
   out.push('  Mention what is due. Close a reminder only when the user says it is done (edit it if you',
