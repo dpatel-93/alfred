@@ -82,7 +82,7 @@ chk('watch past its Until date expired', done('2026-10-01--watch.md'));
 chk('undated todo stays open', fs.existsSync(p('Reminders/2026-10-21--todo.md')));
 chk('author-closed item filed to Done', done('2026-10-22--author-closed.md'));
 const closed = read(p('Reminders/Done/2026-10-22--closed-by-signal.md'));
-chk('close signal closes and files its reminder', /Status:\*\* done/.test(closed) && /Closed: .* by claude/.test(closed));
+chk('close signal closes and files its reminder', /Status:\*\* done/.test(closed) && /- Closed: 2026-10-24 09:00 ET by librarian via claude · reason: done/.test(closed));
 chk('applied close signal filed to Inbox/Done', fs.existsSync(p('Inbox/Done/2026-10-24-0800--claude--grok--close--close-me.md')));
 chk('close signal with a missing target is left for a person', fs.existsSync(p('Inbox/2026-10-24-0600--grok--claude--close--missing.md')));
 
@@ -110,7 +110,7 @@ chk('run is logged', /Librarian log/.test(read(p('System/logs/librarian-2026-10.
 
 console.log('\nAmend signals');
 const movedTodo = read(p('Reminders/2026-10-21--todo.md'));
-chk('a Set: amend changes the field and notes who asked', /\*\*Due:\*\* 2026-10-28/.test(movedTodo) && /- Edited: 2026-10-24 09:00 ET by grok \(change note, applied 2026-10-24 09:00 ET\): due none → 2026-10-28/.test(movedTodo), movedTodo);
+chk('a Set: amend changes the field and notes who asked', /\*\*Due:\*\* 2026-10-28/.test(movedTodo) && /- Edited: 2026-10-24 09:00 ET by librarian via grok: due none → 2026-10-28/.test(movedTodo), movedTodo);
 chk('its signal is filed as applied', !fs.existsSync(p('Inbox/2026-10-24-0810--grok--claude--amend--move-todo.md'))
   && /done \(applied by librarian/.test(read(p('Inbox/Done/2026-10-24-0810--grok--claude--amend--move-todo.md'))));
 const reopened = read(p('Reminders/2026-10-23--expired-errand.md'));
@@ -148,7 +148,7 @@ put('Reminders/2026-10-21--cloud-errand.md', reminder('errand', 'open', '2026-10
 const cloudActions = lib.runLibrarian(ROOT, { runner: 'cloud', now: at });
 chk('the cloud runner works even with a fresh heartbeat and leaves its own', cloudActions.some((a) => /cloud-errand/.test(a))
   && /\*\*Last run:\*\* 2026-10-24 09:00 ET/.test(read(p('System/librarian-heartbeat.md'))), cloudActions.join('; '));
-chk('its run is logged as the cloud', /## 2026-10-24 09:00 ET · cloud/.test(read(p('System/logs/librarian-2026-10.md'))));
+chk('its run is logged as the cloud', /^- 2026-10-24 09:00 ET · cloud · applied \d+, needs a look \d+, waiting \d+, path references \d+/m.test(read(p('System/logs/librarian-2026-10.md'))));
 chk('cloudLibrarian reports the heartbeat', lib.cloudLibrarian(ROOT, at).fresh && lib.cloudLibrarian(ROOT, at).at === '2026-10-24 09:00 ET');
 
 fs.rmSync(ROOT, { recursive: true, force: true });
