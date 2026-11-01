@@ -44,7 +44,7 @@ value.
 4. **Semantic color is a contract, not a palette.** mint = live/healthy/success and the
    primary action. blue = informational, selected, the default instrument color. amber =
    warn/stale. red = critical/error/destructive. violet and orange are *category* colors
-   only (Decisions, Claude-Code) — never status. gray = idle/disabled/absent.
+   only (Memory, System) — never status. gray = idle/disabled/absent.
    A card is never mint because mint looks nice. **The Bench's `--p-*` provider colours
    are a second, narrower contract layered on top of this one**: they may tint an
    *identity* surface only — a seat row, console head, tab, pane border, or composer
@@ -115,8 +115,8 @@ redesign) — copied here, not re-derived, so the two never drift silently again
   --red:    #ff7a80;   /* critical, error, destructive */
   --blue:   #6fa8ff;   /* info / selected — also the fixed focus-ring colour, see §5.2 */
   --blue-strong: #4f8ff0;
-  --violet: #b08cff;   /* category: Decisions */
-  --orange: #e0855c;   /* category: Claude-Code */
+  --violet: #b08cff;   /* category: Memory */
+  --orange: #e0855c;   /* category: System */
   --gray:   #908b9b;   /* idle / disabled / absent — contrast-gated at 4.81:1 on --surface-2 */
 
   /* ---------- Text — warm off-white, never blue-white ---------- */
@@ -242,13 +242,16 @@ status contract in §1.2 and the category convention in §1.1 are unchanged.
 `.cat-btn`). Never define it in `:root`. Any component that takes a category or status
 tint reads `var(--accent, var(--blue))`, so the blue instrument color is the fallback.
 
-| Vault folder / domain | `--accent` |
-|---|---|
-| Projects | `var(--blue)` |
-| Patterns | `var(--amber)` |
-| Decisions | `var(--violet)` |
-| Learning | `var(--mint)` |
-| Claude-Code | `var(--orange)` |
+Brain regions follow the Second Brain's top-level folders; small folders share a region.
+
+| Brain region | Second Brain folders | `--accent` |
+|---|---|---|
+| Projects | Projects | `var(--blue)` |
+| Memory | Memory (the Claude Code mirror in Memory/agents/claude-code is not indexed) | `var(--violet)` |
+| Knowledge | Knowledge | `var(--amber)` |
+| Research | Research, Outputs | `var(--mint)` |
+| Day | Reminders, Routines, Inbox, Calendar | pink `#ff7ab8` (category only, no token) |
+| System | System, the root files, anything unlisted | `var(--orange)` |
 
 ### 1.2 Status semantics (the contract)
 
@@ -1549,18 +1552,16 @@ hidden.
 * The spoken greeting waits until `body` is no longer `.gated`.
 * `?nogate=1` hides it before first paint and never blocks. The browser test suites use it.
 
-### 7.5 "Since you last looked" (Day, top of column 3)
+### 7.5 Day columns (revised 2026-10-23)
 
-Reads `recent` from `/api/assistant` (last 24h of edits, newest first, max 20). Title is
-"Since you last looked (N)". Each row: author chip (Grok = `--p-grok` tint, Claude and
-Alfred = `--p-claude` tint, anything else gray; the leading word of `author` decides, and a
-signal with no author is read off its Inbox file name), folder kicker, title, age ("12 min
-ago", "3 h ago"). Click opens the reader. N is the rows modified after
-`localStorage['alfred-last-seen']`, written when the tab is hidden and on `pagehide`, read
-again when the tab becomes visible; unset means the last 6 hours count as new. Older rows
-render dimmer by colour (never by opacity, which would break contrast). Eight rows show,
-"Show all N" reveals the rest. Empty state: "Nothing changed in the last day." A server
-that does not send `recent` gets no card, rather than a false "nothing changed".
+The user asked for the calendar in the middle and everything to act on to the left. The
+"Since you last looked" card is removed, and `/api/assistant` no longer sends `recent`.
+
+| Column | Cards, top to bottom |
+|---|---|
+| Left: today, this week and to-dos | Today on the calendar (when it has events), Overdue, Due today, Carry over, Routines today, This week, To-dos, Later (collapsed) |
+| Middle: calendar | The month calendar and the picked day's agenda, alone |
+| Right: brief and wrap-up | Grok's morning brief, Watching (collapsed), Projects, Signals waiting, End of day |
 
 ### 7.6 Contrast (measured, WCAG 2.1 relative luminance)
 
@@ -1595,27 +1596,26 @@ floor is to be enforced, `#52648c` reaches 3.00 on surface-2.
 
 ---
 
-## 8. Calendar (2026-10-23)
+## 8. Calendar (2026-10-23, file-backed)
 
-The Day view gained a date layer: dots on a month grid for what needs to happen which day,
-fed by the brain's dated reminders (the truth) and by Google Calendar (every calendar the
-account sees, shared ones and invitations included). No new tokens; the classes live in one
-block, `CALENDAR`, after "Since you last looked". Built with `el()`/`textContent` only.
+The Day view has a date layer: dots on a month grid for what needs to happen which day. It has
+two sources: the brain's dated reminders (the truth) and one Markdown file in the shared brain,
+`Calendar/events.md`, that Grok and Claude both add to and read from. The server parses the
+file and sends it as `feed.calendar` (`exists`, `from`/`to` window, `count`, `days` by date,
+`problems`). There is no Google Calendar, no sign-in and no sync. No new tokens; the classes
+live in one block, `CALENDAR`. Built with `el()`/`textContent` only.
 
 | Surface | Where | Notes |
 |---|---|---|
-| Calendar card (`.cal-card`) | top of Day column 2 | month label, `‹ ›` buttons, a "Today" button when away from today, 6-week grid (42 `button.cal-day`, weeks start Sunday), the agenda for the picked day |
-| Today on the calendar | top of Day column 1 | Google events for today (time, title, calendar chip); absent when not connected or empty |
-| Summary line | Day header | "· N events" once Google's days have loaded (never a false 0) |
-| Settings, Google Calendar | `#settings-gcal`, after Brain location | one-line explainer, status block (status, account, Second Brain calendar, last sync, last error in red), Client ID and secret, Connect, Sync now, Disconnect, "How do I get a client ID?" |
+| Calendar card (`.cal-card`) | top of Day column 2 | month label, `‹ ›` buttons, a "Today" button when away from today, 6-week grid (42 `button.cal-day`, weeks start Sunday), a note line, the agenda for the picked day |
+| Today on the calendar | top of Day column 1 | the file's events for today (time, title, author); absent when there are none |
+| Summary line | Day header | "· N events" for today whenever the events file exists (omitted, never a false 0, when it does not) |
 
 **Dots** (6px, `aria-hidden`; the cell's `aria-label` carries the counts): mint = a brain
-reminder due that day (`feed.overdue/today/upcoming/later` by `due`); the calendar's own colour
-= a Google event, set inline as `--accent` and only after it passes a `#hex` test, otherwise
-blue; hollow (ring in the calendar colour) = an invitation still `needsAction`. Order is
-reminders, then invitations, then events, so a pending invite is never the dot that gets cut.
-Up to 4 dots show; five or more collapse to 3 dots plus `+N`. A Google event that mirrors a
-reminder (`brain && brainFile`) is never drawn; the reminder row, with its actions, wins.
+reminder due that day (`feed.overdue/today/upcoming/later` by `due`); blue (`--blue`, one fixed
+colour) = an event from the file, one dot each, a multi-day event on every day it covers. No
+per-calendar colours, no hollow dots, nothing from the file reaches a style. Reminders first,
+then events. Up to 4 dots show; five or more collapse to 3 dots plus `+N`.
 
 **Cell states.** Today: mint ring. Selected: blue tint plus a 2px inset bottom bar and
 `aria-pressed` (blue = selected, §1.2). Outside the month: `--text-dim` (colour, never
@@ -1625,18 +1625,76 @@ select. Month buttons keep focus on themselves so they can be pressed repeatedly
 arrow repaints only the calendar node, not the whole Day view.
 
 **Agenda** (`.cal-agenda`): the picked day's reminders as the shared `.day-item` rows (Done /
-Tomorrow / Snooze), then `.cal-event` rows: time or "All day", title, a `.cal-chip` (calendar
-name, colour swatch), location, and badges (`invite · needs answer` = warn, `tentative` = info).
-An event opens Google's own page (`calendar/event?eid=`, new tab, `noopener`). Not connected:
-the grid still shows reminder dots and one line says "Google Calendar not connected — Settings
-→ Calendar" (the link opens Settings scrolled to the section).
+Tomorrow / Snooze), then `button.cal-event` rows: time (`all day`, `09:30`, or `09:30–10:00`,
+24h Eastern as the file gives it), title, then a meta line with "through <date>" on a
+multi-day event's earlier days, the location, and a small muted `.ce-by` author label
+("Grok", "Claude", "You") from `by` when present. The today card drops the location. Clicking
+any event opens `Calendar/events.md` in the reader (`dayOpenFile`); that file is the one place
+to add or fix an event.
 
-**Window.** The server fetches roughly today minus 7 days to today plus 42, so days outside it
-carry reminder dots only, and the card says so ("Google events cover ... to ...").
+**Note under the grid** (`.cal-note`), one of:
 
-**Settings flow.** The secret is write-only: one POST, the input is cleared, the page only ever
-shows "saved" (Replace reveals empty inputs). Connect opens Google's consent page in a browser
-tab (the server does this), then the section polls `/api/calendar/status` every 5 s for up to
-5 minutes and flips to Connected on its own, even if Settings was closed meanwhile (it then
-re-polls the Day feed). Disconnect asks first. Sync now toasts "Calendar: N changes" and
-repaints Day from the returned feed.
+| State | Text |
+|---|---|
+| File missing (`exists: false`) | "No calendar file yet: Calendar/events.md" |
+| File present | "N events this month · Calendar/events.md", the file name being a `.cal-link` button that opens it; N counts each event once in the viewed month |
+| Viewed month outside the window | "Events cover <from> to <to>; other days show reminders only · Calendar/events.md" |
+| Unreadable lines (`problems` not empty), added to the above | warn (`--amber`): "N lines in Calendar/events.md could not be read"; the `title` lists the line numbers |
+
+**Window.** The server sends the 1st of last month through the last day of next month, so
+months beyond it carry reminder dots only and the note says so.
+
+## 9. Add and edit (2026-10-23)
+
+The Day view can write, not only read: add a to-do, reminder, errand, routine or event, edit a
+reminder or a routine, and pause or resume a routine. Grok can already do all of this from his
+side; this gives the HUD the same reach. One dialog does all of it (the item editor). No new
+tokens; the classes sit in one CSS block, `ITEM EDITOR`. Built with `el()`/`textContent` only.
+
+| Surface | Where | Notes |
+|---|---|---|
+| `+ Add` (`#day-add`, `.btn.primary`) | Day header, `.day-tools`, before Refresh | opens the editor on To-do |
+| `Edit` (`.btn.day-act`) | every reminder row's action group: Overdue, Due today, Carry over, This week, To-dos, Later, Watching (and the calendar agenda's rows) | after Done / Tomorrow, before the `⋯` snooze; opens the editor prefilled from the row. Rows marked pending have no actions, so no Edit |
+| `Edit` | "Routines today" rows | routine rows have no Done |
+| My routines (`details.day-card`, collapsed) | Day right column, after Watching | every routine: active (today's first), then paused (grey `badge idle`, `.day-item.paused`); each row has its full schedule, Edit and Pause or Resume; a `+ Add routine` button at the foot |
+
+**The editor** is a `.modal`/`.scrim` pair (`.modal.ie-modal`) created on open and removed on
+close: `role="dialog"`, `aria-modal="true"`, `aria-labelledby` its title. Focus moves to the
+Title field; Tab and Shift+Tab wrap inside it; Esc and Cancel (and the ✕) close it and return
+focus to what opened it. A save repaints Day and replaces the row's buttons, so focus then goes
+to the same kind of button for the same file (`data-act` / `data-file`), else to `+ Add`.
+Keys typed in the dialog never reach the page's one-key shortcuts. The toast stack is raised
+above the dialog while it is open (`body.ie-open`).
+
+Adding: a type choice at the top (`.btn.ie-type`, `aria-pressed`; selected is `--blue`).
+Editing a reminder replaces it with a Kind select (to-do, reminder, errand, watch).
+
+| Type | Fields |
+|---|---|
+| To-do | title, scope, note (no date) |
+| Reminder | title, date (required), time, scope, note |
+| Errand | title, scope, note (the date is today; no date field) |
+| Routine | title, schedule builder, time, note |
+| Event | title, date (required), end date, start and end time, place |
+
+Inputs share the Tell Grok input's look (`--surface-2`, `--border-focusable`, 2px `--blue`
+`:focus-visible` ring). Fields not used by the chosen type are `hidden`, not disabled.
+
+**Schedule builder.** Repeats: Daily, Weekdays, Weekends, Weekly on (Mon to Sun checkboxes),
+Monthly on (day 1 to 31), or Other (free text). It writes the words the brain stores, and a
+"Saved as: ..." line under it shows them: `daily`, `weekdays`, `weekends`, `Mondays`,
+`Mondays and Thursdays`, `Mondays, Wednesdays and Fridays`, `monthly on the 15th` (st, nd, rd,
+th, with 11 to 13 as th). Editing parses the stored text back into the builder when it is one of
+those shapes (case-insensitive); anything else opens as free text with a hint. The brain keeps
+a routine's time inside its schedule ("Mondays 08:00"), so the editor reads the time into its own
+field and compares schedules without it; an update sends the schedule only when its words changed.
+
+**Saving** is `POST /api/assistant/item` (`op` create or update; `type` reminder, routine or
+event). An update sends only the fields that changed (a note is appended by the server, so it
+is sent only when typed); a cleared date is `due: "none"`, a cleared time is `null`. Nothing
+changed is refused inline. Checks before sending: title; a reminder's date; a weekly routine
+needs a day; a monthly day is 1 to 31; an event needs a date and cannot end first. Save is
+disabled while the request is in flight. On 200 the editor closes, a toast says `Saved: <title>`
+and the reply's feed is painted; on a refusal the editor stays open and the server's message
+shows in `.ie-error` (`role="alert"`, `--red` rule) and in a toast. Pause and Resume send just
+`{ status }` from the row, with the row marked busy meanwhile.

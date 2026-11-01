@@ -53,7 +53,17 @@ const INDEX_PATH = process.env.ALFRED_INDEX || path.join(__dirname, 'index.json'
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const EMBED_MODEL = 'nomic-embed-text';
 // Retired claude-flow-era note copies live in _Archive — never index them.
-const SKIP_DIRS = new Set(['.obsidian', 'Templates', '.git', 'node_modules', '_Archive']);
+// Matched case-insensitively: the Second Brain keeps its blank forms in
+// System/templates, and a case-sensitive 'Templates' let all fourteen of them
+// into the graph as notes, each with placeholder links to nothing.
+const SKIP_DIRS = new Set(['.obsidian', 'templates', '.git', 'node_modules', '_archive']);
+const isSkippedDir = (name) => SKIP_DIRS.has(String(name).toLowerCase());
+// Paths skipped in every vault, on top of the operator's own vaultExclude.
+// Alfred's session hooks copy Claude Code's working memory into
+// Memory/agents/claude-code so other AIs can read it. It is a machine mirror
+// of ~100 files, not the operator's memory, and indexed it outnumbered the
+// real Memory folder five to one.
+const BUILTIN_EXCLUDES = ['memory/agents/claude-code'];
 const EXCERPT_LEN = 400;
 const EMBED_CHARS = 2000;
 const USAGE_LOG_PATH = path.join(os.homedir(), '.claude', 'metrics', 'ollama-usage.jsonl');
@@ -81,13 +91,17 @@ function logUsage({ model, promptEvalCount, durationMs }) {
 // what a brain shared with other AIs needs — its Health folder is private to
 // that folder, not to every folder that happens to be called Health.
 // Read per call, like the vault path, so a settings edit needs no restart.
-function vaultExcludes() {
+function ownVaultExcludes() {
   try {
     const v = JSON.parse(fs.readFileSync(LOCAL_CONFIG, 'utf8')).vaultExclude;
     if (!Array.isArray(v)) return [];
     return v.filter((s) => typeof s === 'string' && s.trim())
       .map((s) => s.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').toLowerCase());
   } catch { return []; }
+}
+
+function vaultExcludes() {
+  return [...new Set([...BUILTIN_EXCLUDES, ...ownVaultExcludes()])];
 }
 
 function isExcludedPath(root, fullPath, excludes = vaultExcludes()) {
@@ -108,7 +122,7 @@ function walkVault(dir, root = dir, excludes = vaultExcludes()) {
     if (entry.name.startsWith('.')) continue;
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (SKIP_DIRS.has(entry.name) || isExcludedPath(root, fullPath, excludes)) continue;
+      if (isSkippedDir(entry.name) || isExcludedPath(root, fullPath, excludes)) continue;
       results.push(...walkVault(fullPath, root, excludes));
     } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
       results.push(fullPath);
@@ -343,5 +357,5 @@ if (isMain) {
 
 export {
   buildIndex, parseWikiLinks, linkKey, noteKey, topLevelFolder, resolveVaultDir, INDEX_PATH, SKIP_DIRS,
-  vaultExcludes, isExcludedPath,
+  isSkippedDir, vaultExcludes, isExcludedPath,
 };

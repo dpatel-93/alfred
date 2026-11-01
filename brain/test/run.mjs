@@ -51,7 +51,7 @@ const SUITES = [
   { name: 'orchestration', file: 'orchestration.mjs', browser: false },
   { name: 'ask-stream', file: 'ask-stream.mjs', browser: false },
   { name: 'council', file: 'council.mjs', browser: false },
-  { name: 'terminals', file: 'terminals.mjs', browser: false },
+  // terminals.mjs (the in-page PTY consoles) is not run: the Terminals tab was removed. The file stays in place.
   { name: 'search-nav', file: 'search-nav.mjs', browser: true },
   { name: 'org', file: 'org.mjs', browser: true },
   { name: 'charter', file: 'charter.mjs', browser: true },
@@ -146,7 +146,9 @@ function runSuite(suite) {
       // The suites feed this straight to dynamic import(), and import() rejects
       // a bare Windows path ("Received protocol 'c:'"). Hand them a file:// URL,
       // which is valid on every platform.
-      env: { ...process.env, ALFRED_TEST_BASE: BASE, PLAYWRIGHT_INDEX: playwrightUrl() || '' },
+      // ALFRED_TEST_BRAIN: the throwaway brain the server reads, so a suite can drop a file in it
+      // the way Grok does from the car (a change note in Inbox/) and watch the dashboard react.
+      env: { ...process.env, ALFRED_TEST_BASE: BASE, ALFRED_TEST_BRAIN: BRAIN, PLAYWRIGHT_INDEX: playwrightUrl() || '' },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let out = '', err = '';
@@ -284,6 +286,7 @@ function makeTestBrain() {
   put('Routines/user-daily.md', '# The user: daily thing\n\n- **Kind:** routine\n- **Runs:** the user\n- **Schedule:** daily\n- **Status:** active\n');
   put(`Outputs/briefs/${today}.md`, `# Morning brief\n\n- Last updated: ${today} 7:00 AM ET\n\n## Top of the brief\n1. **Test headline.** Body.\n`);
   put('Projects/demo/status.md', '# Demo\n\n- **Status:** Active\n- **Track:** Personal\n\n## Where it stands\n- (2026-01-01) Going fine.\n\n## Next\n1. Ship it.\n');
+  put('Calendar/events.md', `# Calendar\n\n- **Kind:** calendar\n\n## ${today.slice(0, 7)}\n\n- ${today} 09:30-10:00 Test event @ the office (added by grok)\n- ${today} 99:99 A line that cannot be read\n`);
   put('Inbox/README.md', '# Inbox\n');
   return BRAIN;
 }
@@ -298,11 +301,14 @@ const server = spawn(process.execPath, [path.join(HERE, '..', 'server.mjs')], {
     PORT: String(PORT),
     ALFRED_VAULT: path.join(HERE, 'fixtures', 'vault'),
     ALFRED_SHARED_BRAIN: BRAIN,
-    // The calendar module keeps its OAuth client and refresh token under this dir; the api
-    // suite writes a fake client there and must never touch the operator's ~/.alfred.
+    // Local settings the server writes (~/.alfred by default) go here, never to the operator's.
     ALFRED_LOCAL_CONFIG_DIR: path.join(os.tmpdir(), `alfred-test-config-${PORT}`),
     // The Day view auto-opens a sign-in console for a signed-out seat; never on a test run.
     ALFRED_CC_DRY_RUN: '1',
+    // The desk box (Tell Alfred) spawns this stand-in instead of the Claude CLI, through the
+    // same code path, so a hang in that path fails the api suite in seconds rather than shipping.
+    ALFRED_TELL_RUNNER: path.join(HERE, 'fixtures', 'tell-runner-stub.mjs'),
+    ALFRED_TELL_TIMEOUT_MS: '15000',
     // Never the live token file — see TOKEN_FILE in server.mjs.
     ALFRED_TOKEN_FILE: path.join(os.tmpdir(), `alfred-test-${PORT}.token`),
     // The brain suite exists to cover the DEGRADED path — keyword fallback with

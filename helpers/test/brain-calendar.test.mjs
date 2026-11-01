@@ -1,20 +1,18 @@
 #!/usr/bin/env node
 // --- brain-calendar.test.mjs -------------------------------------------------
-// Runs the calendar sync against a throwaway brain and an in-memory fake of the
-// Google Calendar API (injected through setFetch), with a fixed clock.
+// The shared calendar file (Calendar/events.md): parsing, the month view the
+// dashboard draws, the window used by the index, and adding events in order.
+// Runs against a throwaway brain with a fixed clock.
 //
 //   node ~/.claude/helpers/test/brain-calendar.test.mjs
 // ---------------------------------------------------------------------------
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { CALENDAR_FILE, addEvent, calendarView, eventsBetween, parseEvents, readCalendar } from '../brain-calendar.mjs';
+import { easternNow } from '../brain-librarian.mjs';
 
 const ROOT = path.join(os.tmpdir(), `calendar-test-${process.pid}`);
-const CONF = path.join(os.tmpdir(), `calendar-test-conf-${process.pid}`);
-process.env.ALFRED_LOCAL_CONFIG_DIR = CONF;   // never the operator's ~/.alfred
-process.env.ALFRED_SHARED_BRAIN = ROOT;
-const { calendarStatus, calendarView, connectUrl, finishConnect, disconnect, saveConfig, setFetch, syncCalendar } = await import('../brain-calendar.mjs');
-const { easternNow } = await import('../brain-librarian.mjs');
 const NOW = easternNow(new Date('2026-10-26T13:00:00Z')); // Monday 09:00 ET
 
 let pass = 0;
@@ -22,149 +20,96 @@ const fails = [];
 const chk = (name, ok, detail = '') => {
   if (ok) { pass++; console.log(`  PASS  ${name}`); } else { fails.push(name); console.log(`  FAIL  ${name}  ${detail}`); }
 };
-const put = (rel, text) => { fs.mkdirSync(path.dirname(path.join(ROOT, rel)), { recursive: true }); fs.writeFileSync(path.join(ROOT, rel), text, 'utf8'); };
-const read = (rel) => (fs.existsSync(path.join(ROOT, rel)) ? fs.readFileSync(path.join(ROOT, rel), 'utf8') : '');
-const reminder = (kind, status, due, title, author = 'grok') =>
-  `# ${title}\n\n- **Kind:** ${kind}\n- **Status:** ${status}\n- **Due:** ${due}\n- **Scope:** personal\n- **Author:** ${author}\n- **Last updated:** 2026-10-25 10:00 ET\n\nBody.\n`;
+const file = path.join(ROOT, CALENDAR_FILE);
+const read = () => fs.readFileSync(file, 'utf8');
 
-// --- A fake Google: tokens, one calendar list, events per calendar ---
-const G = { calendars: { primary: { id: 'me@example.com', summary: 'me', primary: true, backgroundColor: '#1b6' }, shared: { id: 'fam@group.calendar.google.com', summary: 'Family', backgroundColor: '#f60' } },
-  events: {}, tokenCalls: 0, log: [] };
-let nextId = 1;
-const json = (status, body) => ({ ok: status < 400, status, json: async () => body });
-setFetch(async (url, opts = {}) => {
-  const u = new URL(String(url));
-  const method = opts.method || 'GET';
-  G.log.push(`${method} ${u.pathname}${u.search}`);
-  if (u.hostname === 'oauth2.googleapis.com') {
-    G.tokenCalls++;
-    const f = new URLSearchParams(opts.body);
-    if (f.get('grant_type') === 'authorization_code') return json(200, { access_token: 'at1', refresh_token: 'rt1', expires_in: 3600 });
-    return json(200, { access_token: `at${G.tokenCalls}`, expires_in: 3600 });
-  }
-  if ((opts.headers || {}).Authorization !== `Bearer at${G.tokenCalls}`) return json(401, { error: { message: 'bad token' } });
-  const p = u.pathname.replace('/calendar/v3', '');
-  if (p === '/users/me/calendarList') return json(200, { items: Object.values(G.calendars).map((c) => ({ ...c, selected: true, accessRole: 'owner' })) });
-  if (p === '/calendars/primary') return json(200, G.calendars.primary);
-  if (p === '/calendars' && method === 'POST') { const b = JSON.parse(opts.body); const id = 'brain@group.calendar.google.com'; G.calendars.brain = { id, summary: b.summary, backgroundColor: '#2ef' }; G.events[id] = []; return json(200, { id }); }
-  const m = p.match(/^\/calendars\/([^/]+)(?:\/events(?:\/([^/]+))?)?$/);
-  if (!m) return json(404, { error: { message: 'no route ' + p } });
-  const calId = decodeURIComponent(m[1]);
-  const evId = m[2] ? decodeURIComponent(m[2]) : null;
-  const cal = Object.values(G.calendars).find((c) => c.id === calId);
-  if (!cal) return json(404, { error: { message: 'no calendar' } });
-  G.events[calId] ||= [];
-  if (!m[0].includes('/events')) return json(200, cal);
-  if (method === 'GET' && !evId) {
-    const showDeleted = u.searchParams.get('showDeleted') === 'true';
-    const items = G.events[calId].filter((e) => showDeleted || e.status !== 'cancelled');
-    return json(200, { items });
-  }
-  if (method === 'POST') { const b = JSON.parse(opts.body); const ev = { id: `ev${nextId++}`, status: 'confirmed', ...b }; G.events[calId].push(ev); return json(200, ev); }
-  const ev = G.events[calId].find((e) => e.id === evId);
-  if (!ev) return json(404, { error: { message: 'no event' } });
-  if (method === 'PATCH') { const b = JSON.parse(opts.body); Object.assign(ev, b, { extendedProperties: { private: { ...(ev.extendedProperties?.private || {}), ...(b.extendedProperties?.private || {}) } } }); return json(200, ev); }
-  if (method === 'DELETE') { ev.status = 'cancelled'; return { ok: true, status: 204, json: async () => ({}) }; }
-  return json(405, { error: { message: 'method' } });
-});
+fs.rmSync(ROOT, { recursive: true, force: true });
+fs.mkdirSync(ROOT, { recursive: true });
 
-// --- Fixture ---
-fs.rmSync(ROOT, { recursive: true, force: true }); fs.rmSync(CONF, { recursive: true, force: true });
-put('Reminders/2026-10-26--errand.md', reminder('errand', 'open', '2026-10-26', 'Pick up dry cleaning'));
-put('Reminders/2026-10-28--dentist.md', reminder('reminder', 'open', '2026-10-28', 'Dentist', 'Claude Code'));
-put('Reminders/2026-10-21--chore.md', reminder('todo', 'open', 'none', 'Clean the gutters'));
-put('Reminders/README.md', '# Reminders\n');
+// --- Parsing ---
+console.log('Parsing');
+const sample = [
+  '# Calendar', '',
+  '- **Kind:** calendar',
+  '- **Last updated:** 2026-10-25 10:00 ET', '',
+  'Format: `- YYYY-MM-DD [HH:MM[-HH:MM]] Title [@ place] (added by <ai>)`', '',
+  '```',
+  '- 2026-01-01 An example inside a fence (added by nobody)',
+  '```', '',
+  '## 2026-10 (October 2026)', '',
+  '- 2026-10-26 9:30-10:00 Dentist @ Main St clinic (added by grok)',
+  '- 2026-10-26 School picture day (added by claude-code)',
+  '- 2026-10-31..2026-11-02 Cabin weekend @ the lake (added by Grok)',
+  '- ~~2026-10-27 Cancelled lunch~~ (cancelled by user via claude-code)',
+  '- 2026-10-28 25:00 Broken time (added by grok)',
+  '- 2026-13-01 Broken date',
+  '- 2026-10-29 Plain event with no author', '',
+  '## 2026-12 (December 2026)', '',
+  '- 2026-12-24 Family dinner (added by grok)',
+].join('\n');
+const { events, problems } = parseEvents(sample);
+const dentist = events.find((e) => e.title === 'Dentist');
+chk('a timed event keeps its time, end time, place and author', !!dentist && dentist.date === '2026-10-26' && dentist.time === '09:30'
+  && dentist.endTime === '10:00' && dentist.location === 'Main St clinic' && dentist.by === 'grok' && dentist.allDay === false, JSON.stringify(dentist));
+const picture = events.find((e) => e.title === 'School picture day');
+chk('an event with no time is all day', !!picture && picture.allDay && picture.time === null && picture.by === 'claude-code', JSON.stringify(picture));
+const cabin = events.find((e) => e.title === 'Cabin weekend');
+chk('a multi-day event keeps its end date; the author is lower-cased', !!cabin && cabin.end === '2026-11-02' && cabin.by === 'grok' && cabin.location === 'the lake', JSON.stringify(cabin));
+chk('a struck-through (cancelled) event is not an event', !events.some((e) => /Cancelled lunch/.test(e.title)));
+chk('example lines inside a code fence are ignored', !events.some((e) => /example inside a fence/.test(e.title)));
+chk('an event with no author still reads', events.some((e) => e.title === 'Plain event with no author' && e.by === null));
+chk('a bad time and a bad date are reported as problems with their line numbers, not dropped silently',
+  problems.length === 2 && problems.every((p) => p.line > 0) && /25:00/.test(problems[0].text) && /2026-13-01/.test(problems[1].text), JSON.stringify(problems));
+chk('each event carries its line number in the file', dentist && sample.split('\n')[dentist.line - 1].includes('Dentist'));
 
-console.log('\nConnect');
-chk('status starts unconfigured', !calendarStatus().configured && !calendarStatus().connected);
-saveConfig({ clientId: 'cid', clientSecret: 'sec' });
-const url = connectUrl(7777);
-const state = new URL(url).searchParams.get('state');
-chk('the consent URL asks for offline calendar access with a loopback redirect',
-  /accounts\.google\.com/.test(url) && /access_type=offline/.test(url) && /redirect_uri=http%3A%2F%2F127\.0\.0\.1%3A7777%2Foauth2%2Fgoogle/.test(url) && state?.length === 32, url);
-let bad = null; try { await finishConnect({ code: 'x', state: 'nope' }); } catch (e) { bad = e.message; }
-chk('an unknown state is refused', /unknown|expired/.test(bad || ''), bad);
-const st = await finishConnect({ code: 'code1', state });
-chk('connecting stores the refresh token, the account label and creates the Second Brain calendar',
-  st.connected && st.account === 'me@example.com' && st.brainCalendarId === 'brain@group.calendar.google.com' && G.calendars.brain.summary === 'Second Brain', JSON.stringify(st));
-const saved = JSON.parse(fs.readFileSync(path.join(CONF, 'google-calendar.json'), 'utf8'));
-chk('the saved file holds the refresh token and never an access token', saved.refreshToken === 'rt1' && !JSON.stringify(saved).includes('at1'));
-chk('the page-facing status never carries a secret or token', !JSON.stringify(calendarStatus()).match(/sec|rt1|at1/));
-
-console.log('\nBrain -> calendar');
-let r = await syncCalendar(ROOT, NOW);
-const brainEvents = () => G.events['brain@group.calendar.google.com'];
-chk('first sync creates one all-day event per open dated reminder, none for the undated to-do',
-  r.ok && brainEvents().length === 2 && brainEvents().every((e) => e.start.date && e.extendedProperties.private.brainFile.startsWith('Reminders/'))
-  && !brainEvents().some((e) => /gutters/i.test(e.summary)), JSON.stringify(r));
-const dentist = brainEvents().find((e) => e.summary === 'Dentist');
-chk('the event carries the brain file, the date and a transparent (free) status', dentist.start.date === '2026-10-28' && dentist.end.date === '2026-10-29'
-  && dentist.extendedProperties.private.brainFile === 'Reminders/2026-10-28--dentist.md' && dentist.transparency === 'transparent');
-r = await syncCalendar(ROOT, NOW);
-chk('a second sync is idempotent', r.ok && r.actions.length === 0 && brainEvents().length === 2, JSON.stringify(r.actions));
-
-put('Reminders/2026-10-28--dentist.md', reminder('reminder', 'open', '2026-10-30', 'Dentist', 'Claude Code'));
-r = await syncCalendar(ROOT, NOW);
-chk('moving the reminder at the desk moves the event', dentist.start.date === '2026-10-30' && r.actions.some((a) => /updated in calendar: 2026-10-30/.test(a)), JSON.stringify(r.actions));
-
-fs.mkdirSync(path.join(ROOT, 'Reminders/Done'), { recursive: true });
-fs.renameSync(path.join(ROOT, 'Reminders/2026-10-26--errand.md'), path.join(ROOT, 'Reminders/Done/2026-10-26--errand.md'));
-r = await syncCalendar(ROOT, NOW);
-chk('closing the reminder removes its event', brainEvents().find((e) => /dry cleaning/.test(e.summary)).status === 'cancelled' && r.actions.some((a) => /^remove/.test(a)), JSON.stringify(r.actions));
-
-console.log('\nCalendar -> brain');
-brainEvents().push({ id: 'g1', status: 'confirmed', summary: 'Call the plumber', start: { date: '2026-10-27' }, end: { date: '2026-10-28' }, description: 'Grok added this from the car.' });
-brainEvents().push({ id: 'g2', status: 'confirmed', summary: 'Pediatrician 3pm', start: { dateTime: '2026-10-29T15:00:00-04:00' }, end: { dateTime: '2026-10-29T15:30:00-04:00' }, location: 'Main St' });
-brainEvents().push({ id: 'g3', status: 'confirmed', summary: 'Dentist', start: { date: '2026-10-30' }, end: { date: '2026-10-31' } });
-r = await syncCalendar(ROOT, NOW);
-const plumber = read('Reminders/2026-10-27--call-the-plumber.md');
-chk('a foreign all-day event becomes a reminder file with the event id and the description', /- \*\*Kind:\*\* reminder/.test(plumber) && /- \*\*Due:\*\* 2026-10-27/.test(plumber)
-  && /Grok added this from the car/.test(plumber) && /Calendar event: g1/.test(plumber) && /Author:\*\* calendar/.test(plumber), plumber);
-const ped = read('Reminders/2026-10-29--pediatrician-3pm.md');
-chk('a timed event keeps its time and place', /- \*\*Due:\*\* 2026-10-29 15:00/.test(ped) && /Where: Main St/.test(ped), ped);
-chk('the adopted events now carry their brain file', brainEvents().find((e) => e.id === 'g1').extendedProperties.private.brainFile === 'Reminders/2026-10-27--call-the-plumber.md');
-chk('an event that duplicates a reminder that already has its event (same title and day) is removed, not turned into a second file',
-  brainEvents().find((e) => e.id === 'g3').status === 'cancelled' && !fs.existsSync(path.join(ROOT, 'Reminders/2026-10-30--dentist.md'))
-  && r.actions.some((a) => /^remove  duplicate event "Dentist"/.test(a)), JSON.stringify(r.actions));
-chk('exactly one live Dentist event remains', brainEvents().filter((e) => e.summary === 'Dentist' && e.status !== 'cancelled').length === 1);
-
-const g1 = brainEvents().find((e) => e.id === 'g1');
-g1.start = { date: '2026-10-31' }; g1.end = { date: '2026-11-01' };
-r = await syncCalendar(ROOT, NOW);
-chk('moving the event in the calendar moves the reminder', /- \*\*Due:\*\* 2026-10-31/.test(read('Reminders/2026-10-27--call-the-plumber.md'))
-  && /- Moved: .* via Google Calendar/.test(read('Reminders/2026-10-27--call-the-plumber.md')), read('Reminders/2026-10-27--call-the-plumber.md'));
-
-brainEvents().find((e) => e.id === 'g2').status = 'cancelled';
-r = await syncCalendar(ROOT, NOW);
-chk('deleting the event closes the reminder into Done', !fs.existsSync(path.join(ROOT, 'Reminders/2026-10-29--pediatrician-3pm.md'))
-  && /- Closed: .* via Google Calendar \(event removed\)/.test(read('Reminders/Done/2026-10-29--pediatrician-3pm.md')));
-r = await syncCalendar(ROOT, NOW);
-chk('steady state is quiet again', r.ok && r.actions.length === 0, JSON.stringify(r.actions));
-
+// --- Month view ---
 console.log('\nMonth view');
-G.events['me@example.com'] = [
-  { id: 'p1', status: 'confirmed', summary: 'Standup', start: { dateTime: '2026-10-27T09:30:00-04:00' }, end: { dateTime: '2026-10-27T09:45:00-04:00' } },
-  { id: 'p2', status: 'confirmed', summary: 'Declined thing', start: { dateTime: '2026-10-27T11:00:00-04:00' }, end: { dateTime: '2026-10-27T12:00:00-04:00' }, attendees: [{ self: true, responseStatus: 'declined' }] },
-  { id: 'p3', status: 'confirmed', summary: 'Invite', start: { dateTime: '2026-10-28T13:00:00-04:00' }, end: { dateTime: '2026-10-28T14:00:00-04:00' }, attendees: [{ self: true, responseStatus: 'needsAction' }] },
-];
-G.events['fam@group.calendar.google.com'] = [{ id: 'f1', status: 'confirmed', summary: 'Anniversary dinner', start: { date: '2026-10-24' }, end: { date: '2026-10-25' } }];
-const view = await calendarView(NOW);
-chk('the view lists every selected calendar, marks the brain one, and groups events by day',
-  view.connected && view.calendars.length === 3 && view.calendars.some((c) => c.brain) && view.days['2026-10-24']?.[0].calendar === 'Family'
-  && view.days['2026-10-27']?.length === 1 && view.days['2026-10-27'][0].time === '09:30', JSON.stringify(view).slice(0, 300));
-chk('declined invitations are left out, pending ones are flagged', !JSON.stringify(view).includes('Declined thing') && view.days['2026-10-28'].some((e) => e.invite && e.response === 'needsAction'));
-chk('brain events show up with their file', view.days['2026-10-31']?.some((e) => e.brain && e.brainFile === 'Reminders/2026-10-27--call-the-plumber.md'), JSON.stringify(view.days['2026-10-31']));
+chk('no file yet: the view says so, with no days and no problems', (() => {
+  const v = calendarView(ROOT, NOW);
+  return v.exists === false && v.count === 0 && Object.keys(v.days).length === 0 && v.file === CALENDAR_FILE;
+})());
+fs.mkdirSync(path.dirname(file), { recursive: true });
+fs.writeFileSync(file, sample, 'utf8');
+const v = calendarView(ROOT, NOW);
+chk('the window runs from the 1st of last month to the last day of next month', v.from === '2026-09-01' && v.to === '2026-11-30', `${v.from}..${v.to}`);
+chk('events outside the window are left out (December)', !Object.values(v.days).flat().some((e) => e.title === 'Family dinner'));
+chk('a day lists its events, timed after all-day', JSON.stringify((v.days['2026-10-26'] || []).map((e) => e.title)) === '["School picture day","Dentist"]',
+  JSON.stringify(v.days['2026-10-26']));
+chk('a multi-day event sits on every day it covers, marked start and end', ['2026-10-31', '2026-11-01', '2026-11-02'].every((d) => (v.days[d] || []).some((e) => e.title === 'Cabin weekend'))
+  && v.days['2026-10-31'].find((e) => e.title === 'Cabin weekend').spanStart === true && v.days['2026-11-02'].find((e) => e.title === 'Cabin weekend').spanEnd === true);
+chk('count is events, not event-days', v.count === 4, String(v.count));
+chk('problems reach the view so the dashboard can show them', v.problems.length === 2);
+chk('the view says where it came from', v.source === 'file' && v.exists === true);
 
-console.log('\nTokens and disconnect');
-G.tokenCalls++;  // the fake now expects a newer token: the next call must refresh once and succeed
-r = await syncCalendar(ROOT, NOW);
-chk('an expired access token is refreshed transparently', r.ok, JSON.stringify(r));
-chk('the fake never saw a secret in a URL', !G.log.some((l) => /sec|rt1/.test(l)));
-disconnect();
-chk('disconnect forgets the token and the calendar id', !calendarStatus().connected && !calendarStatus().brainCalendarId);
-r = await syncCalendar(ROOT, NOW);
-chk('sync without a connection is a clean no', r.ok === false && /not connected/.test(r.error));
+// --- The index window ---
+console.log('\nIndex window');
+const week = eventsBetween(ROOT, NOW.date, '2026-11-02');
+chk('the next 7 days include an event that started before the window ends', JSON.stringify(week.map((e) => e.title))
+  === '["School picture day","Dentist","Plain event with no author","Cabin weekend"]', JSON.stringify(week.map((e) => e.title)));
 
-fs.rmSync(ROOT, { recursive: true, force: true }); fs.rmSync(CONF, { recursive: true, force: true });
+// --- Adding ---
+console.log('\nAdding');
+fs.rmSync(path.dirname(file), { recursive: true, force: true });
+const l1 = addEvent(ROOT, { date: '2026-11-05', title: 'Parent-teacher night', time: '18:00', endTime: '19:30', location: 'school', by: 'claude-code' }, NOW);
+chk('adding to a brain with no file creates it with the header and the month', fs.existsSync(file) && /^# Calendar/.test(read()) && /## 2026-11 \(November 2026\)/.test(read())
+  && read().includes('- **Kind:** calendar'), read().slice(0, 300));
+chk('the written line uses the documented format', l1 === '- 2026-11-05 18:00-19:30 Parent-teacher night @ school (added by claude-code)', l1);
+addEvent(ROOT, { date: '2026-11-03', title: 'Vote', by: 'grok' }, NOW);
+addEvent(ROOT, { date: '2026-11-05', time: '08:00', title: 'Breakfast meeting', by: 'grok' }, NOW);
+addEvent(ROOT, { date: '2026-10-30', title: 'Halloween party', by: 'grok' }, NOW);
+addEvent(ROOT, { date: '2026-12-01', end: '2026-12-03', title: 'Conference', by: 'claude-code' }, NOW);
+const order = readCalendar(ROOT).events.map((e) => `${e.date} ${e.title}`);
+chk('events stay in date and time order, months in order', JSON.stringify(order) === JSON.stringify([
+  '2026-10-30 Halloween party', '2026-11-03 Vote', '2026-11-05 Breakfast meeting', '2026-11-05 Parent-teacher night', '2026-12-01 Conference',
+]), JSON.stringify(order));
+const headings = read().split('\n').filter((l) => l.startsWith('## '));
+chk('one heading per month, in order', JSON.stringify(headings) === JSON.stringify(['## 2026-10 (October 2026)', '## 2026-11 (November 2026)', '## 2026-12 (December 2026)']), JSON.stringify(headings));
+chk('Last updated is stamped', read().includes(`- **Last updated:** ${NOW.stamp}`));
+chk('what was added reads back with no problems', readCalendar(ROOT).problems.length === 0);
+let threw = false;
+try { addEvent(ROOT, { date: '2026-11-31', title: 'Not a day' }, NOW); } catch { threw = true; }
+chk('a date that does not exist is refused', threw);
+
+fs.rmSync(ROOT, { recursive: true, force: true });
 console.log(`\n${pass} passed, ${fails.length} failed`);
 if (fails.length) { for (const f of fails) console.log(`  - ${f}`); process.exitCode = 1; } else console.log('OK');

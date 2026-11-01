@@ -1,0 +1,49 @@
+{
+  "name": "alfred-desktop",
+  "productName": "Alfred",
+  "version": "1.0.0",
+  "description": "Alfred on the desktop: the dashboard in its own window, and a floating brain when it is minimized.",
+  "private": true,
+  "type": "module",
+  "main": "main.mjs",
+  "author": "Alfred",
+  "scripts": {
+    "start": "electron .",
+    "dist": "node scripts/write-engine.mjs && electron-builder --win nsis --publish never"
+  },
+  "build": {
+    "appId": "local.alfred.desktop",
+    "productName": "Alfred",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.mjs",
+      "preload.cjs",
+      "widget.html",
+      "widget.js",
+      "loading.html",
+      "engine.json",
+      "build/icon.png"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Alfred"
+    }
+  },
+  "devDependencies": {
+    "electron": "44.10.0",
+    "electron-builder": "26.18.0"
+  },
+  "allowScripts": {
+    "electron": true
+  }
+}

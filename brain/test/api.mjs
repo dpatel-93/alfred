@@ -122,20 +122,26 @@ chk('the operator name is a name, not the template placeholder',
   !/^\(/.test(tiers.ceo?.name || '') && !/not specified/i.test(tiers.ceo?.name || ''),
   JSON.stringify(tiers.ceo?.name));
 
-// --- org self-test ---
-// Deliberately NOT executed here: running it spawns real `claude` processes and spends real
-// tokens, which a test suite has no business doing. What IS asserted is the contract around
-// it — the state it publishes, and that it cannot be triggered without the session token.
-const selfT = org?.selfTest;
-chk('/api/org publishes self-test state', selfT && typeof selfT === 'object', JSON.stringify(selfT));
-chk('self-test is idle in a fresh server', selfT?.running === false, JSON.stringify(selfT?.running));
-chk('self-test reports the active window it is imposing',
-  typeof selfT?.activeWindowMs === 'number' && selfT.activeWindowMs > 0, JSON.stringify(selfT?.activeWindowMs));
-chk('an idle self-test does not widen the org activity window',
-  selfT?.activeWindowMs === 20000, `got ${selfT?.activeWindowMs}`);
-const stNoTok = await fetch(B + '/api/org/selftest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-chk('POST /api/org/selftest without a token is blocked',
-  stNoTok.status === 401 || stNoTok.status === 403, `got ${stNoTok.status}`);
+// --- the org self-test is removed ---
+// It spawned real `claude` turns to light the org chart up; the chart reads real transcripts,
+// so it no longer needs one. Asserted gone rather than dropped, like the terminal above.
+chk('/api/org no longer publishes self-test state', org && !('selfTest' in org), Object.keys(org || {}).join(','));
+const stGone = await fetch(B + '/api/org/selftest', { method: 'POST', headers: H, body: '{}' });
+chk('POST /api/org/selftest removed -> 404', stGone.status === 404, `got ${stGone.status}`);
+
+// --- the Terminals tab, its consoles and the council are removed ---
+// The in-page consoles (/api/terminals + a WebSocket), the council and the multi-seat window are
+// gone. The "Open AI terminal" button replaced them (covered in council.mjs); the sign-in check
+// at startup keeps /api/bench and /api/command-center/signin.
+for (const [method, p] of [['POST', '/api/terminals'], ['GET', '/api/terminals'], ['POST', '/api/council'], ['GET', '/api/council'],
+                           ['GET', '/api/council/council1'], ['POST', '/api/command-center/open'], ['POST', '/api/command-center/config'],
+                           ['GET', '/api/command-center/seats'], ['GET', '/vendor/xterm/xterm.js']]) {
+  const r = await fetch(B + p, { method, headers: H, ...(method === 'POST' ? { body: '{}' } : {}) });
+  chk(`${method} ${p} removed -> 404`, r.status === 404, `got ${r.status}`);
+}
+const pageNow = await fetch(B + '/').then((r) => r.text());
+chk('the page carries no xterm, console lane or seat-bar markup',
+  !/xterm|pane-command|cc-term|ext-term-btn|cc-seats|org-selftest/.test(pageNow), 'a Terminals-tab remnant is still in ui.html');
 
 // --- the voice surface stays removed ---
 // Every route WS2 deleted, asserted gone. A revert or a bad merge that brings
@@ -519,25 +525,94 @@ await new Promise((r) => setTimeout(r, 2000));  // the version bump is debounced
 const status2 = (await j('/api/status')).d;
 chk('brainVersion moved after dashboard actions', typeof status2?.brainVersion==='number' && status2.brainVersion > (status?.brainVersion ?? -1), `${status?.brainVersion} -> ${status2?.brainVersion}`);
 
-// --- Google Calendar: the date bus (no real Google in tests; run.mjs points ALFRED_LOCAL_CONFIG_DIR at a temp dir) ---
-const calNoTok = await fetch(B+'/api/calendar/status');
-chk('GET /api/calendar/status without token blocked', calNoTok.status===401||calNoTok.status===403, `got ${calNoTok.status}`);
-const calSt = await j('/api/calendar/status',{headers:{'X-Alfred-Token':TOKEN}});
-chk('GET /api/calendar/status reports unconfigured, never a secret', calSt.s===200 && calSt.d?.configured===false && calSt.d?.connected===false && !('clientSecret' in (calSt.d||{})), JSON.stringify(calSt.d));
-chk('connect before config is a clear 409', (await post('/api/calendar/connect',{})).s===409);
-chk('a malformed client ID is refused', (await post('/api/calendar/config',{clientId:'nope',clientSecret:'x'.repeat(12)})).s===400);
-const cfg = await post('/api/calendar/config',{clientId:'123-abc.apps.googleusercontent.com',clientSecret:'GOCSPX-testsecret1234'});
-chk('saving the OAuth client marks the calendar configured and returns no secret', cfg.s===200 && cfg.d?.configured===true && !JSON.stringify(cfg.d).includes('GOCSPX'), JSON.stringify(cfg.d));
-const con = await post('/api/calendar/connect',{});
-chk('connect returns the Google consent URL with a loopback redirect', con.s===200 && /accounts\.google\.com/.test(con.d?.url||'') && /oauth2%2Fgoogle/.test(con.d?.url||''), JSON.stringify(con.d).slice(0,200));
-const cb = await fetch(B+'/oauth2/google?code=x&state=bogus');
-chk('the OAuth callback refuses an unknown state', cb.status===400, `got ${cb.status}`);
-const cbErr = await fetch(B+'/oauth2/google?error=access_denied');
-chk('the OAuth callback reports a declined consent', cbErr.status===400 && /declined/i.test(await cbErr.text()), `got ${cbErr.status}`);
+// --- The shared calendar file (Calendar/events.md; Google Calendar was removed 2026-10-23) ---
 const feedCal = (await j('/api/assistant',{headers:{'X-Alfred-Token':TOKEN}})).d;
-chk('the feed carries the calendar state', feedCal?.calendar && feedCal.calendar.connected===false && feedCal.calendar.configured===true, JSON.stringify(feedCal?.calendar));
-const dis = await post('/api/calendar/disconnect',{});
-chk('disconnect answers with the status', dis.s===200 && dis.d?.connected===false);
+const cal = feedCal?.calendar || {};
+const todayEv = (cal.days?.[feedCal?.date] || []).find((e) => e.title === 'Test event');
+chk('the feed reads the calendar file', cal.source==='file' && cal.exists===true && cal.file==='Calendar/events.md', JSON.stringify(cal).slice(0,200));
+chk('today\'s event carries its time, place and author', !!todayEv && todayEv.time==='09:30' && todayEv.endTime==='10:00' && todayEv.location==='the office' && todayEv.by==='grok', JSON.stringify(todayEv));
+chk('an unreadable line is reported, not dropped', Array.isArray(cal.problems) && cal.problems.length===1 && /99:99/.test(cal.problems[0].text), JSON.stringify(cal.problems));
+// --- The desk box: Tell Alfred. Claude is never called: run.mjs points ALFRED_TELL_RUNNER at a
+// stand-in that is spawned exactly like the Claude CLI and reads stdin the same way. ---
+const tgNoTok = await fetch(B+'/api/assistant/tell',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:'x'})});
+chk('POST /api/assistant/tell without token blocked', tgNoTok.status===401||tgNoTok.status===403, `got ${tgNoTok.status}`);
+chk('an empty request is refused', (await post('/api/assistant/tell',{text:'   '})).s===400);
+chk('an over-long request is refused', (await post('/api/assistant/tell',{text:'a'.repeat(501)})).s===400);
+const tgT0 = Date.now();
+const tgOk = await post('/api/assistant/tell',{text:'remind me to test the desk box tomorrow'});
+const tgSecs = (Date.now() - tgT0) / 1000;
+chk('the Claude runner gets the prompt on a closed stdin and answers promptly', tgOk.s===200 && tgOk.d?.via==='claude' && tgSecs < 10,
+  `${tgSecs.toFixed(1)}s ${JSON.stringify(tgOk.d && { via: tgOk.d.via, why: tgOk.d.why })}`);
+const tgRem = (tgOk.d?.saved||[]).find((s) => s.type==='reminder');
+chk('the plan is saved as a reminder and is on the page in the same reply', !!tgRem && tgRem.title==='Stub reminder from the desk box'
+  && (tgOk.d?.feed?.upcoming||[]).some((i) => i.title==='Stub reminder from the desk box' && i.file===tgRem.file) && /tomorrow/i.test(tgOk.d?.reply||''),
+  JSON.stringify({ saved: tgOk.d?.saved, reply: tgOk.d?.reply }).slice(0,300));
+const tg = await post('/api/assistant/tell',{text:'STUB-FAIL remind me to test the desk box tomorrow'});
+chk('when Claude cannot answer, the words go to Claude Code (inbox) and the reason is given', tg.s===200 && tg.d?.via==='inbox' && tg.d?.saved?.[0]?.type==='inbox'
+  && /--user--claude-code--capture--/.test(tg.d.saved[0].file) && /stub was told to fail/i.test(tg.d?.why||''), JSON.stringify(tg.d).slice(0,300));
+chk('the capture is waiting among the feed signals', (tg.d?.feed?.signals||[]).some((s) => s.file===tg.d?.saved?.[0]?.file && s.to==='claude-code' && s.type==='capture'),
+  JSON.stringify(tg.d?.feed?.signals).slice(0,300));
+
+// --- Add and edit from the Day page: POST /api/assistant/item ---
+const inDays = (n) => new Date(Date.now() + n * 864e5).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+const itNoTok = await fetch(B+'/api/assistant/item',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'create',type:'reminder',fields:{kind:'todo',title:'x'}})});
+chk('POST /api/assistant/item without token blocked', itNoTok.status===401||itNoTok.status===403, `got ${itNoTok.status}`);
+const itTodo = await post('/api/assistant/item',{op:'create',type:'reminder',fields:{kind:'todo',title:'API to-do from the editor',due:'none',scope:'personal'}});
+chk('a to-do added from the editor is saved and is in the feed of the same reply', itTodo.s===200 && itTodo.d?.ok===true
+  && /^Reminders\/.*api-to-do-from-the-editor\.md$/.test(itTodo.d?.saved?.file||'') && (itTodo.d?.feed?.todos||[]).some((i) => i.file===itTodo.d.saved.file),
+  JSON.stringify(itTodo.d && { s: itTodo.s, saved: itTodo.d.saved, error: itTodo.d.error }));
+const itEdit = await post('/api/assistant/item',{op:'update',type:'reminder',file:itTodo.d?.saved?.file,fields:{kind:'reminder',due:inDays(3),time:'14:00'}});
+const edited = (itEdit.d?.feed?.upcoming||[]).find((i) => i.file===itTodo.d?.saved?.file);
+chk('editing it into a dated reminder moves it to the week with its time', itEdit.s===200 && edited?.kind==='reminder' && edited?.due===inDays(3) && edited?.time==='14:00',
+  JSON.stringify({ s: itEdit.s, error: itEdit.d?.error, edited }));
+const itRoutine = await post('/api/assistant/item',{op:'create',type:'routine',fields:{title:'API stretch',schedule:'monthly on the 15th',time:'07:30'}});
+const listed = [...(itRoutine.d?.feed?.routines?.today||[]), ...(itRoutine.d?.feed?.routines?.other||[])].find((r) => r.file===itRoutine.d?.saved?.file);
+chk('a monthly routine is saved and listed with its time', itRoutine.s===200 && listed?.schedule==='monthly on the 15th 07:30' && listed?.time==='07:30',
+  JSON.stringify({ s: itRoutine.s, error: itRoutine.d?.error, listed }));
+const itPause = await post('/api/assistant/item',{op:'update',type:'routine',file:itRoutine.d?.saved?.file,fields:{status:'paused'}});
+chk('pausing a routine moves it to the paused list', itPause.s===200 && (itPause.d?.feed?.routines?.paused||[]).some((r) => r.file===itRoutine.d?.saved?.file),
+  JSON.stringify(itPause.d?.feed?.routines?.paused));
+const itEvent = await post('/api/assistant/item',{op:'create',type:'event',fields:{title:'API dinner',date:inDays(2),time:'19:00',endTime:'21:00',location:'Home'}});
+chk('an event is added to the calendar file and is on the calendar in the same reply', itEvent.s===200 && itEvent.d?.saved?.file==='Calendar/events.md'
+  && JSON.stringify(itEvent.d?.feed?.calendar?.days?.[inDays(2)]||[]).includes('API dinner'), JSON.stringify({ s: itEvent.s, error: itEvent.d?.error }));
+const itBad = await post('/api/assistant/item',{op:'create',type:'routine',fields:{title:'API odd',schedule:'now and then'}});
+chk('a schedule Alfred cannot read comes back as a 400 with a sentence to show', itBad.s===400 && itBad.d?.ok===false && /can't read the schedule/.test(itBad.d?.error||''),
+  JSON.stringify(itBad.d));
+const itPast = await post('/api/assistant/item',{op:'create',type:'reminder',fields:{kind:'reminder',title:'API past',due:'2020-01-01'}});
+chk('a past date is refused with 400', itPast.s===400 && /in the past/.test(itPast.d?.error||''), JSON.stringify(itPast.d));
+const itTrav = await post('/api/assistant/item',{op:'update',type:'reminder',file:'Reminders/../MANIFESTO.md',fields:{title:'pwned'}});
+chk('an edit outside Reminders/ is refused', itTrav.s===400, `got ${itTrav.s}`);
+const itOdd = await post('/api/assistant/item',{op:'delete',type:'reminder',file:itTodo.d?.saved?.file});
+chk('an unknown operation is refused (nothing is ever deleted from here)', itOdd.s===400 && ((await j('/api/assistant',{headers:{'X-Alfred-Token':TOKEN}})).d?.upcoming||[]).some((i) => i.file===itTodo.d?.saved?.file),
+  JSON.stringify(itOdd.d));
+
+// --- Grok's change notes: dropped in Inbox/ the way Grok writes them from the car, the running
+// dashboard applies them within seconds, and the feed shows the result. ---
+if (process.env.ALFRED_TEST_BRAIN) {
+  const TB = process.env.ALFRED_TEST_BRAIN;
+  const tgt = await post('/api/assistant/item',{op:'create',type:'reminder',fields:{kind:'todo',title:'API note target',due:'none'}});
+  const tfile = tgt.d?.saved?.file;
+  const stampNow = new Date().toLocaleString('sv-SE', { timeZone: 'America/New_York' }).slice(0, 16) + ' ET';
+  fs.writeFileSync(path.join(TB, 'Inbox', `${inDays(0)}-0000--grok--librarian--amend--api-note.md`),
+    `# Amend: move the API note target\n\n- **Kind:** signal\n- **Type:** amend\n- **From:** grok\n- **To:** librarian\n- **Target:** ${tfile}\n`
+    + `- **Status:** open\n- **Created:** ${stampNow}\n- **Set:** Due = ${inDays(4)}\n- **Set:** Title = API note target, moved\n`, 'utf8');
+  // Before the Librarian writes it, the feed already shows the change (a waiting note counts as applied).
+  const f0 = (await j('/api/assistant',{headers:{'X-Alfred-Token':TOKEN}})).d;
+  const shown = (f0?.upcoming||[]).find((x) => x.file===tfile && x.due===inDays(4) && x.title==='API note target, moved') || null;
+  chk('a waiting change note is shown as already applied in the very next feed', !!shown, JSON.stringify(shown));
+  // The watcher runs the Librarian once its quiet window (about 8 s after the last pass) is over.
+  let written = '';
+  for (let i = 0; i < 40 && !/by grok \(change note/.test(written); i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    written = fs.existsSync(path.join(TB, tfile)) ? fs.readFileSync(path.join(TB, tfile), 'utf8') : '';
+  }
+  chk('the running dashboard writes the change into the file within seconds', new RegExp(`- \\*\\*Due:\\*\\* ${inDays(4)}`).test(written)
+    && /by grok \(change note/.test(written), written.slice(0, 400));
+}
+
+chk('the Google sign-in endpoints are gone', (await fetch(B+'/oauth2/google?code=x')).status===404
+  && (await fetch(B+'/api/calendar/status',{headers:{'X-Alfred-Token':TOKEN}})).status===404
+  && (await post('/api/calendar/connect',{})).s===404);
 
 // --- injection / traversal probes ---
 const trav = await j('/api/note?path=../../../etc/passwd');
