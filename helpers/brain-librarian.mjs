@@ -25,7 +25,8 @@ import { CALENDAR_FILE, eventsBetween, formatEvent } from './brain-calendar.mjs'
 import {
   DAY_MS, addDays, appendLine, cleanRef, closedLine, easternNow, firstWord, mdFiles, nowFromStamp, readFields, setField, stampOf, withSchema,
 } from './brain-core.mjs';
-import { applyChangeNotes, overlayReminders, pendingChanges, recentChanges } from './brain-notes.mjs';
+import { applyChangeNotes, openNotes, overlayReminders, pendingChanges, recentChanges } from './brain-notes.mjs';
+import { lifeIndexSection } from './life-notes.mjs';
 import { oneLine, slugify } from './brain-items.mjs';
 import { handoffWaiting } from './brain-handoffs.mjs';
 
@@ -359,7 +360,7 @@ function catalog(brain) {
   });
   out.push('', '### Knowledge', '- `Knowledge/Runbooks/`, `Knowledge/Docs/`, `Knowledge/Decisions/`, `Knowledge/Patterns/`, `Knowledge/Learning/`, `Knowledge/Investigations/`');
   out.push('', '### Calendar', `- \`${CALENDAR_FILE}\`: dated events (appointments, plans, trips), one line each; any AI adds and reads`);
-  out.push('', '### Everything else', '- `Memory/profile.md`, `Memory/timeline/`, `Memory/agents/` · `Research/` · `Health/` · `Outputs/briefs/`, `Outputs/news/`, `Outputs/reports/` · `System/agents/`, `System/ai-stack.md`, `System/CHANGELOG.md`, `System/templates/` · `Archive/`');
+  out.push('', '### Everything else', '- `Memory/profile.md`, `Memory/timeline/`, `Memory/agents/` · `Life/` (life admin: Recurring, People, Documents, Assets) · `Research/` · `Health/` · `Outputs/briefs/`, `Outputs/news/`, `Outputs/reports/` · `System/agents/`, `System/ai-stack.md`, `System/CHANGELOG.md`, `System/templates/` · `Archive/`');
   return out;
 }
 
@@ -404,6 +405,7 @@ export function renderIndex(brain, now = easternNow(), waiting = waitingItems(br
     `### Signals waiting (${o.signals.length})`,
     ...(o.signals.length ? o.signals.map((s) => `- ${s.type} from ${s.from} to ${s.to} · ${s.ageDays}d · \`${s.file}\``) : ['- none']),
     ...(stale.length ? ['', `**${stale.length} signal(s) older than ${STALE_SIGNAL_DAYS} days: the user should decide.**`] : []), '',
+    ...lifeIndexSection(brain, now, openNotes(brain)),
     ...waitingSection(waiting),
     ...recentSection(brain, now),
     '## Catalog', '', ...catalog(brain), '',

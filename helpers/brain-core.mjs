@@ -44,7 +44,8 @@ export function readFields(text) {
 
 export function setField(text, field, value) {
   const re = new RegExp(`^- \\*\\*${field}:\\*\\*.*$`, 'm');
-  if (re.test(text)) return text.replace(re, `- **${field}:** ${value}`);
+  // Replaced by a function, so a "$" in the value ("$' fee", "$$5") is written as typed, not read as a pattern.
+  if (re.test(text)) return text.replace(re, () => `- **${field}:** ${value}`);
   const lines = text.split('\n');
   let last = -1;
   lines.slice(0, 40).forEach((l, i) => { if (/^- \*\*[A-Za-z ]+:\*\*/.test(l)) last = i; });

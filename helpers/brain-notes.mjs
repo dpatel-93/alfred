@@ -23,6 +23,7 @@ import {
 } from './brain-core.mjs';
 import { CALENDAR_FILE, cancelEvent, findEvent, parseEvents, readCalendar } from './brain-calendar.mjs';
 import { createEvent, oneLine, updateReminder, updateRoutine } from './brain-items.mjs';
+import { LIFE_RECORD, applyLifeNote } from './life-notes.mjs';
 
 const NOTE_TYPES = ['close', 'amend', 'change', 'capture'];
 const LOCKED = [/^MANIFESTO\.md$/i, /^README\.md$/i, /^index\.md$/i, /^Inbox\//i, /^Archive\//i,
@@ -118,6 +119,8 @@ function resolveTarget(brain, ref) {
     const rel = [`Inbox/${base}`, `Inbox/Done/${base}`].find((r) => fs.existsSync(path.join(brain, r))) || ref;
     return { kind: 'signal', rel, full: path.join(brain, rel), exists: fs.existsSync(path.join(brain, rel)), inDone: /^Inbox\/Done\//.test(rel) };
   }
+  // A life-admin record (Life/Recurring, People, Documents, Assets): done, skip or snooze by note.
+  if (LIFE_RECORD.test(ref)) return { kind: 'life', rel: ref, full: path.join(brain, ref), exists: fs.existsSync(path.join(brain, ref)) };
   const base = path.basename(ref);
   const tries = /^Reminders\//.test(ref) || !ref.includes('/')
     ? [ref, `Reminders/${base}`, `Reminders/Done/${base}`, ...(!ref.includes('/') ? [`Routines/${base}`] : [])] : [ref];
@@ -316,6 +319,7 @@ export function applyChangeNotes(brain, run, now = easternNow()) {
           outcome = `superseded: ${t.rel} was changed at ${later}, after this note; nothing applied`;
         } else if (t.kind === 'reminder') outcome = applyToReminder(brain, n, t, ctx);
         else if (t.kind === 'routine') outcome = applyToRoutine(brain, n, t, ctx);
+        else if (t.kind === 'life') outcome = n.replace ? replaceFile(brain, t, n, ctx) : applyLifeNote(brain, n, t.rel, ctx);
         else if (n.replace) outcome = replaceFile(brain, t, n, ctx);
         else fail(`only a whole-file replacement can change ${t.rel} by note`);
       }
@@ -381,7 +385,7 @@ export function overlayReminders(items, pending) {
 export function recentChanges(brain, now = easternNow(), hours = RECENT_HOURS) {
   const since = easternNow(new Date(now.ms - hours * 3600 * 1000)).stamp;
   const rows = [];
-  for (const folder of ['Reminders', 'Reminders/Done', 'Routines']) {
+  for (const folder of ['Reminders', 'Reminders/Done', 'Routines', 'Life/Recurring', 'Life/People', 'Life/Documents', 'Life/Assets']) {
     for (const f of mdFiles(path.join(brain, folder))) {
       const rel = `${folder}/${f}`;
       const text = fs.readFileSync(path.join(brain, rel), 'utf8');
