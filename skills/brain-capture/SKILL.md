@@ -1,6 +1,6 @@
 ---
 name: brain-capture
-description: Add or change an item in the user's brain the right way - a reminder, to-do, errand, watch, habit or other routine, calendar event, or a memory proposal. Use whenever the user says remind me, add to my list, don't let me forget, every Monday, I have an appointment, remember that, or asks to move, snooze, close, pause or cancel something.
+description: Add or change an item in the user's brain the right way - a reminder, to-do, errand, watch, habit or other routine, calendar event, life admin (a bill, renewal, upkeep job, tax day, expiring document, birthday), or a memory proposal. Use whenever the user says remind me, add to my list, don't let me forget, every Monday, I have an appointment, my bill is due, renew, my passport expires, remember that, or asks to move, snooze, close, pause or cancel something.
 ---
 
 # Brain capture
@@ -18,10 +18,13 @@ Work in the brain folder named in your instructions. Its `RULEBOOK.md` is the fu
    | get it done some time, no date | `todo` |
    | waiting on someone or something, follow it up | `watch` |
    | it repeats ("every", "each", "on Mondays", "monthly") | a habit in `Routines/` |
-   | it happens on a date (appointment, plan, birthday, trip) | a line in `Calendar/events.md`, plus a reminder only if they want a nudge |
+   | it happens on a date (appointment, plan, trip) | a line in `Calendar/events.md`, plus a reminder only if they want a nudge |
+   | a bill, subscription, renewal, upkeep job, tax day or check-up that comes round | a record in `Life/Recurring/` (section 6) |
+   | someone's birthday or anniversary, or staying in touch with them | a record in `Life/People/` (section 6) |
+   | a passport, licence or policy that expires; something with a warranty | `Life/Documents/` or `Life/Assets/` (section 6) |
    | a fact about them, how something of theirs works, a preference or a decision | a memory proposal |
 2. **Work out the dates** against today in the user's time zone. Never write "Friday" or "next week" into a date field. A date in the past, or one you can't pin down, is a question for the user.
-3. **Look first.** Search `Reminders/`, `Routines/` and `Calendar/events.md` for the same thing. If it is there, change it instead of adding a second one.
+3. **Look first.** Search `Reminders/`, `Routines/`, `Life/` and `Calendar/events.md` for the same thing. If it is there, change it instead of adding a second one.
 4. **Team mode only** (`Team:` in `System/settings.md` is not `none`): take the pen in `Agents/pen.md` before editing an existing file (RULEBOOK §16.5). A brand-new file needs no pen.
 
 ## 2. Add a reminder, errand, to-do or watch
@@ -90,14 +93,43 @@ Use `added by user` when the user asked for it, or your short name when you adde
 - **Move:** cancel the old line with `(cancelled by user via <who>: moved to YYYY-MM-DD)` and add the new one.
 Confirm in one line: "Added: dentist, Wednesday 4 November at 09:30."
 
-## 6. Propose a memory
+## 6. Add or update life admin
+One file per record, `Life/<Recurring|People|Documents|Assets>/<slug>.md`, in the format of RULEBOOK §19. For a bill:
+```
+# Electric bill
+
+- **Schema:** 1
+- **Kind:** recurring
+- **Area:** money
+- **Type:** bill
+- **Repeats:** every month on the 15th
+- **Anchor:** fixed
+- **Next due:** YYYY-MM-DD
+- **Remind:** 5 days before
+- **Amount:** $142.50
+- **Autopay:** no
+- **Provider:** the power company
+- **Status:** active
+- **Author:** <who>
+- **Created:** <now>
+- **Last updated:** <now>
+```
+- Upkeep and check-ups count from the last time: `Anchor: after done` (a filter every 3 months, a dentist every 6).
+- **Done:** set `Last done`, move `Next due` on (RULEBOOK §19), add `- Edited: <now> by <who>: done <date>; next <date>`.
+- A person is a first name or nickname with `Kind: person`, `Relationship`, `Birthday: May 3`; a document is
+  `Kind: document` with `Type`, `Whose`, `Expires`, `Kept` (where it is, described).
+- Never an account, policy, card, passport, licence or serial number; never a full name. Health: ask first, every time.
+
+Confirm in one line: "Added: electric bill, the 15th of each month, $142.50, in Life."
+
+## 7. Propose a memory
 1. Check it is worth keeping (two or more: needed again in over a week; annoying to repeat; about them, not general knowledge; stable; another AI would act differently knowing it).
 2. Never: passwords, keys, account or ID numbers, addresses, phone numbers, anyone's full name. Ask first, every time, for health, money and other people.
 3. Ask in one line: "Want me to remember that the boiler is serviced every October?" A direct "remember that..." is already a yes.
 4. **On yes**, add `- (YYYY-MM-DD) <fact> · via <who>` to the right file: `System/profile.md` (who they are, how they like help), `Memory/topics/<topic>.md` (a part of life or work; health only in `health.md`), or `Memory/timeline/YYYY-MM.md` (events and decisions). A temporary fact ends `· until YYYY-MM-DD`. If the fact replaces an old one, replace that line.
 5. **If they can't answer now**, leave a proposal for them: `Inbox/YYYY-MM-DD-HHMM--<who>--user--capture--<slug>.md` with `Kind: signal`, `Type: capture`, `From: <who>`, `To: user`, `Re:`, `Target: <the file>`, `Status: open`, `Created: <now>`, and the proposed lines in the body (RULEBOOK §11). Write nothing to memory until they say yes.
 
-## 7. After any change
+## 8. After any change
 1. Update `index.md`: put the item in the right section (or take it out), fix the counts, set `Last updated`, and add a line at the top of "Changed in the last 48 hours" (RULEBOOK §13).
 2. In team mode, give the pen back.
 3. Tell the user in one short line what you saved and where.

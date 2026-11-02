@@ -31,6 +31,7 @@ Work in the brain folder named in your instructions (`RULEBOOK.md` §14 there). 
 | **Due today** | items due today (timed ones first, by time) and today's calendar events |
 | **Routines today** | active habits whose schedule falls on today: `daily`; `weekdays` (Mon-Fri); `weekends`; a named day; `monthly on the Nth` (on short months, the last day). Show the time if the schedule has one |
 | **This week** | the next 7 days, grouped by day (`### Saturday 2026-10-31`): items due and events |
+| **Life admin** | only when `Life/` has records: what is inside its reminder window (`Next due`, `Expires` or a birthday, less `Remind`): `- <title> · <type> · <when> · <amount>`. Something due today or past its date also goes in Top (RULEBOOK §19) |
 
 What needs the user comes first, in that order. A newsletter brief's news sections (RULEBOOK §14) come after all of these.
 
